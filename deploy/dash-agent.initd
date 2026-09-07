@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+name="dash-agent"
+description="dash agent"
+command="/usr/local/bin/dash-agent"
+command_args="--config /etc/dash-agent/config.json"
+command_user="dashagent:dashagent"
+supervisor="supervise-daemon"
+respawn_delay=5
+respawn_max=0
+output_log="/dev/null"
+error_log="/dev/null"
+depend() { need net; after firewall; }
