@@ -12,6 +12,7 @@ import (
 
 	"dash/internal/audit"
 	"dash/internal/db"
+	"dash/internal/events"
 	"dash/internal/ulid"
 )
 
@@ -655,7 +656,28 @@ func (s *NodeService) DeleteNode(ctx context.Context, id string, actorKind, acto
 			IP:         ip,
 		})
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	operator := actorID
+	if operator == "" {
+		operator = actorKind
+	}
+	events.Emit(ctx, events.Event{
+		Type:       "node.removed",
+		Source:     "inventory",
+		TargetKind: "node",
+		TargetID:   id,
+		Title:      fmt.Sprintf("节点 %s 已删除", node.Name),
+		DedupKey:   fmt.Sprintf("node.removed:%s", id),
+		Payload: map[string]any{
+			"node_name": node.Name,
+			"operator":  operator,
+		},
+	})
+
+	return nil
 }
 
 // RevokeAgentToken 吊销节点的 Agent 长期令牌。

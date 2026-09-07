@@ -11,6 +11,7 @@ import (
 
 	"dash/internal/config"
 	"dash/internal/db"
+	"dash/internal/events"
 	"dash/internal/protocol"
 )
 
@@ -86,11 +87,50 @@ func (h *HelloHandler) HandleHello(ctx context.Context, nodeID string, remoteIP 
 		NeedFacts:         needFacts,
 	}
 
-	// 4. 更新 nodes 状态为 online，记录版本与 last_seen
+	// 4. 更新 nodes 状态为 online，记录版本与 last_seen 并发出 node.online 事件
+	var nodeName string
+	var prevLastSeen sql.NullInt64
+	var groupName sql.NullString
+	queryNodeSQL := `SELECT n.name, n.last_seen_at_ms, g.name
+		FROM nodes n
+		LEFT JOIN node_groups g ON n.node_group_id = g.id
+		WHERE n.id = ?`
+	_ = h.database.QueryRow(ctx, queryNodeSQL, nodeID).Scan(&nodeName, &prevLastSeen, &groupName)
+
 	updateNodeSQL := `UPDATE nodes
 	                  SET agent_version = ?, conn_state = 'online', last_seen_at_ms = ?, updated_at_ms = ?
 	                  WHERE id = ?`
 	_, _ = h.database.Exec(ctx, updateNodeSQL, params.AgentVersion, nowMs, nowMs, nodeID)
+
+	var offlineSeconds int64
+	if prevLastSeen.Valid && prevLastSeen.Int64 > 0 {
+		offlineSeconds = (nowMs - prevLastSeen.Int64) / 1000
+		if offlineSeconds < 0 {
+			offlineSeconds = 0
+		}
+	}
+	if nodeName == "" {
+		nodeName = nodeID
+	}
+	gName := ""
+	if groupName.Valid {
+		gName = groupName.String
+	}
+
+	events.Emit(ctx, events.Event{
+		Type:       "node.online",
+		Source:     "control",
+		TargetKind: "node",
+		TargetID:   nodeID,
+		Title:      fmt.Sprintf("节点 %s 上线", nodeName),
+		DedupKey:   fmt.Sprintf("node.online:%s", nodeID),
+		Payload: map[string]any{
+			"node_name":       nodeName,
+			"group_name":      gName,
+			"public_ip":       remoteIP,
+			"offline_seconds": offlineSeconds,
+		},
+	})
 
 	// 5. 更新 node_facts 中的客户端连接来源 IP
 	if remoteIP != "" {

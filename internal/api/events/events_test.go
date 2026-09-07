@@ -25,8 +25,13 @@ func setupTestDB(t *testing.T) *db.DB {
 		t.Skipf("Skipping test: MySQL test DB not accessible: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
+
+	_, _ = d.Exec(ctx, "SELECT GET_LOCK('dash_events_test', 30)")
+	t.Cleanup(func() {
+		_, _ = d.Exec(context.Background(), "SELECT RELEASE_LOCK('dash_events_test')")
+	})
 
 	mig := migrate.New(d, "../../../migrations")
 	if err := mig.Up(ctx); err != nil {
@@ -49,6 +54,8 @@ func TestEventsAPI(t *testing.T) {
 	store := events.NewStore(d, 50)
 	store.Start()
 	defer store.Stop()
+	oldStore := events.GetDefaultStore()
+	defer events.SetDefaultStore(oldStore)
 	events.SetDefaultStore(store)
 
 	if err := store.SyncBuiltinTypes(ctx); err != nil {
@@ -69,23 +76,24 @@ func TestEventsAPI(t *testing.T) {
 			"node_name": "test-node",
 		},
 	})
-	time.Sleep(150 * time.Millisecond)
 
-	// 2. Test GET /api/v1/events
-	req := httptest.NewRequest("GET", "/api/v1/events?event_type=node.offline", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /api/v1/events returned status %d, body: %s", rec.Code, rec.Body.String())
-	}
-
+	// 2. Test GET /api/v1/events with polling for drain
 	var listResp struct {
 		Items []events.EventRecord `json:"items"`
 		Total int                  `json:"total"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &listResp); err != nil {
-		t.Fatalf("decode list response failed: %v", err)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		req := httptest.NewRequest("GET", "/api/v1/events?event_type=node.offline", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code == http.StatusOK {
+			_ = json.Unmarshal(rec.Body.Bytes(), &listResp)
+			if listResp.Total == 1 && len(listResp.Items) == 1 {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	if listResp.Total != 1 || len(listResp.Items) != 1 {
 		t.Fatalf("expected 1 item, got total=%d len=%d", listResp.Total, len(listResp.Items))
@@ -93,8 +101,8 @@ func TestEventsAPI(t *testing.T) {
 	eventID := listResp.Items[0].ID
 
 	// 3. Test GET /api/v1/events/unread-count
-	req = httptest.NewRequest("GET", "/api/v1/events/unread-count", nil)
-	rec = httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/events/unread-count", nil)
+	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/v1/events/unread-count returned status %d", rec.Code)

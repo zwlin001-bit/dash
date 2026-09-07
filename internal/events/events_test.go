@@ -22,8 +22,13 @@ func setupTestDB(t *testing.T) *db.DB {
 		t.Skipf("Skipping test: MySQL test DB not accessible: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
+
+	_, _ = d.Exec(ctx, "SELECT GET_LOCK('dash_events_test', 30)")
+	t.Cleanup(func() {
+		_, _ = d.Exec(context.Background(), "SELECT RELEASE_LOCK('dash_events_test')")
+	})
 
 	// Ensure migrations are up to date
 	mig := migrate.New(d, "../../migrations")
@@ -75,6 +80,8 @@ func TestSixBuiltinEvents(t *testing.T) {
 	store := events.NewStore(d, 100)
 	store.Start()
 	defer store.Stop()
+	oldStore := events.GetDefaultStore()
+	defer events.SetDefaultStore(oldStore)
 	events.SetDefaultStore(store)
 
 	if err := store.SyncBuiltinTypes(ctx); err != nil {
@@ -166,12 +173,17 @@ func TestSixBuiltinEvents(t *testing.T) {
 		},
 	})
 
-	// Wait briefly for worker queue drain
-	time.Sleep(300 * time.Millisecond)
-
-	records, total, err := store.ListEvents(ctx, events.Filter{})
-	if err != nil {
-		t.Fatalf("ListEvents failed: %v", err)
+	// Wait for worker queue drain with timeout
+	var records []events.EventRecord
+	var total int
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		var err error
+		records, total, err = store.ListEvents(ctx, events.Filter{})
+		if err == nil && total == 6 && len(records) == 6 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	if total != 6 || len(records) != 6 {
@@ -239,6 +251,8 @@ func TestNonBlockingWhenDBUnavailable(t *testing.T) {
 	store := events.NewStore(d, 50)
 	store.Start()
 	defer store.Stop()
+	oldStore := events.GetDefaultStore()
+	defer events.SetDefaultStore(oldStore)
 	events.SetDefaultStore(store)
 
 	ctx := context.Background()
@@ -276,6 +290,8 @@ func TestDispositionDrop(t *testing.T) {
 	store := events.NewStore(d, 100)
 	store.Start()
 	defer store.Stop()
+	oldStore := events.GetDefaultStore()
+	defer events.SetDefaultStore(oldStore)
 	events.SetDefaultStore(store)
 
 	if err := store.SyncBuiltinTypes(ctx); err != nil {
@@ -288,10 +304,18 @@ func TestDispositionDrop(t *testing.T) {
 		Source: "control",
 		Title:  "node-1 online",
 	})
-	time.Sleep(100 * time.Millisecond)
-
-	records, total, err := store.ListEvents(ctx, events.Filter{EventType: "node.online"})
-	if err != nil || total != 1 {
+	deadline := time.Now().Add(2 * time.Second)
+	var records []events.EventRecord
+	var total int
+	var err error
+	for time.Now().Before(deadline) {
+		records, total, err = store.ListEvents(ctx, events.Filter{EventType: "node.online"})
+		if err == nil && total == 1 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if total != 1 {
 		t.Fatalf("expected 1 node.online event, got total=%d err=%v", total, err)
 	}
 
@@ -323,10 +347,15 @@ func TestDispositionDrop(t *testing.T) {
 		Source: "control",
 		Title:  "node-1 offline",
 	})
-	time.Sleep(100 * time.Millisecond)
-
-	records, total, err = store.ListEvents(ctx, events.Filter{EventType: "node.offline"})
-	if err != nil || total != 1 {
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		records, total, err = store.ListEvents(ctx, events.Filter{EventType: "node.offline"})
+		if err == nil && total == 1 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if total != 1 {
 		t.Fatalf("expected 1 node.offline event, got total=%d", total)
 	}
 	_ = records
@@ -343,6 +372,8 @@ func TestMarkReadAndUnreadCount(t *testing.T) {
 	store := events.NewStore(d, 100)
 	store.Start()
 	defer store.Stop()
+	oldStore := events.GetDefaultStore()
+	defer events.SetDefaultStore(oldStore)
 	events.SetDefaultStore(store)
 
 	if err := store.SyncBuiltinTypes(ctx); err != nil {
@@ -359,10 +390,17 @@ func TestMarkReadAndUnreadCount(t *testing.T) {
 			OccurredAt: now - int64((3-i)*1000),
 		})
 	}
-	time.Sleep(200 * time.Millisecond)
-
-	count, err := store.GetUnreadCount(ctx)
-	if err != nil || count != 3 {
+	deadline := time.Now().Add(2 * time.Second)
+	var count int64
+	var err error
+	for time.Now().Before(deadline) {
+		count, err = store.GetUnreadCount(ctx)
+		if err == nil && count == 3 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if count != 3 {
 		t.Fatalf("expected unread count 3, got %d (err: %v)", count, err)
 	}
 

@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"dash/internal/db"
+	"dash/internal/events"
 	"dash/internal/logx"
 	"dash/internal/protocol"
 
@@ -367,6 +369,7 @@ func (r *Registry) sweepInactive(ctx context.Context) {
 	for _, sess := range timedOut {
 		_ = sess.Close()
 		if r.database != nil {
+			r.emitOffline(ctx, sess.NodeID, sess.LastSeenAtMs.Load(), sess.RemoteIP)
 			_, _ = r.database.Exec(ctx,
 				`UPDATE nodes SET conn_state = 'offline', updated_at_ms = ? WHERE id = ?`,
 				nowMs, sess.NodeID)
@@ -375,8 +378,80 @@ func (r *Registry) sweepInactive(ctx context.Context) {
 
 	// 同步检查数据库中标记为 online 但已超时的僵尸记录
 	if r.database != nil {
+		qZombie := `SELECT n.id, n.last_seen_at_ms, COALESCE(f.ipv4, '')
+			FROM nodes n
+			LEFT JOIN node_facts f ON n.id = f.node_id
+			WHERE n.conn_state = 'online' AND (n.last_seen_at_ms IS NULL OR n.last_seen_at_ms < ?)`
+		rows, err := r.database.Query(ctx, qZombie, cutoffMs)
+		if err == nil {
+			type zombieInfo struct {
+				id       string
+				lastSeen int64
+				ip       string
+			}
+			var zombieList []zombieInfo
+			for rows.Next() {
+				var zid string
+				var zls sql.NullInt64
+				var zip string
+				if err := rows.Scan(&zid, &zls, &zip); err == nil {
+					var ls int64
+					if zls.Valid {
+						ls = zls.Int64
+					}
+					zombieList = append(zombieList, zombieInfo{id: zid, lastSeen: ls, ip: zip})
+				}
+			}
+			_ = rows.Close()
+
+			for _, z := range zombieList {
+				r.emitOffline(ctx, z.id, z.lastSeen, z.ip)
+			}
+		}
+
 		_, _ = r.database.Exec(ctx,
 			`UPDATE nodes SET conn_state = 'offline', updated_at_ms = ? WHERE conn_state = 'online' AND (last_seen_at_ms IS NULL OR last_seen_at_ms < ?)`,
 			nowMs, cutoffMs)
 	}
+}
+
+// emitOffline 发送节点离线事件 (P1-20)。
+func (r *Registry) emitOffline(ctx context.Context, nodeID string, lastSeenAtMs int64, defaultIP string) {
+	if r.database == nil {
+		return
+	}
+	var nodeName string
+	var groupName, factsIP sql.NullString
+	querySQL := `SELECT n.name, g.name, f.ipv4
+		FROM nodes n
+		LEFT JOIN node_groups g ON n.node_group_id = g.id
+		LEFT JOIN node_facts f ON n.id = f.node_id
+		WHERE n.id = ?`
+	_ = r.database.QueryRow(ctx, querySQL, nodeID).Scan(&nodeName, &groupName, &factsIP)
+	if nodeName == "" {
+		nodeName = nodeID
+	}
+	gName := ""
+	if groupName.Valid {
+		gName = groupName.String
+	}
+	publicIP := defaultIP
+	if factsIP.Valid && factsIP.String != "" {
+		publicIP = factsIP.String
+	}
+
+	events.Emit(ctx, events.Event{
+		Type:       "node.offline",
+		Source:     "control",
+		TargetKind: "node",
+		TargetID:   nodeID,
+		Title:      fmt.Sprintf("节点 %s 离线", nodeName),
+		DedupKey:   fmt.Sprintf("node.offline:%s", nodeID),
+		Payload: map[string]any{
+			"node_name":       nodeName,
+			"group_name":      gName,
+			"public_ip":       publicIP,
+			"last_seen_at_ms": lastSeenAtMs,
+		},
+	})
 }

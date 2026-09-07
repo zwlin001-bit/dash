@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"dash/internal/db"
+	"dash/internal/events"
 	"dash/internal/protocol"
 )
 
@@ -139,11 +141,51 @@ func (h *FallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 4. 更新在线状态与客户端 IP
+	// 4. 更新在线状态与客户端 IP 并根据状态变化发出 node.online 事件
+	var nodeName, prevConnState string
+	var prevLastSeen sql.NullInt64
+	var groupName sql.NullString
+	queryNodeSQL := `SELECT n.name, n.conn_state, n.last_seen_at_ms, g.name
+		FROM nodes n
+		LEFT JOIN node_groups g ON n.node_group_id = g.id
+		WHERE n.id = ?`
+	_ = h.database.QueryRow(ctx, queryNodeSQL, nodeID).Scan(&nodeName, &prevConnState, &prevLastSeen, &groupName)
+
 	updateStateSQL := `UPDATE nodes
 	                   SET conn_state = 'online', last_seen_at_ms = ?, updated_at_ms = ?
 	                   WHERE id = ?`
 	_, _ = h.database.Exec(ctx, updateStateSQL, nowMs, nowMs, nodeID)
+
+	if prevConnState != "online" {
+		var offlineSeconds int64
+		if prevLastSeen.Valid && prevLastSeen.Int64 > 0 {
+			offlineSeconds = (nowMs - prevLastSeen.Int64) / 1000
+			if offlineSeconds < 0 {
+				offlineSeconds = 0
+			}
+		}
+		if nodeName == "" {
+			nodeName = nodeID
+		}
+		gName := ""
+		if groupName.Valid {
+			gName = groupName.String
+		}
+		events.Emit(ctx, events.Event{
+			Type:       "node.online",
+			Source:     "control",
+			TargetKind: "node",
+			TargetID:   nodeID,
+			Title:      fmt.Sprintf("节点 %s 上线", nodeName),
+			DedupKey:   fmt.Sprintf("node.online:%s", nodeID),
+			Payload: map[string]any{
+				"node_name":       nodeName,
+				"group_name":      gName,
+				"public_ip":       clientIP,
+				"offline_seconds": offlineSeconds,
+			},
+		})
+	}
 
 	if clientIP != "" {
 		parsed := net.ParseIP(clientIP)

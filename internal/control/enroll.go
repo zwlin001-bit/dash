@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"dash/internal/db"
+	"dash/internal/events"
 	"dash/internal/protocol"
 )
 
@@ -300,7 +301,27 @@ func (h *EnrollHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. 成功返回明文长期 Token
+	// 5. 成功返回明文长期 Token 并发出 node.enrolled 事件
+	var osName, arch string
+	if req.Facts != nil {
+		osName = req.Facts.OSName
+		arch = req.Facts.Arch
+	}
+	events.Emit(ctx, events.Event{
+		Type:       "node.enrolled",
+		Source:     "control",
+		TargetKind: "node",
+		TargetID:   nodeID,
+		Title:      fmt.Sprintf("新节点 %s 接入", nodeName),
+		DedupKey:   fmt.Sprintf("node.enrolled:%s", nodeID),
+		Payload: map[string]any{
+			"node_name": nodeName,
+			"public_ip": clientIP,
+			"os_name":   osName,
+			"arch":      arch,
+		},
+	})
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(EnrollResponse{

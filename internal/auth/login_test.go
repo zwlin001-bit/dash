@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"dash/internal/db"
+	"dash/internal/events"
 	"dash/internal/ulid"
 )
 
@@ -330,6 +331,61 @@ func TestChangePassword(t *testing.T) {
 	_, _, err = svc.Login(ctx, username, newPwd, "test-agent", "127.0.0.1")
 	if err != nil {
 		t.Fatalf("login with new password failed: %v", err)
+	}
+}
+
+func TestLoginFailedEvent(t *testing.T) {
+	database := getTestDB(t)
+	defer database.Close()
+
+	store := events.NewStore(database, 50)
+	store.Start()
+	defer store.Stop()
+	oldStore := events.GetDefaultStore()
+	defer events.SetDefaultStore(oldStore)
+	events.SetDefaultStore(store)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_ = store.SyncBuiltinTypes(ctx)
+
+	svc := NewService(database)
+	username := "failed_user_" + ulid.New()[:8]
+	_, _ = svc.CreateUser(ctx, username, "CorrectPass123!", true)
+
+	// Attempt login with bad password
+	_, _, err := svc.Login(ctx, username, "WrongPass!", "test-agent", "192.168.1.50")
+	if err == nil {
+		t.Fatal("expected login to fail")
+	}
+
+	// Verify auth.login_failed event was emitted
+	deadline := time.Now().Add(2 * time.Second)
+	var records []events.EventRecord
+	for time.Now().Before(deadline) {
+		records, _, err = store.ListEvents(ctx, events.Filter{EventType: "auth.login_failed"})
+		if err == nil && len(records) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	found := false
+	for _, r := range records {
+		if r.Payload["username"] == username {
+			found = true
+			if r.Type != "auth.login_failed" || r.SourceModule != "auth" {
+				t.Fatalf("unexpected event: %+v", r)
+			}
+			if r.Payload["ip"] != "192.168.1.50" {
+				t.Fatalf("unexpected payload: %+v", r.Payload)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("auth.login_failed event for user %s not found in %v", username, records)
 	}
 }
 
