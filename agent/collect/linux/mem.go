@@ -12,8 +12,9 @@ func init() {
 
 // MemCollector 采集内存与 Swap 使用量。
 type MemCollector struct {
-	reader *procReader
-	buf    []byte
+	reader       *procReader
+	buf          []byte
+	IncludeCache bool
 }
 
 // NewMemCollector 创建默认内存采集器。
@@ -130,7 +131,9 @@ func (c *MemCollector) Collect(sample *collect.Sample) error {
 	}
 
 	var memUsedKB int64
-	if hasMemAvailable {
+	if c.IncludeCache && hasMemFree {
+		memUsedKB = int64(memTotal) - int64(memFree)
+	} else if hasMemAvailable {
 		memUsedKB = int64(memTotal) - int64(memAvailable)
 	} else if hasMemFree {
 		// Alpine 或极老内核缺少 MemAvailable 时的回退

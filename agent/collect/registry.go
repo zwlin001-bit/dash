@@ -38,6 +38,18 @@ func CollectorsByTier(t Tier) []Collector {
 	return res
 }
 
+// CollectorByCode 返回指定 Code 的采集器（若存在）。
+func CollectorByCode(code string) Collector {
+	mu.RLock()
+	defer mu.RUnlock()
+	for _, c := range collectors {
+		if c.Code() == code {
+			return c
+		}
+	}
+	return nil
+}
+
 // CollectTier 依次执行指定 Tier 的所有已注册采集器。
 func CollectTier(t Tier, sample *Sample) error {
 	mu.RLock()

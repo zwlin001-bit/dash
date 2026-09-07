@@ -25,6 +25,7 @@ type ConnsCollector struct {
 	reader4        *procReader
 	reader6        *procReader
 	fallbackLogged bool
+	Enabled        bool
 }
 
 // NewConnsCollector 创建默认连接数采集器。
@@ -40,6 +41,7 @@ func NewConnsCollectorWithRoot(root string) *ConnsCollector {
 		buf:      make([]byte, 8192),
 		reader4:  newProcReader(filepath.Join(netDir, "sockstat")),
 		reader6:  newProcReader(filepath.Join(netDir, "sockstat6")),
+		Enabled:  true,
 	}
 }
 
@@ -109,6 +111,10 @@ func countLinesInFile(path string, buf []byte) (int32, error) {
 
 // Collect 读取 /proc/net/sockstat[6] 或回退读取 tcp[6]/udp[6]。
 func (c *ConnsCollector) Collect(sample *collect.Sample) error {
+	if !c.Enabled {
+		return nil
+	}
+
 	data4, err4 := c.reader4.Read(c.buf)
 	if err4 != nil {
 		// 回退逻辑：读取 /proc/net/tcp 与 udp 行数
