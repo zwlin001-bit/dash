@@ -44,16 +44,21 @@ func (m *ControlModule) Register(a *app.App) error {
 				fbH.SetIngester(ing)
 			}
 		}
-		a.Mux.Handle("/api/agent/v1/enroll", NewEnrollHandler(a.DB))
-		a.Mux.Handle("/api/agent/v1/rpc", wsH)
-		a.Mux.Handle("/api/agent/v1/report", fbH)
+		// 免鉴权白名单：Agent 首次入网注册接口，通过一次性 enrollment_token 鉴权
+		a.HandlePublic("/api/agent/v1/enroll", NewEnrollHandler(a.DB).ServeHTTP)
+		// 免鉴权白名单：Agent WebSocket RPC 长连接，升级前通过 Authorization: Bearer <agent_token> 鉴权
+		a.HandlePublic("/api/agent/v1/rpc", wsH.ServeHTTP)
+		// 免鉴权白名单：Agent HTTP 上报降级通道，请求体携带 agent 鉴权信息
+		a.HandlePublic("/api/agent/v1/report", fbH.ServeHTTP)
 	}
 
 	installH := NewInstallScriptHandler(a.Config, a.DB)
 	dlH := NewDownloadHandler(a.Config)
-	a.Mux.Handle("GET /install.sh", installH)
-	a.Mux.Handle("GET /dl/{filename}", dlH)
-	a.Mux.Handle("GET /dl/", dlH)
+	// 免鉴权白名单：公开装机脚本下载
+	a.HandlePublic("GET /install.sh", installH.ServeHTTP)
+	// 免鉴权白名单：Agent 各架构二进制产物公开下载
+	a.HandlePublic("GET /dl/{filename}", dlH.ServeHTTP)
+	a.HandlePublic("GET /dl/", dlH.ServeHTTP)
 
 	return nil
 }

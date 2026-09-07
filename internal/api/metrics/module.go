@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"fmt"
-	"net/http"
 
 	"dash/internal/app"
 	"dash/internal/ingest"
@@ -48,13 +47,10 @@ func (m *Module) Handler() *Handler {
 	return m.handler
 }
 
-// Register 实现 app.Module 接口，注册路由至 a.Mux。
+// Register 实现 app.Module 接口，注册路由至 App（带鉴权）。
 func (m *Module) Register(a *app.App) error {
 	if a == nil {
 		return fmt.Errorf("metrics: app cannot be nil")
-	}
-	if a.Mux == nil {
-		a.Mux = http.NewServeMux()
 	}
 
 	// 若 App 中已注入数据库实例，绑定至 QueryEngine
@@ -71,6 +67,6 @@ func (m *Module) Register(a *app.App) error {
 		}
 	}
 
-	m.handler.RegisterRoutes(a.Mux)
+	m.handler.RegisterAppRoutes(a)
 	return nil
 }

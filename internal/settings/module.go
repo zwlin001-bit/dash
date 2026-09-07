@@ -29,17 +29,20 @@ func (m *SettingsModule) Register(a *app.App) error {
 	if a == nil {
 		return fmt.Errorf("settings: app cannot be nil")
 	}
-	if a.Mux == nil {
-		a.Mux = http.NewServeMux()
-	}
 
 	var reg *control.Registry
 	if r, ok := a.Registry.(*control.Registry); ok {
 		reg = r
 	}
 	m.service = NewService(a.DB, reg)
-	m.RegisterRoutes(a.Mux)
+	m.RegisterAppRoutes(a)
 	return nil
+}
+
+// RegisterAppRoutes 注册系统设置 API 路由到 App（以鉴权方式注册）。
+func (m *SettingsModule) RegisterAppRoutes(a *app.App) {
+	a.HandleAuthed("GET /api/v1/settings", m.service.HandleGet)
+	a.HandleAuthed("PATCH /api/v1/settings", m.service.HandlePatch)
 }
 
 func (m *SettingsModule) RegisterRoutes(mux *http.ServeMux) {

@@ -29,11 +29,11 @@ func (m *WebModule) Name() string {
 }
 
 func (m *WebModule) Register(a *app.App) error {
-	if a.Mux == nil {
-		a.Mux = http.NewServeMux()
-	}
+	// 注册事件相关 API 到 App（带鉴权）
+	eventsapi.RegisterAppRoutes(a, nil)
 
-	RegisterRoutes(a.Mux)
+	// 免鉴权白名单：前端静态资源及 SPA 兜底路由
+	a.HandlePublic("/", Handler().ServeHTTP)
 	return nil
 }
 
