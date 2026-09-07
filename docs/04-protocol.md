@@ -12,7 +12,7 @@
 | 通道 | 端点 | 用途 |
 |---|---|---|
 | 主通道 | `wss://<domain>/api/agent/v1/rpc` | 上报 + 指令下发，一条长连接 |
-| 回退通道 | `POST https://<domain>/api/agent/v1/report` | WS 不可用时只上报，指令通过响应体回带 |
+| 回退通道 | `POST https://<domain>/api/agent/v1/report` | WS 不可用时只上报，**指令通过响应体的 `commands` 数组回带**，具体格式见 [`12-api-spec.md`](12-api-spec.md) §2 |
 | 终端 | `wss://<domain>/api/agent/v1/terminal` | 交互式终端，独立连接，默认关闭 |
 | 产物下载 | `GET https://<domain>/dl/dash-agent-linux-<arch>` | 安装与升级 |
 
@@ -45,6 +45,7 @@ WebSocket 使用 text frame。启用 `permessage-deflate`，但小于 1 KB 的�
   "server_time_ms": 1757222400123,
   "interval_fast_s": 5,
   "interval_slow_s": 60,
+  "facts_max_interval_s": 1800,
   "collect_conns": true,
   "exec_mode": "actions",
   "enable_terminal": false,
@@ -87,6 +88,26 @@ WebSocket 使用 text frame。启用 `permessage-deflate`，但小于 1 KB 的�
 
 只在启动、`facts_hash` 变化、或服务端 `need_facts` 时上报。字段对应 `node_facts` 表。
 
+```json
+{"jsonrpc":"2.0","method":"agent.facts","params":{
+  "arch": "amd64",
+  "os_name": "debian",
+  "os_version": "12",
+  "kernel": "6.1.0-21-amd64",
+  "virt": "kvm",
+  "cpu_model": "Intel Xeon",
+  "cpu_cores": 2,
+  "cpu_threads": 4,
+  "mem_total": 4120000000,
+  "swap_total": 1073741824,
+  "disk_total": 42000000000,
+  "ipv4": "198.51.100.1",
+  "ipv6": "2001:db8::1",
+  "boot_at_ms": 1757222400000,
+  "facts_hash": "3f2a5b6c"
+}}
+```
+
 ### 2.4 `agent.result`（notification）
 
 指令执行结果回传：
@@ -117,6 +138,18 @@ WebSocket 使用 text frame。启用 `permessage-deflate`，但小于 1 KB 的�
 | `server.ping_task` | notification | 下发探测任务清单（全量替换） |
 | `server.terminal_open` | request | 要求 agent 发起终端连接，携带一次性 ticket |
 | `server.reload_actions` | notification | 动作清单版本变更 |
+
+`server.config` 示例：
+
+```json
+{"jsonrpc":"2.0","method":"server.config","params":{
+  "interval_fast_s": 10,
+  "interval_slow_s": 120,
+  "facts_max_interval_s": 3600,
+  "collect_conns": false,
+  "need_facts": false
+}}
+```
 
 **agent 对不认识的方法必须返回 `-32601 Method not found` 并继续运行**，
 不允许因为服务端下发了新方法就崩溃——这是滚动升级能工作的前提。

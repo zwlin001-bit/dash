@@ -12,6 +12,12 @@
 | [`05-deployment.md`](05-deployment.md) | `setup.sh` 部署流程、证书、域名维护 |
 | [`06-speedtest.md`](06-speedtest.md) | 三网测速模块（电信/联通/移动 + 自定义）·第三期 |
 | [`07-monitoring.md`](07-monitoring.md) | Ping 探测、告警引擎、通知渠道、到期与流量提醒 ·第二期 |
+| [`08-field-map.md`](08-field-map.md) | **跨层指标字段总表**：/proc → 协议 → 表列 → rollup → 图表 |
+| [`09-events-notify.md`](09-events-notify.md) | 统一事件总线、通知渠道、路由规则、消息模板 |
+| [`10-schema-spec.md`](10-schema-spec.md) | **表结构规格**：逐列的类型、可空、默认、索引。建表的唯一权威 |
+| [`11-collect-spec.md`](11-collect-spec.md) | **采集算法规格**：每个指标怎么算、每个坑在哪 |
+| [`12-api-spec.md`](12-api-spec.md) | **接口规格**：端点、参数、返回、状态码 |
+| [`13-ui-spec.md`](13-ui-spec.md) | **界面规格**：设计 token、双主题、布局、组件类名 |
 | `adr/` | 关键决策记录 |
 | [`agy/`](agy/README.md) | **给 AGY（反重力）的实施说明**。第一期任务清单：[`agy/tasks/`](agy/tasks/README.md) |
 

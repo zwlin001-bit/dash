@@ -10,7 +10,6 @@
 git clone <repo> && cd dash
 sudo ./setup.sh install
 # > 请输入访问域名: dash.example.com
-# > 请输入 Oracle ADB wallet 路径 (回车使用 ./wallet):
 # ...
 # 安装完成。访问 https://dash.example.com
 # 初始管理员: admin / <随机生成的密码，只显示一次>
@@ -19,11 +18,11 @@ sudo ./setup.sh install
 非交互形式：
 
 ```sh
-sudo ./setup.sh install --domain dash.example.com --wallet /opt/wallet --yes
+sudo ./setup.sh install --domain dash.example.com --yes
 ```
 
-> 当前 ADB 的「相互 TLS (mTLS) 认证」为**必需**，因此 `--wallet` 是必填项。
-> 详见 [`agy/M0-foundation.md`](agy/M0-foundation.md) 的 T0.0。
+> **ADB 已关闭 mTLS，用连接串（TLS-only）直连，不需要 wallet。**
+> 数据库连接信息通过 `--db-dsn` / `--db-user` / `--db-password` 或对应环境变量提供。
 
 子命令：`install` / `upgrade` / `uninstall` / `status`。**全部幂等，可重复执行。**
 
@@ -38,7 +37,6 @@ sudo ./setup.sh install --domain dash.example.com --wallet /opt/wallet --yes
    /usr/local/bin/dashd
    /etc/dash/config.toml        0600 dashd:dashd   ← 只放自举必需项
    /etc/dash/master.key         0400 dashd:dashd   ← 随机生成，凭据加密主密钥
-   /etc/dash/wallet/            0700 dashd:dashd   ← ADB wallet（mTLS 必需）
    /var/lib/dash/               0750 dashd:dashd   ← 证书缓存、provider socket
    /var/lib/dash/providers/
    ```
@@ -54,7 +52,7 @@ sudo ./setup.sh install --domain dash.example.com --wallet /opt/wallet --yes
 [db]
 driver      = "oracle"          # oracle | mysql
 dsn         = "…"
-wallet_path = "/opt/wallet"
+wallet_path = ""
 
 [server]
 listen        = ":443"
@@ -85,7 +83,6 @@ setup.sh upgrade    # 停服务 → 备份旧二进制 → 换新 → 跑 migrat
 setup.sh uninstall  # 停服务、删 unit、删二进制；默认保留 /etc/dash 与数据库
                     # --purge 才删配置（数据库永远不动，只提示）
 setup.sh status     # 服务状态、版本、数据库连通性、证书到期时间、在线 agent 数
-                    # 以及 ADB wallet 剩余有效期（到期需重新下载，会导致连不上库）
 ```
 
 ---
@@ -108,5 +105,4 @@ setup.sh status     # 服务状态、版本、数据库连通性、证书到期�
 ```
 /etc/dash/master.key   ← 丢失则所有已存凭据无法解密
 /etc/dash/config.toml
-/etc/dash/wallet/      ← ADB 连接凭据；也可随时从 OCI 控制台重新下载
 ```

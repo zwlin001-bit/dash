@@ -34,6 +34,42 @@ POST/GET/DELETE        /api/v1/enroll-tokens
 POST                   /api/v1/login    /api/v1/logout
 ```
 
+## 端点规格
+
+★ 端点、请求体、返回、状态码在 [`../../12-api-spec.md`](../../12-api-spec.md) §3–§5，照着实现。
+
+几个要点：
+- 节点列表项要**一次返回齐**（含 group、tags、latest、billing），
+  前端不做 N+1。`latest` 读内存缓存不查库
+- `POST /api/v1/nodes/tags:batch` 是**批量打标签**接口，30 台机器逐个点太蠢
+- 创建 enrollment token 的响应里要带**完整的一键安装命令**（域名从 `settings.site.domain` 取）
+
+## 校验规则
+
+| 字段 | 规则 |
+|---|---|
+| `name`（节点/分组/标签） | 去首尾空白后 1–64 字符（标签 1–48），不允许纯空白 |
+| 唯一性 | 分组名、标签名全局唯一，冲突返回 `409 duplicate_name` |
+| `traffic_reset_day` | 1–28（避开 29/30/31 在部分月份不存在的问题） |
+| `cycle_days` | > 0 |
+| `price` | ≥ 0 |
+| `password` | ≥ 8 字符 |
+| 排序字段 | 只接受接口声明的白名单，**不接受任意字段**（防注入） |
+
+密码用 **bcrypt cost 12** 或 **argon2id**（`time=1, memory=64MB, threads=4`）。
+**不许自己发明哈希方案。**
+
+## 删除顺序
+
+★ **不依赖外键级联**（`10-schema-spec.md` §0 明确不建外键）。按顺序显式删：
+
+- 删节点：`node_tags` → `node_facts` → `node_billing` → `nodes`。
+  **时序数据不同步删**，交给保留期过期
+- 删分组：其下节点的 `node_group_id` 置 NULL，**不级联删节点**
+- 删标签：先删 `node_tags` 关联行，再删 `tags`
+
+整个删除放在**一个事务**里。
+
 ## 约束
 
 - **标签走 `tags` + `node_tags` 关联表**，不许退回成分号拼接的字符串。

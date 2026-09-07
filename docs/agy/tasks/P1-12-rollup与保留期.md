@@ -16,6 +16,54 @@ internal/ingest/retention.go   保留期清理
 内部调度器（1m 每分钟 / 1h 每小时 / 1d 每天 / 清理每小时）
 ```
 
+★ **开工前先读 [`../../08-field-map.md`](../../08-field-map.md)**，字段名、单位、聚合方式全部以它为准。
+
+## 生成与调度
+
+### 44 列的 SQL 别手敲
+
+`sample_host_1m/1h/1d` 各 44 列，`INSERT ... SELECT` 语句很长。
+★ **用 Go 代码按 `10-schema-spec.md` §3 的展开规则生成 SQL**（gauge→`_avg/_max/_min`、
+counter→`_last`、delta→`_sum`），列表只写一份，三级 rollup 共用。
+手敲三遍必然出现列顺序错位，而且那种 bug 只在数值上体现，不会报错。
+
+### 调度窗口
+
+| 级别 | 频率 | 处理窗口 |
+|---|---|---|
+| 1m | 每分钟第 10 秒 | `[上一分钟起点, 上一分钟终点)` |
+| 1h | 每小时第 2 分钟 | `[上一小时起点, 上一小时终点)` |
+| 1d | 每天 00:05 | `[昨天 00:00, 今天 00:00)` |
+
+延后一点执行是为了让迟到的上报先落库。**只处理已关闭的桶。**
+
+★ **启动时要补跑**：查 `sample_host_1m` 的 `MAX(bucket_ms)`，
+从那里补到当前，避免 dashd 停机期间的数据永远没有 rollup。
+补跑按小时分块，不要一条 SQL 扫几天。
+
+### 逐级聚合的加权平均
+
+```sql
+-- _1h 从 _1m 聚合，avg 必须加权
+SUM(cpu_pct_avg * sample_cnt) / SUM(sample_cnt)   AS cpu_pct_avg,
+MAX(cpu_pct_max)                                  AS cpu_pct_max,
+MIN(cpu_pct_min)                                  AS cpu_pct_min,
+SUM(sample_cnt)                                   AS sample_cnt
+```
+★ 直接 `AVG(cpu_pct_avg)` 是错的。各分钟样本数不等时结果会偏，
+而且**不会报错、肉眼看不出**——这是最阴的一类 bug。
+
+`SUM(sample_cnt) = 0` 时结果写 NULL，不要除零。
+
+### 保留期清理
+
+```sql
+DELETE FROM sample_host WHERE ts_ms >= ? AND ts_ms < ?
+```
+每次删一小时区间，从最老边界推进到保留边界，**每轮之间 sleep 200ms**。
+保留期从 `settings` 读（键名见 `10-schema-spec.md` §5）。
+`retention.1d_days = 0` 表示永久，跳过该表。
+
 ## 约束
 
 - **用可移植 SQL 在数据库内完成，不要把数据拉到应用层再算。**

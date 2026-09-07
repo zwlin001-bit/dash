@@ -113,7 +113,8 @@ MySQL 走多行 `VALUES (...),(...)`。对上暴露同一个 `BatchInsert(table,
 ### 1.6 驱动与连接
 
 - Oracle：**`github.com/sijms/go-ora/v2`（纯 Go）**，不用 godror——godror 需要 Oracle Instant Client（C 依赖），会毁掉「单二进制」的部署简单性。
-- ADB 连接用 wallet（mTLS）；wallet 路径写在 `/etc/dash/config.toml`，不进数据库。
+- **ADB 已关闭 mTLS，用连接串（TLS-only）直连，不使用 wallet。**
+  连接串与账号写在 `/etc/dash/config.toml`（`0600`），密码支持从环境变量注入。
 - 连接池：`MaxOpenConns` 默认 20，`MaxIdleConns` 10，`ConnMaxLifetime` 30min（ADB 会主动断长连接）。
 - **ADB 在网络另一端，往返延迟是主要成本**：所有热路径写入必须批量化（见 §5.4）。
 

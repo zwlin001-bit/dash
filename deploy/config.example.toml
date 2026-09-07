@@ -8,7 +8,7 @@ user   = "admin"
 password = "${DASH_DB_PASSWORD}"
 dsn = "(description=(retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=adb.ap-tokyo-1.oraclecloud.com))(connect_data=(service_name=xxxxx_tp.adb.oraclecloud.com))(security=(ssl_server_dn_match=yes)))"
 # 若 ADB 开启了强制双向 TLS，需提供 wallet 目录；关闭 mTLS 时留空
-wallet_path = "/etc/dash/wallet"   # ADB 开启 mTLS 时必填；关闭 mTLS 时留空
+wallet_path = ""                   # ADB 已关闭 mTLS，留空即可
 
 max_open_conns = 20
 max_idle_conns = 10
