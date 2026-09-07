@@ -104,3 +104,33 @@ func TestWebModule_Register(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 }
+
+func TestHealthzHandler_NoDB(t *testing.T) {
+	h := api.HealthzHandler(nil, "v1.2.3")
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected status 503 without DB, got %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		t.Errorf("expected application/json, got %s", contentType)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body failed: %v", err)
+	}
+
+	bodyStr := string(body)
+	if !strings.Contains(bodyStr, `"db":"error"`) || !strings.Contains(bodyStr, `"version":"v1.2.3"`) {
+		t.Errorf("unexpected healthz body: %s", bodyStr)
+	}
+}

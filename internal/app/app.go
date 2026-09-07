@@ -11,8 +11,9 @@ import (
 // 供各模块在 Register 时进行依赖注入和路由装配。
 type App struct {
 	Mux    *http.ServeMux
-	DB     *db.DB
-	Config *config.Config
+	DB      *db.DB
+	Config  *config.Config
+	Version string
 	// 后续任务按需扩充字段
 }
 
