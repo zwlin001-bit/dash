@@ -25,6 +25,57 @@ scripts/agent-bench.sh   ★ 一条命令打印四项指标和是否达标
 | 磁盘写入 | **≤ 1 次/分钟** | 0 | `/proc/<pid>/io` 的 `write_bytes` |
 | 二进制体积 | **≤ 6 MB** | 5 MB | `ls -l bin/dash-agent` |
 
+## 配置项与状态文件
+
+**配置项全表**见 [`../../03-agent.md`](../../03-agent.md) §8。
+优先级：命令行 > 环境变量（`DASH_AGENT_*`）> 配置文件 > 内置默认。
+
+`/var/lib/dash-agent/state.json`：
+
+```jsonc
+{
+  "version": 1,
+  "node_id": "01J…",
+  "facts_hash": "…",
+  "net_baseline": {                    // 用于跨重启的网卡计数器基线
+    "eth0": {"total_up": 0, "total_down": 0, "at_ms": 0}
+  }
+}
+```
+
+- 只在内容变化时写，**且最多每分钟一次**
+- 写临时文件 → `fsync` → `rename` 原子替换
+- **丢失不影响运行**：`node_id` 从配置文件读，`facts_hash` 重算，基线重新建立
+- `version` 字段用于将来格式变更；读到不认识的版本就当作不存在，重建
+
+### 三档定时的调度
+
+- 用**单个 1 秒 ticker** 驱动，内部按计数判断该跑哪些档，
+  **不要开三个 goroutine 三个 ticker**——那会让 `GOMAXPROCS(1)` 下的调度更抖
+- 采集耗时超过间隔时**跳过这一轮**并打日志，绝不排队堆积
+- ★ **时间戳用 `time.Now().UnixMilli()` 取真实时间**，
+  但间隔判断用 `time.Since(单调时钟)`——系统时间被 NTP 调整时不能让采集乱掉
+
+## scripts/agent-bench.sh 规格
+
+必须能一条命令跑完并打印结论。要求：
+
+```
+用法: ./scripts/agent-bench.sh [时长秒数，默认 3600]
+
+输出示例:
+  RSS           11.2 MB   / 上限 20 MB    ✅
+  CPU            0.18 %   / 上限 0.5 %    ✅
+  磁盘写         0 次/分  / 上限 1 次/分  ✅
+  二进制         4.8 MB   / 上限 6 MB     ✅
+  结论: 达标
+```
+
+- RSS 取运行期间的**峰值**，不是结束时的瞬时值
+- CPU 用 `/proc/<pid>/stat` 的 `utime+stime` 增量 ÷ 时长 ÷ `CLK_TCK`
+- 磁盘写用 `/proc/<pid>/io` 的 `write_bytes` 与 `syscall_w` 增量
+- 任一项超标时**退出码非 0**，方便接进 CI
+
 ## 约束
 
 - 这三行必须有：

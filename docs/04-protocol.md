@@ -12,7 +12,7 @@
 | 通道 | 端点 | 用途 |
 |---|---|---|
 | 主通道 | `wss://<domain>/api/agent/v1/rpc` | 上报 + 指令下发，一条长连接 |
-| 回退通道 | `POST https://<domain>/api/agent/v1/report` | WS 不可用时只上报，指令通过响应体回带 |
+| 回退通道 | `POST https://<domain>/api/agent/v1/report` | WS 不可用时只上报，**指令通过响应体的 `commands` 数组回带**，具体格式见 [`12-api-spec.md`](12-api-spec.md) §2 |
 | 终端 | `wss://<domain>/api/agent/v1/terminal` | 交互式终端，独立连接，默认关闭 |
 | 产物下载 | `GET https://<domain>/dl/dash-agent-linux-<arch>` | 安装与升级 |
 

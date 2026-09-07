@@ -19,6 +19,47 @@ dashd 的 /dl/dash-agent-linux-<arch> 下载端点
 systemd unit 模板 + OpenRC 脚本模板
 ```
 
+## agent 配置文件
+
+`/etc/dash-agent/config.json`（`0600`，属主 `dashagent`）：
+
+```jsonc
+{
+  "endpoint": "https://dash.example.com",
+  "token": "…",
+  "interval_fast_s": 5,
+  "interval_slow_s": 60,
+  "facts_max_interval_s": 1800,
+  "collect_conns": true,
+  "exec_mode": "off"
+}
+```
+
+★ 采集参数以服务端 `agent.hello` 应答下发的为准，
+这里的值只是**服务端不可达时的兜底**。装机脚本写默认值即可，不要让用户填。
+
+## OpenRC 服务脚本（Alpine）
+
+```sh
+#!/sbin/openrc-run
+name="dash-agent"
+description="dash agent"
+command="/usr/local/bin/dash-agent"
+command_args="--config /etc/dash-agent/config.json"
+command_user="dashagent:dashagent"
+supervisor="supervise-daemon"
+respawn_delay=5
+respawn_max=0
+output_log="/dev/null"
+error_log="/dev/null"
+depend() { need net; after firewall; }
+```
+
+★ `output_log`/`error_log` 指向 `/dev/null` 并让 `supervise-daemon` 把 stderr 转给 syslog；
+**不要让 agent 自己写日志文件**（P3.6）。
+
+systemd unit 见 [`../../03-agent.md`](../../03-agent.md) §7.1，照抄即可。
+
 ## 约束（Alpine 是主要翻车点）
 
 - ★ **POSIX sh，busybox ash 能跑。**
