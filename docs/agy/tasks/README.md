@@ -42,10 +42,10 @@
 | 15 | [前端脚手架与图表组件](P1-15-前端脚手架.md) | 01 | `web/` |
 | 16 | [节点列表与详情页](P1-16-节点页面.md) | 13, 15 | `web/` |
 | 17 | [机器清单管理页](P1-17-清单管理页.md) | 14, 15 | `web/` |
-| 18 | [Agent 安装脚本](P1-18-agent安装脚本.md) | 09, 14 | `scripts/install-agent.sh` |
+| 18 | [Agent 安装脚本 + 自助注册](P1-18-agent安装脚本.md) | 09 ✅, 14 ✅ | `scripts/install-agent.sh` + agent enroll 能力 |
 | 19 | [setup.sh 一键部署](P1-19-一键部署.md) | 04, 15 | `setup.sh` |
 | 20 | [事件总线骨架](P1-20-事件总线骨架.md) | 04 | `internal/events` + 迁移 0002 |
-| 21 | [dashd 主程序装配](P1-21-dashd主程序装配.md) | 10,11,13,14,20 | `cmd/dashd` serve 模式 ★拆分遗漏，补 |
+| 21 | [dashd 生命周期与资源预算](P1-21-dashd主程序装配.md) | 19 ✅ | 优雅退出+flush、1GB 内存预算、bench 脚本 |
 
 ## 并行执行
 
