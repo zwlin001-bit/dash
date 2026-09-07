@@ -101,6 +101,7 @@ type Config struct {
 	HTTPClient            *http.Client
 	WSDialer              *websocket.Dialer
 	Logger                Logger
+	OnConnected           func() // WS 连接就绪回调
 }
 
 type writeMsg struct {
@@ -496,6 +497,10 @@ func (t *wsTransport) runWSSession(conn *websocket.Conn) {
 		defer closeDone()
 		t.writePump(conn, done)
 	}()
+
+	if t.cfg.OnConnected != nil {
+		go t.cfg.OnConnected()
+	}
 
 	select {
 	case <-done:
