@@ -247,18 +247,34 @@ func runServe(args []string) {
 	logx.Info("dashd exited gracefully")
 }
 
-func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "migrate":
-			runMigrate(os.Args[2:])
-			return
-		case "serve":
-			runServe(os.Args[2:])
-			return
+// parseCLIArgs 解析命令行参数，提取子命令（serve 或 migrate）并返回剩余参数。
+// 支持:
+//   dashd
+//   dashd -config <path>
+//   dashd -config <path> serve
+//   dashd serve -config <path>
+//   dashd -config <path> migrate
+//   dashd migrate -config <path>
+func parseCLIArgs(args []string) (subcmd string, cleanArgs []string) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		prevIsValFlag := i > 0 && (args[i-1] == "-config" || args[i-1] == "--config")
+		if subcmd == "" && !prevIsValFlag && (arg == "migrate" || arg == "serve") {
+			subcmd = arg
+			continue
 		}
+		cleanArgs = append(cleanArgs, arg)
+	}
+	return subcmd, cleanArgs
+}
+
+func main() {
+	subcmd, cleanArgs := parseCLIArgs(os.Args[1:])
+	if subcmd == "migrate" {
+		runMigrate(cleanArgs)
+		return
 	}
 
-	// 无子命令或以命令行选项开头，默认运行 serve 模式
-	runServe(os.Args[1:])
+	// 默认运行 serve 模式（支持无子命令或显式 serve）
+	runServe(cleanArgs)
 }

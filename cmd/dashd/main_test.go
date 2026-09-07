@@ -108,3 +108,33 @@ func TestRegisterModules_Execution(t *testing.T) {
 		t.Error("expected a.Registry to be set after registering modules")
 	}
 }
+
+func TestParseCLIArgs(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		wantSubcmd   string
+		wantCleanLen int
+	}{
+		{"empty", []string{}, "", 0},
+		{"serve only", []string{"serve"}, "serve", 0},
+		{"migrate only", []string{"migrate"}, "migrate", 0},
+		{"serve with flags after", []string{"serve", "-config", "test.toml"}, "serve", 2},
+		{"serve with flags before", []string{"-config", "test.toml", "serve"}, "serve", 2},
+		{"migrate with flags after", []string{"migrate", "-config", "test.toml"}, "migrate", 2},
+		{"migrate with flags before", []string{"-config", "test.toml", "migrate"}, "migrate", 2},
+		{"flags only defaults to empty subcmd", []string{"-config", "test.toml"}, "", 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			subcmd, clean := parseCLIArgs(tt.args)
+			if subcmd != tt.wantSubcmd {
+				t.Errorf("got subcmd %q, want %q", subcmd, tt.wantSubcmd)
+			}
+			if len(clean) != tt.wantCleanLen {
+				t.Errorf("got clean args len %d, want %d", len(clean), tt.wantCleanLen)
+			}
+		})
+	}
+}

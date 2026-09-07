@@ -44,11 +44,17 @@ LOG_FILE="/tmp/dashd-bench-$$.log"
 mkdir -p "$DATA_DIR"
 rm -f "$MASTER_KEY" "$CONFIG_FILE" "$LOG_FILE"
 
-# 默认使用本地 Docker 测试 MySQL (端口 33306)，亦允许通过 DASH_DB_DSN 覆盖
+# 默认优先探测本地 MySQL (端口 3306 或 33306)，亦允许通过 DASH_DB_DSN 覆盖
 DB_DRIVER="${DASH_DB_DRIVER:-mysql}"
 DB_USER="${DASH_DB_USER:-root}"
 DB_PASSWORD="${DASH_DB_PASSWORD:-root}"
-DB_DSN="${DASH_DB_DSN:-root:root@tcp(127.0.0.1:33306)/dash_test?parseTime=true}"
+if [ -n "${DASH_DB_DSN:-}" ]; then
+  DB_DSN="$DASH_DB_DSN"
+elif (echo > /dev/tcp/127.0.0.1/3306) 2>/dev/null; then
+  DB_DSN="root:root@tcp(127.0.0.1:3306)/dash_test?parseTime=true"
+else
+  DB_DSN="root:root@tcp(127.0.0.1:33306)/dash_test?parseTime=true"
+fi
 
 cat << EOF > "$CONFIG_FILE"
 [db]
