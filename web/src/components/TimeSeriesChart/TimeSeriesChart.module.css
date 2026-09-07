@@ -76,7 +76,7 @@
 
 .spanBtn.active {
   background: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
