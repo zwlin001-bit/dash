@@ -11,11 +11,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"dash/internal/app"
@@ -90,10 +88,13 @@ func (m *WebModule) Register(a *app.App) error {
 	// 注册 /healthz 和 SPA/静态资源
 	a.Mux.HandleFunc("GET /healthz", HealthzHandler(a.DB, a.Version))
 	RegisterRoutes(a.Mux)
+	return nil
+}
 
-	// 若在单测或不需要监听端口的场景下，由环境变量控制不阻塞
+// StartServer 启动 Web 服务（支持 :443 自动 ACME 证书与普通 HTTP 监听），返回停止服务函数。
+func StartServer(a *app.App) (func(context.Context) error, error) {
 	if os.Getenv("DASH_TEST_NO_SERVE") == "1" {
-		return nil
+		return func(context.Context) error { return nil }, nil
 	}
 
 	cfg := a.Config
@@ -115,9 +116,6 @@ func (m *WebModule) Register(a *app.App) error {
 	if listenACME == "" {
 		listenACME = ":80"
 	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	// 若监听 443 端口，启动自动 ACME 证书与 80 端口 HTTP-01 挑战/跳转 (05-deployment.md)
 	if listenAddr == ":443" {
@@ -175,42 +173,41 @@ func (m *WebModule) Register(a *app.App) error {
 		}
 
 		go func() {
-			<-stop
-			log.Printf("收到终止信号，正在关闭服务...")
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = acmeServer.Shutdown(ctx)
-			_ = httpsServer.Shutdown(ctx)
+			log.Printf("dashd HTTPS 控制台已启动: 监听 %s, ACME 监听 %s", listenAddr, listenACME)
+			if err := httpsServer.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Printf("https server exited: %v", err)
+			}
 		}()
 
-		log.Printf("dashd HTTPS 控制台已启动: 监听 %s, ACME 监听 %s", listenAddr, listenACME)
-		if err := httpsServer.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("https server failed: %w", err)
+		shutdown := func(ctx context.Context) error {
+			_ = acmeServer.Shutdown(ctx)
+			return httpsServer.Shutdown(ctx)
 		}
-
-		return nil
+		return shutdown, nil
 	}
 
-	// 非 443 端口：普通 HTTP 服务（供开发/单测环境使用）
+	// 普通 HTTP 服务（供 nginx 反向代理或开发/单测环境使用）
 	server := &http.Server{
 		Addr:    listenAddr,
 		Handler: a.Mux,
 	}
 
+	displayAddr := listenAddr
+	if strings.HasPrefix(displayAddr, ":") {
+		displayAddr = "127.0.0.1" + displayAddr
+	}
+	log.Printf("dashd 服务已启动: http://%s (监听地址 %s)", displayAddr, listenAddr)
+
 	go func() {
-		<-stop
-		log.Printf("收到终止信号，正在关闭 Web 控制台...")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(ctx)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("web server exited: %v", err)
+		}
 	}()
 
-	log.Printf("dashd 控制台已启动: http://localhost%s (监听地址 %s)", listenAddr, listenAddr)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("web server failed: %w", err)
+	shutdown := func(ctx context.Context) error {
+		return server.Shutdown(ctx)
 	}
-
-	return nil
+	return shutdown, nil
 }
 
 // Handler 返回内嵌 SPA 与静态资源的处理 Handler。

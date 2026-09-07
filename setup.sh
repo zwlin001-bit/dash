@@ -4,6 +4,7 @@ set -e
 # ==============================================================================
 # dashd 一键部署与管理脚本 (POSIX sh 兼容)
 # 支持: install / upgrade / uninstall / status
+# 架构: Nginx 双域名反向代理 (内网控制台 + 公网 Agent 接入) + dashd
 # ==============================================================================
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -13,19 +14,21 @@ usage() {
 Usage: $0 <command> [options]
 
 Commands:
-  install     Install and bootstrap dashd
+  install     Install and bootstrap dashd with Nginx dual-domain ingress
   upgrade     Upgrade dashd binary with automatic rollback
-  uninstall   Uninstall dashd service and binary
-  status      Show current status of dashd
+  uninstall   Uninstall dashd service, binary, and Nginx configuration
+  status      Show current status of dashd, Nginx, and TLS certificates
 
 Options for 'install':
-  --domain <domain>           Domain for HTTPS/ACME (required in non-interactive mode)
+  --console-domain <domain>   Domain for internal web console (e.g. console.dash.internal)
+  --agent-domain <domain>     Domain for public agent ingress (e.g. agent.example.com)
+  --domain <domain>           Fallback domain (if single domain specified)
+  --internal-ip <ip>          Internal IP to bind console (default: auto-detect WireGuard/LAN IP)
   --db-driver <driver>        Database driver: oracle (default) or mysql
   --db-user <user>            Database user (default: admin)
   --db-password <password>    Database password (or DASH_DB_PASSWORD env)
   --db-dsn <dsn>              Database connection DSN (or DASH_DB_DSN env)
-  --server-listen <listen>    Listen address for HTTPS (default: :443)
-  --server-listen-acme <addr> Listen address for ACME HTTP-01 (default: :80)
+  --server-listen <listen>    Local loopback listen address for dashd (default: 127.0.0.1:8080)
   --data-dir <path>           Data directory (default: /var/lib/dash)
   --admin-user <name>         Initial admin username (default: admin)
   --admin-password <pass>     Initial admin password (optional)
@@ -67,26 +70,57 @@ detect_distro() {
     fi
 }
 
-ensure_dependencies() {
-    detect_distro
-    if ! command -v setcap >/dev/null 2>&1; then
-        echo "--> 正在安装 setcap 工具..."
-        if [ "$DISTRO" = "alpine" ]; then
-            apk add --no-cache libcap
-        elif command -v apt-get >/dev/null 2>&1; then
-            apt-get update -qq && apt-get install -y -qq libcap2-bin
-        else
-            echo "❌ 警告: 未找到 setcap，请先手动安装 libcap 工具。" >&2
+detect_internal_ip() {
+    # 1. 尝试检测 WireGuard / VPN 网卡 (wg0, wg, tailscale0, tun0)
+    for iface in wg0 wg-quick wg tailscale0 tun0; do
+        if command -v ip >/dev/null 2>&1; then
+            _ip=$(ip -4 addr show dev "$iface" 2>/dev/null | sed -n 's/.*inet[[:space:]]*\([0-9.]*\).*/\1/p' | head -n 1)
+            if [ -n "$_ip" ]; then
+                echo "$_ip"
+                return 0
+            fi
         fi
+    done
+
+    # 2. 尝试从 hostname -I 获取私有 IPv4
+    if command -v hostname >/dev/null 2>&1; then
+        for _ip in $(hostname -I 2>/dev/null); do
+            case "$_ip" in
+                10.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|192.168.*)
+                    echo "$_ip"
+                    return 0
+                    ;;
+            esac
+        done
     fi
 
-    if ! command -v curl >/dev/null 2>&1; then
-        echo "--> 正在安装 curl 工具..."
-        if [ "$DISTRO" = "alpine" ]; then
-            apk add --no-cache curl
-        elif command -v apt-get >/dev/null 2>&1; then
-            apt-get update -qq && apt-get install -y -qq curl
-        fi
+    # 3. 尝试从 ip -4 addr 获取非 127.* IP
+    if command -v ip >/dev/null 2>&1; then
+        for _ip in $(ip -4 addr show 2>/dev/null | sed -n 's/.*inet[[:space:]]*\([0-9.]*\).*/\1/p'); do
+            case "$_ip" in
+                127.*) ;;
+                *)
+                    echo "$_ip"
+                    return 0
+                    ;;
+            esac
+        done
+    fi
+
+    # 4. 回退到 127.0.0.1
+    echo "127.0.0.1"
+}
+
+ensure_dependencies() {
+    detect_distro
+    echo "--> 正在检查并安装系统依赖 (nginx, openssl, libcap, curl)..."
+    if [ "$DISTRO" = "alpine" ]; then
+        apk add --no-cache nginx openssl libcap curl
+    elif command -v apt-get >/dev/null 2>&1; then
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq && apt-get install -y -qq nginx openssl libcap2-bin curl
+    else
+        echo "⚠️ 请确保系统已安装: nginx, openssl, setcap (libcap), curl" >&2
     fi
 }
 
@@ -105,6 +139,175 @@ ensure_user() {
     fi
 }
 
+ensure_certificates() {
+    _c_domain="$1"
+    _a_domain="$2"
+    _i_ip="$3"
+
+    mkdir -p /etc/dash/certs
+    chmod 0755 /etc/dash/certs
+
+    # 控制台证书 (绑定内网 IP 与内网域名)
+    if [ ! -f /etc/dash/certs/console.crt ] || [ ! -f /etc/dash/certs/console.key ]; then
+        echo "--> 为管理控制台生成 TLS 证书: ${_c_domain} (内网 IP: ${_i_ip})..."
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/dash/certs/console.key \
+            -out /etc/dash/certs/console.crt \
+            -subj "/CN=${_c_domain}" \
+            -addext "subjectAltName=DNS:${_c_domain},IP:${_i_ip}" 2>/dev/null || \
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/dash/certs/console.key \
+            -out /etc/dash/certs/console.crt \
+            -subj "/CN=${_c_domain}" 2>/dev/null
+        chmod 0644 /etc/dash/certs/console.crt
+        chmod 0600 /etc/dash/certs/console.key
+    fi
+
+    # Agent 接入证书
+    if [ ! -f /etc/dash/certs/agent.crt ] || [ ! -f /etc/dash/certs/agent.key ]; then
+        echo "--> 为 Agent 接入生成 TLS 证书: ${_a_domain}..."
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/dash/certs/agent.key \
+            -out /etc/dash/certs/agent.crt \
+            -subj "/CN=${_a_domain}" \
+            -addext "subjectAltName=DNS:${_a_domain}" 2>/dev/null || \
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/dash/certs/agent.key \
+            -out /etc/dash/certs/agent.crt \
+            -subj "/CN=${_a_domain}" 2>/dev/null
+        chmod 0644 /etc/dash/certs/agent.crt
+        chmod 0600 /etc/dash/certs/agent.key
+    fi
+}
+
+configure_nginx() {
+    _c_domain="$1"
+    _a_domain="$2"
+    _i_ip="$3"
+    _listen="$4"
+
+    echo "--> 配置 Nginx 双域名反向代理与 TLS 终结..."
+    NGINX_DIR="/etc/nginx/conf.d"
+    if [ -d /etc/nginx/http.d ]; then
+        NGINX_DIR="/etc/nginx/http.d"
+    fi
+    mkdir -p "$NGINX_DIR"
+    mkdir -p /var/lib/dash/acme
+    chmod 0755 /var/lib/dash/acme
+
+    # 避免默认站点的 80/443 端口冲突
+    rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+    if [ -f /etc/nginx/http.d/default.conf ]; then
+        mv /etc/nginx/http.d/default.conf /etc/nginx/http.d/default.conf.bak 2>/dev/null || true
+    fi
+
+    cat > "$NGINX_DIR/dash.conf" <<NGINX_EOF
+# dash 反向代理配置（自动生成）
+map \$http_upgrade \$dash_connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# 1. 证书申请与 HTTP 跳转
+server {
+    listen 80;
+    server_name ${_c_domain} ${_a_domain};
+
+    location /.well-known/acme-challenge/ {
+        root /var/lib/dash/acme;
+    }
+
+    location /healthz {
+        proxy_pass http://${_listen};
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+# 2. 管理控制台 (仅绑定内网 IP: ${_i_ip})
+server {
+    listen ${_i_ip}:443 ssl;
+    server_name ${_c_domain};
+
+    ssl_certificate /etc/dash/certs/console.crt;
+    ssl_certificate_key /etc/dash/certs/console.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    location / {
+        proxy_pass http://${_listen};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$dash_connection_upgrade;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+# 3. Agent 接入入口 (公网监听 443，只暴露 /api/agent/v1/* 与 /dl/*)
+server {
+    listen 443 ssl;
+    server_name ${_a_domain};
+
+    ssl_certificate /etc/dash/certs/agent.crt;
+    ssl_certificate_key /etc/dash/certs/agent.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    location /healthz {
+        proxy_pass http://${_listen};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /api/agent/v1/ {
+        proxy_pass http://${_listen};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$dash_connection_upgrade;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    location /dl/ {
+        proxy_pass http://${_listen};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # 核心安全控制：公网不暴露控制台 API 与前端界面
+    location / {
+        return 404;
+    }
+}
+NGINX_EOF
+
+    # 测试并启动或重载 Nginx
+    nginx -t
+    if [ "$INIT_SYSTEM" = "systemd" ]; then
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable nginx 2>/dev/null || true
+        systemctl restart nginx || systemctl start nginx
+    elif [ "$INIT_SYSTEM" = "openrc" ]; then
+        rc-update add nginx default 2>/dev/null || true
+        rc-service nginx restart || rc-service nginx start
+    else
+        nginx -s reload 2>/dev/null || nginx || true
+    fi
+}
+
 extract_json_val() {
     printf '%s' "$1" | sed -n 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 }
@@ -116,13 +319,15 @@ extract_json_int() {
 cmd_install() {
     check_root
 
+    CONSOLE_DOMAIN=""
+    AGENT_DOMAIN=""
+    INTERNAL_IP=""
     DOMAIN=""
     DB_DRIVER="${DASH_DB_DRIVER:-oracle}"
     DB_USER="${DASH_DB_USER:-admin}"
     DB_PASSWORD="${DASH_DB_PASSWORD:-}"
     DB_DSN="${DASH_DB_DSN:-}"
-    SERVER_LISTEN="${DASH_SERVER_LISTEN:-:443}"
-    SERVER_LISTEN_ACME="${DASH_SERVER_LISTEN_ACME:-:80}"
+    SERVER_LISTEN="${DASH_SERVER_LISTEN:-127.0.0.1:8080}"
     DATA_DIR="${DASH_SERVER_DATA_DIR:-/var/lib/dash}"
     ADMIN_USER="admin"
     ADMIN_PASSWORD=""
@@ -130,8 +335,20 @@ cmd_install() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --console-domain)
+                CONSOLE_DOMAIN="$2"
+                shift 2
+                ;;
+            --agent-domain)
+                AGENT_DOMAIN="$2"
+                shift 2
+                ;;
             --domain)
                 DOMAIN="$2"
+                shift 2
+                ;;
+            --internal-ip)
+                INTERNAL_IP="$2"
                 shift 2
                 ;;
             --db-driver)
@@ -152,10 +369,6 @@ cmd_install() {
                 ;;
             --server-listen)
                 SERVER_LISTEN="$2"
-                shift 2
-                ;;
-            --server-listen-acme)
-                SERVER_LISTEN_ACME="$2"
                 shift 2
                 ;;
             --data-dir)
@@ -181,25 +394,54 @@ cmd_install() {
         esac
     done
 
-    # 域名交互输入 (P1-19 约束：交互只有一个必填项：域名。其余全部有合理默认值)
-    if [ -z "$DOMAIN" ]; then
+    # 域名交互输入 (P1-19 需求变更：双域名要求输入两个域名)
+    if [ -z "$CONSOLE_DOMAIN" ] || [ -z "$AGENT_DOMAIN" ]; then
         if [ "$NON_INTERACTIVE" -eq 1 ] || [ ! -t 0 ]; then
-            echo "❌ 错误: 非交互模式下必须通过 --domain 指定访问域名。" >&2
-            exit 1
-        fi
-        printf "请输入访问域名 (如 dash.example.com): "
-        read -r DOMAIN
-        if [ -z "$DOMAIN" ]; then
-            echo "❌ 错误: 域名不能为空。" >&2
-            exit 1
+            if [ -n "$DOMAIN" ]; then
+                [ -z "$AGENT_DOMAIN" ] && AGENT_DOMAIN="$DOMAIN"
+                [ -z "$CONSOLE_DOMAIN" ] && CONSOLE_DOMAIN="console.$DOMAIN"
+            fi
+            if [ -z "$CONSOLE_DOMAIN" ] || [ -z "$AGENT_DOMAIN" ]; then
+                echo "❌ 错误: 非交互模式下必须指定 --console-domain 与 --agent-domain（或通过 --domain 提供）。" >&2
+                exit 1
+            fi
+        else
+            if [ -z "$CONSOLE_DOMAIN" ]; then
+                printf "请输入管理控制台内网域名 (如 console.dash.internal): "
+                read -r CONSOLE_DOMAIN
+                if [ -z "$CONSOLE_DOMAIN" ]; then
+                    echo "❌ 错误: 控制台域名不能为空。" >&2
+                    exit 1
+                fi
+            fi
+            if [ -z "$AGENT_DOMAIN" ]; then
+                printf "请输入 Agent 接入公网域名 (如 agent.example.com): "
+                read -r AGENT_DOMAIN
+                if [ -z "$AGENT_DOMAIN" ]; then
+                    echo "❌ 错误: Agent 域名不能为空。" >&2
+                    exit 1
+                fi
+            fi
         fi
     fi
 
-    echo "==> [1/7] 检查系统环境与依赖..."
+    # 内网 IP 自动检测与确认
+    AUTO_IP=$(detect_internal_ip)
+    if [ -z "$INTERNAL_IP" ]; then
+        if [ "$NON_INTERACTIVE" -eq 1 ] || [ ! -t 0 ]; then
+            INTERNAL_IP="$AUTO_IP"
+        else
+            printf "请输入管理控制台绑定的内网 IP [默认 %s]: " "$AUTO_IP"
+            read -r INPUT_IP
+            INTERNAL_IP="${INPUT_IP:-$AUTO_IP}"
+        fi
+    fi
+
+    echo "==> [1/8] 检查系统环境与依赖 (Nginx, OpenSSL, setcap, curl)..."
     ensure_dependencies
     detect_init
 
-    echo "==> [2/7] 确保系统用户与目录权限..."
+    echo "==> [2/8] 确保系统用户与目录权限..."
     ensure_user
     mkdir -p /etc/dash
     chmod 0750 /etc/dash
@@ -245,7 +487,6 @@ conn_max_lifetime_s = 1800
 
 [server]
 listen = "$SERVER_LISTEN"
-listen_acme = "$SERVER_LISTEN_ACME"
 data_dir = "$DATA_DIR"
 master_key = "/etc/dash/master.key"
 CFG_EOF
@@ -253,7 +494,13 @@ CFG_EOF
         chown dashd:dashd /etc/dash/config.toml
     fi
 
-    echo "==> [3/7] 准备可执行程序..."
+    echo "==> [3/8] 生成双域名 TLS 证书..."
+    ensure_certificates "$CONSOLE_DOMAIN" "$AGENT_DOMAIN" "$INTERNAL_IP"
+
+    echo "==> [4/8] 配置并启动 Nginx 双入口反向代理..."
+    configure_nginx "$CONSOLE_DOMAIN" "$AGENT_DOMAIN" "$INTERNAL_IP" "$SERVER_LISTEN"
+
+    echo "==> [5/8] 准备 dashd 可执行程序..."
     BIN_SRC=""
     if [ -f "$SCRIPT_DIR/bin/dashd" ]; then
         BIN_SRC="$SCRIPT_DIR/bin/dashd"
@@ -278,12 +525,11 @@ CFG_EOF
     chmod 0755 /usr/local/bin/dashd
     chown root:root /usr/local/bin/dashd
 
-    echo "==> [4/7] 赋予低端口绑定能力 (setcap)..."
     if command -v setcap >/dev/null 2>&1; then
-        setcap cap_net_bind_service=+ep /usr/local/bin/dashd
+        setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
     fi
 
-    echo "==> [5/7] 配置系统服务..."
+    echo "==> [6/8] 配置系统服务 (dashd.service)..."
     if [ "$INIT_SYSTEM" = "systemd" ]; then
         cat > /etc/systemd/system/dashd.service <<'UNIT_EOF'
 [Unit]
@@ -295,7 +541,7 @@ Wants=network-online.target
 Type=simple
 User=dashd
 Group=dashd
-ExecStart=/usr/local/bin/dashd -config /etc/dash/config.toml
+ExecStart=/usr/local/bin/dashd -config /etc/dash/config.toml serve
 Restart=always
 RestartSec=5s
 LimitNOFILE=65535
@@ -319,7 +565,7 @@ UNIT_EOF
 name="dashd"
 description="dashd - VPS Management and Monitoring Server"
 command="/usr/local/bin/dashd"
-command_args="-config /etc/dash/config.toml"
+command_args="-config /etc/dash/config.toml serve"
 command_user="dashd:dashd"
 command_background="true"
 pidfile="/run/dashd.pid"
@@ -333,8 +579,8 @@ OPENRC_EOF
         rc-update add dashd default >/dev/null 2>&1 || true
     fi
 
-    echo "==> [6/7] 执行数据库迁移与初始化..."
-    INIT_CMD="/usr/local/bin/dashd init-db --config /etc/dash/config.toml --domain $DOMAIN --admin-user $ADMIN_USER"
+    echo "==> [7/8] 执行数据库迁移与双域名初始化..."
+    INIT_CMD="/usr/local/bin/dashd init-db --config /etc/dash/config.toml --domain $AGENT_DOMAIN --agent-domain $AGENT_DOMAIN --console-domain $CONSOLE_DOMAIN --admin-user $ADMIN_USER"
     if [ -n "$ADMIN_PASSWORD" ]; then
         INIT_CMD="$INIT_CMD --admin-password $ADMIN_PASSWORD"
     fi
@@ -348,7 +594,7 @@ OPENRC_EOF
     # 提取管理员密码
     ADMIN_PW=$(printf '%s\n' "$INIT_OUT" | sed -n 's/^ADMIN_PASSWORD:[[:space:]]*//p' | head -n 1)
 
-    echo "==> [7/7] 启动服务并等待健康检查..."
+    echo "==> [8/8] 启动 dashd 服务并等待健康检查..."
     if [ "$INIT_SYSTEM" = "systemd" ]; then
         systemctl restart dashd.service
     elif [ "$INIT_SYSTEM" = "openrc" ]; then
@@ -356,13 +602,13 @@ OPENRC_EOF
     else
         echo "⚠️ 未识别到 systemd 或 openrc，尝试启动 dashd..."
         pkill -f /usr/local/bin/dashd 2>/dev/null || true
-        su -s /bin/sh dashd -c "/usr/local/bin/dashd -config /etc/dash/config.toml" >/var/log/dashd.log 2>&1 &
+        su -s /bin/sh dashd -c "/usr/local/bin/dashd -config /etc/dash/config.toml serve" >/var/log/dashd.log 2>&1 &
     fi
 
     # 健康检查轮询 (30 秒)
     CHECK_URL="http://127.0.0.1/healthz"
-    if [ "$SERVER_LISTEN" != ":443" ]; then
-        CHECK_URL="http://127.0.0.1${SERVER_LISTEN}/healthz"
+    if [ -n "$SERVER_LISTEN" ]; then
+        CHECK_URL="http://${SERVER_LISTEN}/healthz"
     fi
 
     MAX_WAIT=30
@@ -370,7 +616,7 @@ OPENRC_EOF
     HEALTH_OK=0
 
     while [ "$WAITED" -lt "$MAX_WAIT" ]; do
-        if curl -s -f "$CHECK_URL" >/dev/null 2>&1 || curl -k -s -f "https://127.0.0.1/healthz" >/dev/null 2>&1; then
+        if curl -s "$CHECK_URL" 2>/dev/null | grep -q '"status"' || curl -k -s "https://127.0.0.1/healthz" 2>/dev/null | grep -q '"status"'; then
             HEALTH_OK=1
             break
         fi
@@ -391,9 +637,11 @@ OPENRC_EOF
 
     echo ""
     echo "============================================================"
-    echo "🎉 dashd 安装成功！"
+    echo "🎉 dashd 双入口一键部署成功！"
     echo "============================================================"
-    echo "访问地址:     https://${DOMAIN}"
+    echo "管理控制台:   https://${CONSOLE_DOMAIN}"
+    echo "控制台绑定:   ${INTERNAL_IP}:443 (仅内网/WireGuard 访问，不监听公网)"
+    echo "Agent 接入:   https://${AGENT_DOMAIN} (公网接入，仅暴露 Agent 协议)"
     echo "初始管理员:   ${ADMIN_USER}"
     if [ -n "$ADMIN_PW" ]; then
         echo "初始密码:     ${ADMIN_PW}"
@@ -405,6 +653,7 @@ OPENRC_EOF
     echo "★ 关键文件备份提醒（重要）："
     echo "  1. /etc/dash/master.key   (凭据主密钥，丢失则已加密凭据无法恢复)"
     echo "  2. /etc/dash/config.toml  (系统自举配置文件)"
+    echo "  3. /etc/dash/certs/       (TLS 证书与密钥目录)"
     echo "============================================================"
 }
 
@@ -465,7 +714,7 @@ cmd_upgrade() {
     chmod 0755 /usr/local/bin/dashd
     chown root:root /usr/local/bin/dashd
     if command -v setcap >/dev/null 2>&1; then
-        setcap cap_net_bind_service=+ep /usr/local/bin/dashd
+        setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
     fi
 
     echo "==> [4/6] 执行数据库迁移..."
@@ -474,7 +723,7 @@ cmd_upgrade() {
         printf '%s\n' "$MIGRATE_OUT" >&2
         cp -f /usr/local/bin/dashd.bak /usr/local/bin/dashd
         if command -v setcap >/dev/null 2>&1; then
-            setcap cap_net_bind_service=+ep /usr/local/bin/dashd
+            setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
         fi
         if [ "$INIT_SYSTEM" = "systemd" ]; then
             systemctl start dashd.service
@@ -484,21 +733,24 @@ cmd_upgrade() {
         exit 1
     }
 
-    echo "==> [5/6] 启动新版本服务..."
+    echo "==> [5/6] 启动新版本服务并重载 Nginx..."
     if [ "$INIT_SYSTEM" = "systemd" ]; then
         systemctl start dashd.service
+        systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
     elif [ "$INIT_SYSTEM" = "openrc" ]; then
         rc-service dashd start
+        rc-service nginx reload 2>/dev/null || true
     else
-        su -s /bin/sh dashd -c "/usr/local/bin/dashd -config /etc/dash/config.toml" >/var/log/dashd.log 2>&1 &
+        su -s /bin/sh dashd -c "/usr/local/bin/dashd -config /etc/dash/config.toml serve" >/var/log/dashd.log 2>&1 &
+        nginx -s reload 2>/dev/null || true
     fi
 
     echo "==> [6/6] 验证新版本健康状态..."
-    CHECK_URL="http://127.0.0.1/healthz"
+    CHECK_URL="http://127.0.0.1:8080/healthz"
     if [ -f /etc/dash/config.toml ]; then
         LISTEN_CFG=$(grep '^[[:space:]]*listen[[:space:]]*=' /etc/dash/config.toml | head -n 1 | sed 's/.*=[[:space:]]*"\([^"]*\)".*/\1/')
-        if [ -n "$LISTEN_CFG" ] && [ "$LISTEN_CFG" != ":443" ]; then
-            CHECK_URL="http://127.0.0.1${LISTEN_CFG}/healthz"
+        if [ -n "$LISTEN_CFG" ]; then
+            CHECK_URL="http://${LISTEN_CFG}/healthz"
         fi
     fi
 
@@ -507,7 +759,7 @@ cmd_upgrade() {
     HEALTH_OK=0
 
     while [ "$WAITED" -lt "$MAX_WAIT" ]; do
-        if curl -s -f "$CHECK_URL" >/dev/null 2>&1 || curl -k -s -f "https://127.0.0.1/healthz" >/dev/null 2>&1; then
+        if curl -s "$CHECK_URL" 2>/dev/null | grep -q '"status"' || curl -k -s "https://127.0.0.1/healthz" 2>/dev/null | grep -q '"status"'; then
             HEALTH_OK=1
             break
         fi
@@ -528,7 +780,7 @@ cmd_upgrade() {
 
         cp -f /usr/local/bin/dashd.bak /usr/local/bin/dashd
         if command -v setcap >/dev/null 2>&1; then
-            setcap cap_net_bind_service=+ep /usr/local/bin/dashd
+            setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
         fi
 
         if [ "$INIT_SYSTEM" = "systemd" ]; then
@@ -536,7 +788,7 @@ cmd_upgrade() {
         elif [ "$INIT_SYSTEM" = "openrc" ]; then
             rc-service dashd start
         else
-            su -s /bin/sh dashd -c "/usr/local/bin/dashd -config /etc/dash/config.toml" >/var/log/dashd.log 2>&1 &
+            su -s /bin/sh dashd -c "/usr/local/bin/dashd -config /etc/dash/config.toml serve" >/var/log/dashd.log 2>&1 &
         fi
         echo "✅ 回滚完成，旧版本服务已恢复运行。"
         exit 1
@@ -571,7 +823,11 @@ cmd_uninstall() {
         pkill -f /usr/local/bin/dashd 2>/dev/null || true
     fi
 
-    echo "--> 删除二进制文件..."
+    echo "--> 清除 Nginx 反向代理配置..."
+    rm -f /etc/nginx/conf.d/dash.conf /etc/nginx/http.d/dash.conf /etc/nginx/sites-enabled/dash.conf
+    nginx -s reload 2>/dev/null || true
+
+    echo "--> 删除 dashd 二进制文件..."
     rm -f /usr/local/bin/dashd /usr/local/bin/dashd.bak
 
     if [ "$PURGE" -eq 1 ]; then
@@ -590,7 +846,7 @@ cmd_uninstall() {
 cmd_status() {
     detect_init
 
-    # 1. 服务运行状态
+    # 1. dashd 服务运行状态
     PID=$(pidof dashd 2>/dev/null || pgrep -x dashd 2>/dev/null || true)
     PID=$(printf '%s' "$PID" | awk '{print $1}')
 
@@ -606,9 +862,19 @@ cmd_status() {
         fi
     fi
 
-    # 2. 查询 /healthz
+    # 2. Nginx 服务运行状态
+    NGINX_STATUS="stopped (未运行)"
+    if pidof nginx >/dev/null 2>&1 || pgrep -x nginx >/dev/null 2>&1; then
+        NGINX_STATUS="active (running)"
+    elif [ "$INIT_SYSTEM" = "systemd" ]; then
+        if systemctl is-active nginx >/dev/null 2>&1; then
+            NGINX_STATUS="active (running)"
+        fi
+    fi
+
+    # 3. 查询 /healthz
     HEALTH_JSON=""
-    for url in "http://127.0.0.1/healthz" "http://127.0.0.1:8080/healthz" "https://127.0.0.1/healthz"; do
+    for url in "http://127.0.0.1:8080/healthz" "http://127.0.0.1/healthz" "https://127.0.0.1/healthz"; do
         HEALTH_JSON=$(curl -k -s -m 2 "$url" 2>/dev/null || true)
         if [ -n "$HEALTH_JSON" ] && printf '%s' "$HEALTH_JSON" | grep -q '"status"'; then
             break
@@ -633,27 +899,44 @@ cmd_status() {
         fi
     fi
 
-    # 3. 证书到期时间
-    CERT_EXPIRY="尚未生成 (首次通过域名访问时自动申请)"
-    CERT_DIR="/var/lib/dash/certs"
-    if [ -d "$CERT_DIR" ]; then
-        CERT_FILE=$(find "$CERT_DIR" -type f 2>/dev/null | head -n 1)
-        if [ -n "$CERT_FILE" ] && command -v openssl >/dev/null 2>&1; then
-            EXP_DATE=$(openssl x509 -enddate -noout -in "$CERT_FILE" 2>/dev/null | sed 's/notAfter=//')
-            if [ -n "$EXP_DATE" ]; then
-                CERT_EXPIRY="$EXP_DATE"
-            fi
-        fi
+    # 4. 证书到期时间
+    CONSOLE_CERT_EXPIRY="尚未生成"
+    AGENT_CERT_EXPIRY="尚未生成"
+    if [ -f /etc/dash/certs/console.crt ] && command -v openssl >/dev/null 2>&1; then
+        EXP_DATE=$(openssl x509 -enddate -noout -in /etc/dash/certs/console.crt 2>/dev/null | sed 's/notAfter=//')
+        [ -n "$EXP_DATE" ] && CONSOLE_CERT_EXPIRY="$EXP_DATE"
+    fi
+    if [ -f /etc/dash/certs/agent.crt ] && command -v openssl >/dev/null 2>&1; then
+        EXP_DATE=$(openssl x509 -enddate -noout -in /etc/dash/certs/agent.crt 2>/dev/null | sed 's/notAfter=//')
+        [ -n "$EXP_DATE" ] && AGENT_CERT_EXPIRY="$EXP_DATE"
+    fi
+
+    # 5. 读取配置域名与绑定信息
+    CONF_FILE="/etc/nginx/conf.d/dash.conf"
+    [ -f /etc/nginx/http.d/dash.conf ] && CONF_FILE="/etc/nginx/http.d/dash.conf"
+
+    CONSOLE_INFO="未知"
+    AGENT_INFO="未知"
+    if [ -f "$CONF_FILE" ]; then
+        C_BIND=$(grep 'listen .*ssl' "$CONF_FILE" | head -n 1 | awk '{print $2}')
+        C_NAME=$(grep 'server_name' "$CONF_FILE" | sed -n '2p' | awk '{print $2}' | tr -d ';')
+        A_NAME=$(grep 'server_name' "$CONF_FILE" | sed -n '3p' | awk '{print $2}' | tr -d ';')
+        [ -n "$C_NAME" ] && CONSOLE_INFO="https://${C_NAME} (绑定: ${C_BIND})"
+        [ -n "$A_NAME" ] && AGENT_INFO="https://${A_NAME} (公网 443)"
     fi
 
     echo "----------------------------------------"
     echo "dashd 服务状态"
     echo "----------------------------------------"
-    echo "服务状态:     $SERVICE_STATUS"
-    echo "程序版本:     $VER"
-    echo "数据库连通性: $DB_STATUS"
-    echo "证书到期时间: $CERT_EXPIRY"
-    echo "在线 agent 数: $AGENTS_ONLINE"
+    echo "dashd 状态:     $SERVICE_STATUS"
+    echo "Nginx 状态:     $NGINX_STATUS"
+    echo "程序版本:       $VER"
+    echo "数据库连通性:   $DB_STATUS"
+    echo "控制台入口:     $CONSOLE_INFO"
+    echo "控制台证书到期: $CONSOLE_CERT_EXPIRY"
+    echo "Agent 接入入口: $AGENT_INFO"
+    echo "Agent 证书到期: $AGENT_CERT_EXPIRY"
+    echo "在线 agent 数:  $AGENTS_ONLINE"
     echo "----------------------------------------"
 }
 

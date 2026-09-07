@@ -52,3 +52,8 @@ build-web:
 		mkdir -p internal/api/dist && \
 		cp -r web/dist/* internal/api/dist/; \
 	fi
+
+.PHONY: bench-dashd
+bench-dashd:
+	@./scripts/dashd-bench.sh
+

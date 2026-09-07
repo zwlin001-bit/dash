@@ -7,8 +7,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"dash/internal/api"
@@ -130,6 +134,8 @@ func runInitDB(args []string) {
 	configPath := fs.String("config", "/etc/dash/config.toml", "path to config.toml")
 	migDir := fs.String("dir", "migrations", "path to migrations directory")
 	domainFlag := fs.String("domain", "", "site domain (e.g. dash.example.com)")
+	agentDomainFlag := fs.String("agent-domain", "", "agent ingress domain (e.g. agent.example.com)")
+	consoleDomainFlag := fs.String("console-domain", "", "console internal domain (e.g. console.dash.internal)")
 	adminUserFlag := fs.String("admin-user", "admin", "admin username")
 	adminPassFlag := fs.String("admin-password", "", "admin password (auto-generated if empty and user does not exist)")
 	driverFlag := fs.String("driver", "", "override db driver (oracle | mysql)")
@@ -177,7 +183,10 @@ func runInitDB(args []string) {
 	}
 	fmt.Println("Database schema migration completed successfully.")
 
-	// 2. Set site.domain in settings if provided
+	// 2. Set site.domain and site.console_domain in settings if provided
+	if *agentDomainFlag != "" && *domainFlag == "" {
+		*domainFlag = *agentDomainFlag
+	}
 	if *domainFlag != "" {
 		domain := strings.TrimSpace(*domainFlag)
 		upsertSQL := database.Dialect().UpsertSQL("settings", []string{"setting_key"}, []string{"setting_val", "updated_at_ms"})
@@ -188,6 +197,18 @@ func runInitDB(args []string) {
 			os.Exit(1)
 		}
 		fmt.Printf("Site domain configured: %s\n", domain)
+	}
+
+	if *consoleDomainFlag != "" {
+		consoleDomain := strings.TrimSpace(*consoleDomainFlag)
+		upsertSQL := database.Dialect().UpsertSQL("settings", []string{"setting_key"}, []string{"setting_val", "updated_at_ms"})
+		nowMs := time.Now().UnixMilli()
+		_, err = database.Exec(ctx, upsertSQL, "site.console_domain", consoleDomain, nowMs)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to configure console domain: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Console domain configured: %s\n", consoleDomain)
 	}
 
 	// 3. Create or update admin user in account_users
@@ -245,23 +266,13 @@ func runInitDB(args []string) {
 	fmt.Println("Database initialization completed successfully.")
 }
 
-func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "migrate":
-			runMigrate(os.Args[2:])
-			return
-		case "init-db":
-			runInitDB(os.Args[2:])
-			return
-		}
-	}
-
+func runServe(args []string) {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	var showVersion bool
-	flag.BoolVar(&showVersion, "version", false, "print version and exit")
-	flag.BoolVar(&showVersion, "v", false, "print version and exit")
-	cliFlags := config.RegisterFlags(flag.CommandLine)
-	flag.Parse()
+	fs.BoolVar(&showVersion, "version", false, "print version and exit")
+	fs.BoolVar(&showVersion, "v", false, "print version and exit")
+	cliFlags := config.RegisterFlags(fs)
+	_ = fs.Parse(args)
 
 	if showVersion {
 		fmt.Printf("dashd %s (commit: %s, built: %s)\n", version, gitCommit, buildTime)
@@ -283,6 +294,7 @@ func main() {
 	app := &App{
 		Config:  cfg,
 		Version: version,
+		Mux:     http.NewServeMux(),
 	}
 
 	// Try connecting to database
@@ -303,4 +315,78 @@ func main() {
 	}
 
 	log.Printf("dashd %s initialized with %d modules", version, len(modules))
+
+	// 启动 HTTP/HTTPS 服务
+	shutdownServer, err := api.StartServer(app)
+	if err != nil {
+		log.Fatalf("failed to start server: %v", err)
+	}
+
+	// 阻塞等待信号并优雅关闭
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	log.Printf("收到终止信号，正在优雅关闭服务...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if shutdownServer != nil {
+		_ = shutdownServer(shutdownCtx)
+	}
+
+	// 优雅关闭：排空时序落库缓冲 (flush ingest)
+	if flusher, ok := app.Ingester.(interface{ Stop() }); ok {
+		log.Printf("正在排空时序采集缓冲区 (flush ingest)...")
+		flusher.Stop()
+	}
+
+	if app.DB != nil {
+		_ = app.DB.Close()
+	}
+
+	log.Printf("dashd 服务已安全退出")
+}
+
+func main() {
+	// 服务端资源预算：稳态 RSS <= 1 GB
+	debug.SetMemoryLimit(1 << 30)
+
+	if len(os.Args) <= 1 {
+		runServe(nil)
+		return
+	}
+
+	first := os.Args[1]
+	switch first {
+	case "migrate":
+		runMigrate(os.Args[2:])
+		return
+	case "init-db":
+		runInitDB(os.Args[2:])
+		return
+	case "serve":
+		runServe(os.Args[2:])
+		return
+	}
+
+	// 如果以 flag 开头，提取是否有嵌入的子命令
+	var filtered []string
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if arg == "serve" {
+			continue
+		}
+		if arg == "migrate" {
+			runMigrate(append(os.Args[1:i], os.Args[i+1:]...))
+			return
+		}
+		if arg == "init-db" {
+			runInitDB(append(os.Args[1:i], os.Args[i+1:]...))
+			return
+		}
+		filtered = append(filtered, arg)
+	}
+
+	runServe(filtered)
 }

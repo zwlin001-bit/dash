@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -64,5 +66,37 @@ func TestRegisterModules_Failure(t *testing.T) {
 	err := RegisterModules(app, mods)
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestRegisterModules_RealModules(t *testing.T) {
+	app := &App{
+		Mux:     nil,
+		Config:  nil,
+		Version: "test-ver",
+	}
+
+	if err := RegisterModules(app, modules); err != nil {
+		t.Fatalf("failed to register real modules: %v", err)
+	}
+
+	if app.Mux == nil {
+		t.Fatal("expected app.Mux to be initialized")
+	}
+
+	// 验证 /healthz 正常挂载并响应
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	app.Mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable && rec.Code != http.StatusOK {
+		t.Fatalf("unexpected /healthz status code: %d", rec.Code)
+	}
+
+	// 验证 /api/v1/settings 正常挂载，不再返回 404 endpoint not found
+	recSettings := httptest.NewRecorder()
+	reqSettings := httptest.NewRequest("GET", "/api/v1/settings", nil)
+	app.Mux.ServeHTTP(recSettings, reqSettings)
+	if recSettings.Code != http.StatusOK {
+		t.Fatalf("expected /api/v1/settings status 200, got %d (body: %s)", recSettings.Code, recSettings.Body.String())
 	}
 }
