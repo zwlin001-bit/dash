@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
