@@ -40,9 +40,8 @@ type Module = app.Module
 // 约束：后续任务只允许向此列表追加模块，不改动装配与启动逻辑。
 var modules = []Module{
 	auth.NewModule(),
-	control.NewModule(),
 	inventory.NewModule(),
-	ingest.NewModule(),
+	ingest.NewModule(), // ★ 必须在 control 之前：control 依赖 app.Ingester
 	control.NewModule(),
 	metrics.NewModule(),
 	events.NewModule(),
