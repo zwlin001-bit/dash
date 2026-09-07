@@ -68,6 +68,16 @@
 - 一个任务一个分支：`agy/p1-04-migrations`
 - 提交信息：`P1-04: 增加 metric_series 的唯一索引` —— 带任务号
 
+### ★ 改了前端就必须重建内嵌产物
+
+前端通过 `//go:embed dist` 打进 `dashd` 二进制。
+**改了 `web/src/` 就必须跑 `make build-web`**，把产物更新进 `internal/api/dist/` 并一起提交。
+
+只改源码不重建，编译出来的二进制里还是旧前端——代码看着修好了，部署上去毫无变化。
+任务 23 就是这么被骗过去的：改了 8 个源文件，产物停在两周前，线上白屏依旧。
+
+提交前自查：`grep -c "<你这次改动里的特征字符串>" internal/api/dist/assets/*.js` 必须命中。
+
 ### ★ 任务完成必须自己推送分支
 
 ```sh
@@ -126,4 +136,5 @@ git push -u origin <你的分支名>
 - [ ] 新建的目录有 `README.md`（职责边界、对外接口、依赖谁）
 - [ ] 日志里翻不到任何机密
 - [ ] 只做了自己这一个任务
+- [ ] ★ 改了 `web/src/` → **已跑 `make build-web` 并提交 `internal/api/dist/`**
 - [ ] ★ **已 `git push -u origin <分支>`，且 `git log --oneline -1 origin/<分支>` 能看到自己的提交**
