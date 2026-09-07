@@ -4,41 +4,8 @@ import { Link } from 'react-router-dom';
 import { checkHealth, getNodeGroups, getNodes, getTags } from '../../api/nodes';
 import { subscribeMetricsStream } from '../../api/metrics';
 import { MetricStreamEvent, NodeLatest, NodeStateStreamEvent } from '../../api/types';
+import { fmt, formatBytes, formatBps, formatTimeAgo } from '../../utils';
 import styles from './Overview.module.css';
-
-function formatBytes(bytes?: number): string {
-  if (bytes === undefined || bytes === null || isNaN(bytes) || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let i = 0;
-  let val = bytes;
-  while (val >= 1024 && i < units.length - 1) {
-    val /= 1024;
-    i++;
-  }
-  return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatBps(bps?: number): string {
-  if (!bps || bps <= 0) return '0 B/s';
-  if (bps >= 1024 * 1024 * 1024) return `${(bps / (1024 * 1024 * 1024)).toFixed(1)} GB/s`;
-  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
-  if (bps >= 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
-  return `${bps} B/s`;
-}
-
-function formatTimeAgo(ms?: number): string {
-  if (!ms || ms <= 0) return '从未上线';
-  const diff = Date.now() - ms;
-  if (diff < 10000) return '刚刚';
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return `${sec} 秒前`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} 分钟前`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} 小时前`;
-  const day = Math.floor(hr / 24);
-  return `${day} 天前`;
-}
 
 export const Overview: React.FC = () => {
   const [search, setSearch] = useState('');
@@ -114,7 +81,7 @@ export const Overview: React.FC = () => {
     };
   }, []);
 
-  // 将静态列表与 SSE 最新状态/指标动态合并
+  // 将静态列表与 SSE 最新状态/指标动态合并（不构造伪造的 0 值）
   const liveNodes = useMemo(() => {
     return rawNodes.map((node) => {
       const stateOverride = realtimeStates[node.id];
@@ -122,16 +89,14 @@ export const Overview: React.FC = () => {
 
       const mergedConnState = stateOverride?.conn_state ?? node.conn_state;
       const mergedLastSeen = stateOverride?.last_seen_at_ms ?? node.last_seen_at_ms;
-      const mergedLatest: NodeLatest = {
-        ...(node.latest || {
-          ts_ms: Date.now(),
-          cpu_pct: 0,
-          mem_used: 0,
-          net_up_bps: 0,
-          net_down_bps: 0,
-        }),
-        ...(metricOverride || {}),
-      };
+
+      let mergedLatest: NodeLatest | undefined = undefined;
+      if (node.latest || metricOverride) {
+        mergedLatest = {
+          ...(node.latest || {}),
+          ...(metricOverride || {}),
+        };
+      }
 
       return {
         ...node,
@@ -175,14 +140,28 @@ export const Overview: React.FC = () => {
   const offlineCount = liveNodes.filter((n) => n.conn_state === 'offline').length;
   const neverCount = liveNodes.filter((n) => n.conn_state === 'never').length;
 
-  const totalUpBps = liveNodes.reduce((acc, n) => acc + (n.latest?.net_up_bps || 0), 0);
-  const totalDownBps = liveNodes.reduce((acc, n) => acc + (n.latest?.net_down_bps || 0), 0);
+  const onlineNodesWithCpu = liveNodes.filter(
+    (n) => n.conn_state === 'online' && n.latest?.cpu_pct !== undefined && n.latest?.cpu_pct !== null
+  );
   const avgCpu =
-    onlineCount > 0
-      ? liveNodes
-          .filter((n) => n.conn_state === 'online')
-          .reduce((acc, n) => acc + (n.latest?.cpu_pct || 0), 0) / onlineCount
-      : 0;
+    onlineNodesWithCpu.length > 0
+      ? onlineNodesWithCpu.reduce((acc, n) => acc + (n.latest?.cpu_pct || 0), 0) /
+        onlineNodesWithCpu.length
+      : null;
+
+  const hasUpBps = liveNodes.some(
+    (n) => n.latest?.net_up_bps !== undefined && n.latest?.net_up_bps !== null
+  );
+  const totalUpBps = hasUpBps
+    ? liveNodes.reduce((acc, n) => acc + (n.latest?.net_up_bps || 0), 0)
+    : null;
+
+  const hasDownBps = liveNodes.some(
+    (n) => n.latest?.net_down_bps !== undefined && n.latest?.net_down_bps !== null
+  );
+  const totalDownBps = hasDownBps
+    ? liveNodes.reduce((acc, n) => acc + (n.latest?.net_down_bps || 0), 0)
+    : null;
 
   const hasFilterActive =
     search.trim() !== '' || selectedGroup !== '' || selectedTag !== '' || selectedState !== 'all';
@@ -222,7 +201,7 @@ export const Overview: React.FC = () => {
 
         <div className={styles.kpiCard}>
           <span className={styles.kpiTitle}>平均 CPU</span>
-          <span className={styles.kpiValue}>{avgCpu.toFixed(1)}%</span>
+          <span className={styles.kpiValue}>{fmt(avgCpu, '%')}</span>
           <span className={styles.kpiSub}>仅统计在线节点</span>
         </div>
 
@@ -363,29 +342,37 @@ export const Overview: React.FC = () => {
 
                 // 内存占用
                 const memUsed = node.latest?.mem_used;
-                const memTotal = node.latest?.mem_total || (node as any).facts?.mem_total;
+                const memTotal = node.latest?.mem_total ?? node.facts?.mem_total;
                 let memText = '--';
-                if (memUsed !== undefined && memTotal && memTotal > 0) {
+                if (memUsed !== undefined && memUsed !== null && memTotal && memTotal > 0) {
                   const memPct = ((memUsed / memTotal) * 100).toFixed(0);
                   memText = `${memPct}% (${formatBytes(memUsed)}/${formatBytes(memTotal)})`;
+                } else if (memUsed !== undefined && memUsed !== null) {
+                  memText = formatBytes(memUsed);
                 }
 
                 // 磁盘占用
                 const diskUsed = node.latest?.disk_used;
-                const diskTotal = node.latest?.disk_total || (node as any).facts?.disk_total;
+                const diskTotal = node.latest?.disk_total ?? node.facts?.disk_total;
                 let diskText = '--';
-                if (diskUsed !== undefined && diskTotal && diskTotal > 0) {
+                if (diskUsed !== undefined && diskUsed !== null && diskTotal && diskTotal > 0) {
                   const diskPct = ((diskUsed / diskTotal) * 100).toFixed(0);
                   diskText = `${diskPct}% (${formatBytes(diskUsed)}/${formatBytes(diskTotal)})`;
+                } else if (diskUsed !== undefined && diskUsed !== null) {
+                  diskText = formatBytes(diskUsed);
                 }
 
                 // 当月流量计算与阈值着色（流量 ≥80% 橙 --warn，≥100% 红 --err）
-                const monthTrafficUsed =
-                  (node.latest?.traffic_month_up || 0) + (node.latest?.traffic_month_down || 0);
+                const trafficUp = node.latest?.traffic_month_up;
+                const trafficDown = node.latest?.traffic_month_down;
+                const hasTraffic =
+                  (trafficUp !== undefined && trafficUp !== null) ||
+                  (trafficDown !== undefined && trafficDown !== null);
+                const monthTrafficUsed = (trafficUp || 0) + (trafficDown || 0);
                 const trafficLimit = node.billing?.traffic_limit;
                 let trafficRatio = 0;
                 let trafficWarnClass = '';
-                if (trafficLimit && trafficLimit > 0) {
+                if (hasTraffic && trafficLimit && trafficLimit > 0) {
                   trafficRatio = monthTrafficUsed / trafficLimit;
                   if (trafficRatio >= 1.0) {
                     trafficWarnClass = styles.trafficErr;
@@ -422,7 +409,7 @@ export const Overview: React.FC = () => {
                       <Link to={`/nodes/${node.id}`} className={styles.nodeLink}>
                         {node.name}
                       </Link>
-                      {node.clock_skew_ms && Math.abs(node.clock_skew_ms) > 30000 && (
+                      {node.clock_skew_ms != null && Math.abs(node.clock_skew_ms) > 30000 && (
                         <span
                           className={`badge badge-neutral ${styles.clockBadge}`}
                           title={`时钟异常，偏差 ${(node.clock_skew_ms / 1000).toFixed(1)} 秒`}
@@ -457,7 +444,7 @@ export const Overview: React.FC = () => {
 
                     {/* CPU */}
                     <td className="col-num cell-mono">
-                      {node.latest?.cpu_pct !== undefined ? `${node.latest.cpu_pct.toFixed(1)}%` : '--'}
+                      {fmt(node.latest?.cpu_pct, '%')}
                     </td>
 
                     {/* 内存 */}
@@ -477,7 +464,9 @@ export const Overview: React.FC = () => {
 
                     {/* 当月流量 */}
                     <td className={`col-num cell-mono ${trafficWarnClass}`}>
-                      {trafficLimit && trafficLimit > 0 ? (
+                      {!hasTraffic ? (
+                        '--'
+                      ) : trafficLimit && trafficLimit > 0 ? (
                         <span>
                           {formatBytes(monthTrafficUsed)} / {formatBytes(trafficLimit)}
                           <span style={{ fontSize: 11, marginLeft: 4 }}>

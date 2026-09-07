@@ -61,15 +61,16 @@ export interface MetricsQueryResponse {
 }
 
 // 节点最新采样（读内存缓存，08-field-map.md §1）
+// 约束：采集失败时单项省略，全部字段均为可选
 export interface NodeLatest {
-  ts_ms: number;
-  cpu_pct: number;
-  mem_used: number;
+  ts_ms?: number;
+  cpu_pct?: number;
+  mem_used?: number;
   mem_total?: number;
   disk_used?: number;
   disk_total?: number;
-  net_up_bps: number;
-  net_down_bps: number;
+  net_up_bps?: number;
+  net_down_bps?: number;
   traffic_month_up?: number;
   traffic_month_down?: number;
   uptime_s?: number;
@@ -128,29 +129,30 @@ export interface NodeFacts {
 }
 
 // 节点列表项（12-api-spec.md §4）
+// 约束：group / billing / latest / clock_skew_ms / facts 无数据时可能被后端省略
 export interface NodeItem {
   id: string;
   name: string;
-  node_group_id?: string;
+  node_group_id?: string | null;
   display_order?: number;
   is_hidden?: boolean;
   agent_version?: string;
   conn_state: 'online' | 'offline' | 'never';
-  last_seen_at_ms?: number;
-  clock_skew_ms?: number;
-  note?: string;
+  last_seen_at_ms?: number | null;
+  clock_skew_ms?: number | null;
+  note?: string | null;
   created_at_ms?: number;
   updated_at_ms?: number;
-  group?: NodeGroup;
+  group?: NodeGroup | null;
   tags?: NodeTag[];
-  latest?: NodeLatest;
-  billing?: NodeBilling;
-  facts?: NodeFacts;
+  latest?: NodeLatest | null;
+  billing?: NodeBilling | null;
+  facts?: NodeFacts | null;
 }
 
 // 节点详情
 export interface NodeDetail extends NodeItem {
-  facts?: NodeFacts;
+  facts?: NodeFacts | null;
 }
 
 // 分页通用结构
@@ -263,15 +265,25 @@ export interface SystemSettings {
 // SSE 流事件
 export interface MetricStreamEvent {
   node_id: string;
-  ts_ms: number;
-  cpu_pct: number;
-  mem_used: number;
-  net_up_bps: number;
-  net_down_bps: number;
+  ts_ms?: number;
+  cpu_pct?: number;
+  mem_used?: number;
+  net_up_bps?: number;
+  net_down_bps?: number;
+  disk_used?: number;
+  load1?: number;
 }
 
 export interface NodeStateStreamEvent {
   node_id: string;
   conn_state: 'online' | 'offline';
   last_seen_at_ms: number;
+}
+
+// 健康检查响应（docs/12-api-spec.md §9）
+export interface HealthResponse {
+  status: string;
+  version?: string;
+  db?: string;
+  agents_online?: number;
 }

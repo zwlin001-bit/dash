@@ -5,63 +5,8 @@ import { getNode } from '../../api/nodes';
 import { getMetrics, subscribeMetricsStream } from '../../api/metrics';
 import { MetricStreamEvent, NodeLatest, NodeStateStreamEvent, TimeSeriesSpan } from '../../api/types';
 import { TimeSeriesChart } from '../../components/TimeSeriesChart';
+import { formatBytes, formatBps, formatTimeAgo, formatDateTime, formatUptime } from '../../utils';
 import styles from './NodeDetail.module.css';
-
-function formatBytes(bytes?: number): string {
-  if (bytes === undefined || bytes === null || isNaN(bytes) || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let i = 0;
-  let val = bytes;
-  while (val >= 1024 && i < units.length - 1) {
-    val /= 1024;
-    i++;
-  }
-  return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatBps(bps?: number): string {
-  if (!bps || bps <= 0) return '0 B/s';
-  if (bps >= 1024 * 1024 * 1024) return `${(bps / (1024 * 1024 * 1024)).toFixed(1)} GB/s`;
-  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
-  if (bps >= 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
-  return `${bps} B/s`;
-}
-
-function formatTimeAgo(ms?: number): string {
-  if (!ms || ms <= 0) return '从未上线';
-  const diff = Date.now() - ms;
-  if (diff < 10000) return '刚刚';
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return `${sec} 秒前`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} 分钟前`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} 小时前`;
-  const day = Math.floor(hr / 24);
-  return `${day} 天前`;
-}
-
-function formatDateTime(ms?: number): string {
-  if (!ms || ms <= 0) return '--';
-  const d = new Date(ms);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hour = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  const sec = String(d.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hour}:${min}:${sec}`;
-}
-
-function formatUptime(uptimeS?: number): string {
-  if (!uptimeS || uptimeS <= 0) return '--';
-  const d = Math.floor(uptimeS / 86400);
-  const h = Math.floor((uptimeS % 86400) / 3600);
-  const m = Math.floor((uptimeS % 3600) / 60);
-  if (d > 0) return `${d} 天 ${h} 小时`;
-  if (h > 0) return `${h} 小时 ${m} 分钟`;
-  return `${m} 分钟`;
-}
 
 export const NodeDetail: React.FC = () => {
   const { id = '01JBX79N1A9W5K3E8S6T2Y4P0A' } = useParams<{ id: string }>();
@@ -112,20 +57,19 @@ export const NodeDetail: React.FC = () => {
 
   const node = useMemo(() => {
     if (!nodeData) return null;
+    let mergedLatest: NodeLatest | undefined = undefined;
+    if (nodeData.latest || liveLatest) {
+      mergedLatest = {
+        ...(nodeData.latest || {}),
+        ...(liveLatest || {}),
+      };
+    }
+
     return {
       ...nodeData,
       conn_state: liveState?.conn_state ?? nodeData.conn_state,
       last_seen_at_ms: liveState?.last_seen_at_ms ?? nodeData.last_seen_at_ms,
-      latest: {
-        ...(nodeData.latest || {
-          ts_ms: Date.now(),
-          cpu_pct: 0,
-          mem_used: 0,
-          net_up_bps: 0,
-          net_down_bps: 0,
-        }),
-        ...(liveLatest || {}),
-      },
+      latest: mergedLatest,
     };
   }, [nodeData, liveState, liveLatest]);
 
@@ -180,10 +124,14 @@ export const NodeDetail: React.FC = () => {
     ? Math.ceil((node.billing.expires_at_ms - Date.now()) / 86400000)
     : null;
 
-  const monthTrafficUsed =
-    (node?.latest?.traffic_month_up || 0) + (node?.latest?.traffic_month_down || 0);
+  const trafficUp = node?.latest?.traffic_month_up;
+  const trafficDown = node?.latest?.traffic_month_down;
+  const hasTraffic =
+    (trafficUp !== undefined && trafficUp !== null) ||
+    (trafficDown !== undefined && trafficDown !== null);
+  const monthTrafficUsed = (trafficUp || 0) + (trafficDown || 0);
   const trafficLimit = node?.billing?.traffic_limit;
-  const trafficRatio = trafficLimit && trafficLimit > 0 ? monthTrafficUsed / trafficLimit : 0;
+  const trafficRatio = hasTraffic && trafficLimit && trafficLimit > 0 ? monthTrafficUsed / trafficLimit : 0;
   const trafficPct = (trafficRatio * 100).toFixed(1);
 
   // 进度条颜色：≥80% 橙 --warn，≥100% 红 --err
@@ -251,7 +199,9 @@ export const NodeDetail: React.FC = () => {
           <div className={styles.metaItem}>
             <span className={styles.metaLabel}>操作系统 / 架构</span>
             <span className={styles.metaVal}>
-              {node?.facts?.os_name || '--'} {node?.facts?.os_version || ''} ({node?.facts?.arch || '--'})
+              {node?.facts
+                ? `${node.facts.os_name || '--'} ${node.facts.os_version || ''} (${node.facts.arch || '--'})`
+                : '--'}
             </span>
           </div>
           <div className={styles.metaItem}>
@@ -267,7 +217,7 @@ export const NodeDetail: React.FC = () => {
           <div className={styles.metaItem}>
             <span className={styles.metaLabel}>运行时长</span>
             <span className={styles.metaVal}>
-              {node?.latest?.uptime_s ? formatUptime(node.latest.uptime_s) : '--'}
+              {formatUptime(node?.latest?.uptime_s)}
             </span>
           </div>
         </div>
@@ -334,10 +284,9 @@ export const NodeDetail: React.FC = () => {
             <div className={styles.factBox}>
               <span className="text-dim" style={{ fontSize: 11 }}>价格与周期</span>
               <span className="cell-mono">
-                {node?.billing?.price !== undefined
-                  ? `${node.billing.price.toFixed(2)} ${node.billing.currency || 'CNY'}`
+                {node?.billing?.price !== undefined && node?.billing?.price !== null
+                  ? `${node.billing.price.toFixed(2)} ${node.billing.currency || 'CNY'} / 每 ${node.billing.cycle_days || 30} 天`
                   : '--'}
-                {node?.billing?.cycle_days ? ` / 每 ${node.billing.cycle_days} 天` : ' / 月付'}
               </span>
             </div>
 
@@ -368,10 +317,10 @@ export const NodeDetail: React.FC = () => {
             <div className={styles.factBox}>
               <span className="text-dim" style={{ fontSize: 11 }}>当月已用流量</span>
               <span className="cell-mono" style={{ color: trafficRatio >= 0.8 ? trafficColorVar : undefined }}>
-                {formatBytes(monthTrafficUsed)}
-                {trafficLimit && trafficLimit > 0 ? ` / ${formatBytes(trafficLimit)} (${trafficPct}%)` : ''}
+                {hasTraffic ? formatBytes(monthTrafficUsed) : '--'}
+                {hasTraffic && trafficLimit && trafficLimit > 0 ? ` / ${formatBytes(trafficLimit)} (${trafficPct}%)` : ''}
               </span>
-              {trafficLimit && trafficLimit > 0 && (
+              {hasTraffic && trafficLimit && trafficLimit > 0 && (
                 <div className={styles.progressTrack} title={`已用: ${trafficPct}%`}>
                   <div
                     className={styles.progressBar}
@@ -391,7 +340,11 @@ export const NodeDetail: React.FC = () => {
                   ? '双向流量求和'
                   : node?.billing?.traffic_limit_kind === 'max'
                   ? '取较大单向计费'
-                  : '单向出站 (默认)'}
+                  : node?.billing?.traffic_limit_kind === 'both'
+                  ? '单向出站 (默认)'
+                  : node?.billing
+                  ? '单向出站 (默认)'
+                  : '--'}
               </span>
             </div>
           </div>
@@ -412,8 +365,13 @@ export const NodeDetail: React.FC = () => {
             <div className={styles.factBox}>
               <span className="text-dim" style={{ fontSize: 11 }}>物理核心 / 逻辑线程</span>
               <span className="cell-mono">
-                {node?.facts?.cpu_cores ? `${node.facts.cpu_cores} 核` : '--'} /{' '}
-                {node?.facts?.cpu_threads ? `${node.facts.cpu_threads} 线程` : '--'}
+                {node?.facts?.cpu_cores !== undefined && node.facts.cpu_cores !== null
+                  ? `${node.facts.cpu_cores} 核`
+                  : '--'}{' '}
+                /{' '}
+                {node?.facts?.cpu_threads !== undefined && node.facts.cpu_threads !== null
+                  ? `${node.facts.cpu_threads} 线程`
+                  : '--'}
               </span>
             </div>
             <div className={styles.factBox}>
@@ -436,7 +394,9 @@ export const NodeDetail: React.FC = () => {
             <div className={styles.factBox}>
               <span className="text-dim" style={{ fontSize: 11 }}>发行版详情</span>
               <span className="cell-mono">
-                {node?.facts?.os_name || '--'} {node?.facts?.os_version || ''}
+                {node?.facts
+                  ? `${node.facts.os_name || '--'} ${node.facts.os_version || ''}`
+                  : '--'}
               </span>
             </div>
             <div className={styles.factBox}>

@@ -7,6 +7,7 @@ import {
   CreateNodeParams,
   CreateTagParams,
   EnrollToken,
+  HealthResponse,
   NodeBilling,
   NodeDetail,
   NodeGroup,
@@ -103,6 +104,15 @@ export async function revokeNodeToken(id: string): Promise<{ ok: boolean }> {
   });
 }
 
+// 健康检查（docs/12-api-spec.md §9）
+export async function checkHealth(): Promise<HealthResponse> {
+  try {
+    return await apiFetch<HealthResponse>('/healthz');
+  } catch {
+    return { status: 'error', db: 'error' };
+  }
+}
+
 // 分组管理
 export async function getGroups(): Promise<NodeGroup[]> {
   try {
@@ -111,6 +121,8 @@ export async function getGroups(): Promise<NodeGroup[]> {
     return [];
   }
 }
+
+export { getGroups as getNodeGroups };
 
 export async function createGroup(params: CreateGroupParams): Promise<NodeGroup> {
   return await apiFetch<NodeGroup>('/api/v1/node-groups', {

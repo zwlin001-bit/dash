@@ -1,0 +1,92 @@
+.appContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--sp-4);
+  background-color: var(--bg-body);
+}
+
+.appCard {
+  width: 100%;
+  max-width: 600px;
+  padding: var(--sp-6);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.routeContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  padding: var(--sp-6) var(--sp-4);
+}
+
+.routeCard {
+  width: 100%;
+  max-width: 540px;
+  padding: var(--sp-5);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.message {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  word-break: break-word;
+  background-color: var(--bg-card-sub);
+  padding: var(--sp-3);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--err);
+}
+
+.stack {
+  margin: 0;
+  padding: var(--sp-3);
+  background-color: #0b0f14;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  max-height: 220px;
+  border: 1px solid var(--border-dim);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.actions {
+  display: flex;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}

@@ -839,7 +839,7 @@ export const Machines: React.FC = () => {
                             )}
                           </td>
                           <td>
-                            {n.group ? (
+                            {n.group?.name ? (
                               <span className="badge badge-neutral">{n.group.name}</span>
                             ) : (
                               <span style={{ color: 'var(--text-mute)' }}>未分组</span>
@@ -867,7 +867,7 @@ export const Machines: React.FC = () => {
                           </td>
                           <td>
                             <div className="cell-mono" style={{ fontSize: 12 }}>
-                              {n.billing?.price !== undefined
+                              {n.billing?.price !== undefined && n.billing?.price !== null
                                 ? `${n.billing.currency || '$'}${n.billing.price}`
                                 : '--'}
                             </div>
