@@ -39,8 +39,10 @@ func (m *Module) Register(a *app.App) error {
 	m.service = NewService(a.DB, a.Config, nil)
 	a.Ingester = m.service
 
-	// 注册 /healthz 端点暴露服务状态与丢批计数
-	a.Mux.HandleFunc("GET /healthz", m.service.HandleHealthz)
+	// ★ /healthz 由 internal/api 统一提供（12-api-spec.md §9），此处不再重复注册，
+	//   否则 http.ServeMux 会因模式冲突 panic。ingest 的丢批计数通过
+	//   app.Ingester 暴露给 api 模块聚合。
+	_ = m.service.HandleHealthz
 
 	if a.DB != nil {
 		_ = m.service.Start(context.Background())

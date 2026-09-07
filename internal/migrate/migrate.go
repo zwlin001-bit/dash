@@ -15,6 +15,7 @@ import (
 
 	"dash/internal/db"
 	"dash/internal/logx"
+	"dash/migrations"
 )
 
 var (
@@ -67,6 +68,19 @@ func NewWithFS(d *db.DB, fsys fs.FS, dir string) *Migrator {
 		fs:  fsys,
 		dir: dir,
 	}
+}
+
+// DefaultMigrator creates a Migrator with filesystem directory if it exists, or embedded migrations.FS.
+func DefaultMigrator(d *db.DB, dir string) *Migrator {
+	if dir != "" {
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			return New(d, dir)
+		}
+	}
+	if fi, err := os.Stat("migrations"); err == nil && fi.IsDir() {
+		return New(d, "migrations")
+	}
+	return NewWithFS(d, migrations.FS, ".")
 }
 
 func (m *Migrator) tableExists(ctx context.Context, tableName string) (bool, error) {

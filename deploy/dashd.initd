@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+
+name="dashd"
+description="dashd - VPS Management and Monitoring Server"
+command="/usr/local/bin/dashd"
+command_args="-config /etc/dash/config.toml"
+command_user="dashd:dashd"
+command_background="true"
+pidfile="/run/dashd.pid"
+
+depend() {
+	need net
+	after firewall
+}

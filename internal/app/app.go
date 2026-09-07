@@ -10,12 +10,13 @@ import (
 // App 包含 dashd 运行时的核心组件（配置、数据库、路由、后台任务等）。
 // 供各模块在 Register 时进行依赖注入和路由装配。
 type App struct {
-	Mux      *http.ServeMux
-	DB       *db.DB
-	Config   *config.Config
-	Registry any // 供 control / settings 等模块共享的长连接注册表
-	Ingester any // 供 control / ingest 共享的指标落库器
+	Mux     *http.ServeMux
+	DB      *db.DB
+	Config  *config.Config
+	Version string
 	// 后续任务按需扩充字段
+	Registry any // 供 control / settings 共享的长连接注册表
+	Ingester any // 供 control / ingest 共享的指标落库器
 }
 
 // Module 定义服务端子模块的注册契约。
