@@ -2,9 +2,11 @@ package logx
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 )
@@ -182,8 +184,15 @@ func sanitizeAttr(a slog.Attr) slog.Attr {
 		return slog.String(a.Key, "***")
 	}
 
-	if strings.EqualFold(a.Key, "dsn") && a.Value.Kind() == slog.KindString {
-		return slog.String(a.Key, RedactDSN(a.Value.String()))
+	if strings.EqualFold(a.Key, "dsn") {
+		if a.Value.Kind() == slog.KindString {
+			return slog.String(a.Key, RedactDSN(a.Value.String()))
+		}
+		if a.Value.Kind() == slog.KindAny {
+			if strVal, ok := a.Value.Any().(string); ok {
+				return slog.String(a.Key, RedactDSN(strVal))
+			}
+		}
 	}
 
 	switch a.Value.Kind() {
@@ -196,9 +205,46 @@ func sanitizeAttr(a slog.Attr) slog.Attr {
 			sanitizedGroup[i] = sanitizeAttr(child)
 		}
 		return slog.Group(a.Key, anySliceToAny(sanitizedGroup)...)
+	case slog.KindAny:
+		v := a.Value.Any()
+		if v == nil {
+			return a
+		}
+		rv := reflect.ValueOf(v)
+		if (rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface || rv.Kind() == reflect.Func || rv.Kind() == reflect.Chan || rv.Kind() == reflect.Map || rv.Kind() == reflect.Slice) && rv.IsNil() {
+			return slog.Any(a.Key, nil)
+		}
+		if e, ok := v.(error); ok {
+			return slog.String(a.Key, Redact(e.Error()))
+		}
+		if s, ok := v.(fmt.Stringer); ok {
+			if !hasExportedStructFields(rv) {
+				return slog.String(a.Key, Redact(s.String()))
+			}
+		}
+		return slog.Any(a.Key, SanitizeAny(v))
 	default:
 		return a
 	}
+}
+
+func hasExportedStructFields(v reflect.Value) bool {
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return false
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		if t.Field(i).IsExported() {
+			return true
+		}
+	}
+	return false
 }
 
 func anySliceToAny(attrs []slog.Attr) []any {
@@ -225,32 +271,38 @@ func sanitizeArgs(args []any) []any {
 			// 检查是否为 key-value 对中的 key
 			if i%2 == 0 && i+1 < len(args) {
 				sanitized[i] = v
+				val := args[i+1]
 				if isSensitiveKey(v) {
-					if strVal, ok := args[i+1].(string); ok && isTokenKey(v) {
+					if strVal, ok := val.(string); ok && isTokenKey(v) {
 						sanitized[i+1] = RedactToken(strVal)
 					} else {
 						sanitized[i+1] = "***"
 					}
 					i++
 				} else if strings.EqualFold(v, "dsn") {
-					if strVal, ok := args[i+1].(string); ok {
+					if strVal, ok := val.(string); ok {
 						sanitized[i+1] = RedactDSN(strVal)
 					} else {
-						sanitized[i+1] = args[i+1]
+						sanitized[i+1] = SanitizeAny(val)
 					}
 					i++
-				} else if strVal, ok := args[i+1].(string); ok {
+				} else if strVal, ok := val.(string); ok {
 					sanitized[i+1] = Redact(strVal)
 					i++
+				} else if errVal, ok := val.(error); ok {
+					sanitized[i+1] = Redact(errVal.Error())
+					i++
 				} else {
-					sanitized[i+1] = args[i+1]
+					sanitized[i+1] = SanitizeAny(val)
 					i++
 				}
 			} else {
 				sanitized[i] = Redact(v)
 			}
+		case error:
+			sanitized[i] = Redact(v.Error())
 		default:
-			sanitized[i] = arg
+			sanitized[i] = SanitizeAny(arg)
 		}
 	}
 	return sanitized

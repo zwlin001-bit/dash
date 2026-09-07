@@ -151,8 +151,8 @@ func RedactConfig(cfg any) string {
 		return "{}"
 	}
 
-	sanitized := sanitizeValue(reflect.ValueOf(cfg))
-	raw, err := json.Marshal(sanitized.Interface())
+	sanitized := SanitizeAny(cfg)
+	raw, err := json.Marshal(sanitized)
 	if err != nil {
 		return fmt.Sprintf(`{"error":%q}`, err.Error())
 	}
@@ -168,7 +168,7 @@ func isSensitiveKey(key string) bool {
 	case "password", "passwd", "pwd", "token", "secret", "walletpassword", "masterkey", "apikey", "accesskey", "privatekey":
 		return true
 	default:
-		return strings.Contains(lower, "password") || strings.Contains(lower, "secret") || strings.Contains(lower, "token")
+		return strings.Contains(lower, "password") || strings.Contains(lower, "passwd") || strings.Contains(lower, "secret") || strings.Contains(lower, "token")
 	}
 }
 
@@ -178,25 +178,73 @@ func isTokenKey(key string) bool {
 	return strings.Contains(lower, "token")
 }
 
-// sanitizeValue 递归遍历值进行脱敏转换
-func sanitizeValue(v reflect.Value) reflect.Value {
-	if !v.IsValid() {
-		return reflect.ValueOf(nil)
+const maxSanitizeDepth = 8
+
+// SanitizeAny 对任意类型进行深度反射清洗（脱敏敏感字段、DSN 与 Token）。
+// 包含最大深度上限（8层）和循环引用保护。
+func SanitizeAny(v any) any {
+	if v == nil {
+		return nil
+	}
+	visited := make(map[uintptr]bool)
+	return sanitizeInternal(reflect.ValueOf(v), 0, visited)
+}
+
+func sanitizeInternal(val reflect.Value, depth int, visited map[uintptr]bool) any {
+	if !val.IsValid() {
+		return nil
 	}
 
-	switch v.Kind() {
-	case reflect.Pointer, reflect.Interface:
-		if v.IsNil() {
-			return reflect.Zero(v.Type())
+	if depth > maxSanitizeDepth {
+		return "[max depth exceeded]"
+	}
+
+	switch val.Kind() {
+	case reflect.Pointer:
+		if val.IsNil() {
+			return nil
 		}
-		elem := sanitizeValue(v.Elem())
-		ptr := reflect.New(elem.Type())
-		ptr.Elem().Set(elem)
-		return ptr
+		ptr := val.Pointer()
+		if visited[ptr] {
+			return "[circular reference]"
+		}
+		visited[ptr] = true
+		defer delete(visited, ptr)
+
+		elem := val.Elem()
+		if elem.Kind() == reflect.String {
+			return Redact(elem.String())
+		}
+		return sanitizeInternal(elem, depth+1, visited)
+
+	case reflect.Interface:
+		if val.IsNil() {
+			return nil
+		}
+		return sanitizeInternal(val.Elem(), depth+1, visited)
 
 	case reflect.Struct:
-		t := v.Type()
-		resMap := make(map[string]any)
+		if e, ok := val.Interface().(error); ok {
+			return Redact(e.Error())
+		}
+
+		t := val.Type()
+		hasExported := false
+		for i := 0; i < t.NumField(); i++ {
+			if t.Field(i).IsExported() {
+				hasExported = true
+				break
+			}
+		}
+
+		if !hasExported {
+			if s, ok := val.Interface().(fmt.Stringer); ok {
+				return Redact(s.String())
+			}
+			return map[string]any{}
+		}
+
+		resMap := make(map[string]any, t.NumField())
 		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
 			if !field.IsExported() {
@@ -222,92 +270,176 @@ func sanitizeValue(v reflect.Value) reflect.Value {
 				}
 			}
 
-			val := v.Field(i)
-			isRedactTag := field.Tag.Get("redact") == "true"
+			fieldVal := val.Field(i)
+			actualVal := fieldVal
+			for actualVal.Kind() == reflect.Interface {
+				if actualVal.IsNil() {
+					break
+				}
+				actualVal = actualVal.Elem()
+			}
 
-			if isRedactTag || isSensitiveKey(field.Name) || isSensitiveKey(keyName) {
-				if val.Kind() == reflect.String {
-					strVal := val.String()
+			isRedactTag := field.Tag.Get("redact") == "true"
+			isSensitive := isRedactTag || isSensitiveKey(field.Name) || isSensitiveKey(keyName)
+			isToken := isTokenKey(field.Name) || isTokenKey(keyName)
+
+			if !actualVal.IsValid() || ((actualVal.Kind() == reflect.Pointer || actualVal.Kind() == reflect.Interface) && actualVal.IsNil()) {
+				resMap[keyName] = nil
+				continue
+			}
+
+			if isSensitive {
+				if actualVal.Kind() == reflect.String {
+					strVal := actualVal.String()
 					if strVal == "" {
 						resMap[keyName] = ""
-					} else if isTokenKey(field.Name) || isTokenKey(keyName) {
+					} else if isToken {
 						resMap[keyName] = RedactToken(strVal)
 					} else {
 						resMap[keyName] = "***"
 					}
-					continue
+				} else if actualVal.Kind() == reflect.Pointer && !actualVal.IsNil() && actualVal.Elem().Kind() == reflect.String {
+					strVal := actualVal.Elem().String()
+					if isToken {
+						resMap[keyName] = RedactToken(strVal)
+					} else {
+						resMap[keyName] = "***"
+					}
+				} else {
+					resMap[keyName] = "***"
 				}
-			}
-
-			if strings.EqualFold(field.Name, "dsn") && val.Kind() == reflect.String {
-				resMap[keyName] = RedactDSN(val.String())
 				continue
 			}
 
-			if val.Kind() == reflect.String {
-				resMap[keyName] = Redact(val.String())
+			if (strings.EqualFold(field.Name, "dsn") || strings.EqualFold(keyName, "dsn")) && actualVal.Kind() == reflect.String {
+				resMap[keyName] = RedactDSN(actualVal.String())
+				continue
+			}
+
+			if actualVal.Kind() == reflect.String {
+				resMap[keyName] = Redact(actualVal.String())
 			} else {
-				sanitizedChild := sanitizeValue(val)
-				if sanitizedChild.IsValid() {
-					resMap[keyName] = sanitizedChild.Interface()
-				} else {
-					resMap[keyName] = nil
-				}
+				resMap[keyName] = sanitizeInternal(actualVal, depth+1, visited)
 			}
 		}
-		return reflect.ValueOf(resMap)
+		return resMap
 
 	case reflect.Map:
-		resMap := reflect.MakeMap(v.Type())
-		iter := v.MapRange()
+		if val.IsNil() {
+			return nil
+		}
+		ptr := val.Pointer()
+		if visited[ptr] {
+			return "[circular reference]"
+		}
+		visited[ptr] = true
+		defer delete(visited, ptr)
+
+		resMap := make(map[string]any, val.Len())
+		iter := val.MapRange()
 		for iter.Next() {
 			k := iter.Key()
-			val := iter.Value()
+			v := iter.Value()
 			kStr := fmt.Sprintf("%v", k.Interface())
 
-			if isSensitiveKey(kStr) {
-				if val.Kind() == reflect.String {
-					strVal := val.String()
-					if strVal == "" {
-						resMap.SetMapIndex(k, reflect.ValueOf(""))
-					} else if isTokenKey(kStr) {
-						resMap.SetMapIndex(k, reflect.ValueOf(RedactToken(strVal)))
-					} else {
-						resMap.SetMapIndex(k, reflect.ValueOf("***"))
-					}
-					continue
+			actualVal := v
+			for actualVal.Kind() == reflect.Interface {
+				if actualVal.IsNil() {
+					break
 				}
+				actualVal = actualVal.Elem()
 			}
 
-			if strings.EqualFold(kStr, "dsn") && val.Kind() == reflect.String {
-				resMap.SetMapIndex(k, reflect.ValueOf(RedactDSN(val.String())))
+			isSensitive := isSensitiveKey(kStr)
+			isToken := isTokenKey(kStr)
+
+			if !actualVal.IsValid() || ((actualVal.Kind() == reflect.Pointer || actualVal.Kind() == reflect.Interface) && actualVal.IsNil()) {
+				resMap[kStr] = nil
 				continue
 			}
 
-			if val.Kind() == reflect.String {
-				resMap.SetMapIndex(k, reflect.ValueOf(Redact(val.String())))
+			if isSensitive {
+				if actualVal.Kind() == reflect.String {
+					strVal := actualVal.String()
+					if strVal == "" {
+						resMap[kStr] = ""
+					} else if isToken {
+						resMap[kStr] = RedactToken(strVal)
+					} else {
+						resMap[kStr] = "***"
+					}
+				} else if actualVal.Kind() == reflect.Pointer && !actualVal.IsNil() && actualVal.Elem().Kind() == reflect.String {
+					strVal := actualVal.Elem().String()
+					if isToken {
+						resMap[kStr] = RedactToken(strVal)
+					} else {
+						resMap[kStr] = "***"
+					}
+				} else {
+					resMap[kStr] = "***"
+				}
+				continue
+			}
+
+			if strings.EqualFold(kStr, "dsn") && actualVal.Kind() == reflect.String {
+				resMap[kStr] = RedactDSN(actualVal.String())
+				continue
+			}
+
+			if actualVal.Kind() == reflect.String {
+				resMap[kStr] = Redact(actualVal.String())
 			} else {
-				resMap.SetMapIndex(k, sanitizeValue(val))
+				resMap[kStr] = sanitizeInternal(actualVal, depth+1, visited)
 			}
 		}
 		return resMap
 
 	case reflect.Slice, reflect.Array:
-		resSlice := reflect.MakeSlice(reflect.TypeOf([]any{}), v.Len(), v.Len())
-		for i := 0; i < v.Len(); i++ {
-			elem := v.Index(i)
+		if val.Kind() == reflect.Slice && val.IsNil() {
+			return nil
+		}
+		if val.Type().Elem().Kind() == reflect.Uint8 {
+			if val.Kind() == reflect.Slice {
+				return Redact(string(val.Bytes()))
+			}
+			b := make([]byte, val.Len())
+			reflect.Copy(reflect.ValueOf(b), val)
+			return Redact(string(b))
+		}
+
+		if val.Kind() == reflect.Slice && val.Len() > 0 {
+			ptr := val.Pointer()
+			if visited[ptr] {
+				return "[circular reference]"
+			}
+			visited[ptr] = true
+			defer delete(visited, ptr)
+		}
+
+		resSlice := make([]any, val.Len())
+		for i := 0; i < val.Len(); i++ {
+			elem := val.Index(i)
 			if elem.Kind() == reflect.String {
-				resSlice.Index(i).Set(reflect.ValueOf(Redact(elem.String())))
+				resSlice[i] = Redact(elem.String())
 			} else {
-				sanitizedChild := sanitizeValue(elem)
-				if sanitizedChild.IsValid() {
-					resSlice.Index(i).Set(reflect.ValueOf(sanitizedChild.Interface()))
-				}
+				resSlice[i] = sanitizeInternal(elem, depth+1, visited)
 			}
 		}
 		return resSlice
 
+	case reflect.String:
+		return Redact(val.String())
+
 	default:
-		return v
+		if val.CanInterface() {
+			if e, ok := val.Interface().(error); ok {
+				return Redact(e.Error())
+			}
+			if s, ok := val.Interface().(fmt.Stringer); ok {
+				return Redact(s.String())
+			}
+			return val.Interface()
+		}
+		return nil
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -218,6 +219,21 @@ func Load(path string) (*Config, error) {
 	return LoadWithOptions(Options{ConfigFile: path})
 }
 
+var envVarPlaceholderRegex = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}`)
+
+// expandEnvPlaceholders 仅展开 ${VAR} 形式的环境变量占位符。
+// 不带花括号的 $VAR 保持原样（避免 DSN 中包含 $ 字符时被误吞）；
+// 未定义的环境变量同样保留原样 ${VAR}。
+func expandEnvPlaceholders(content string, lookup func(string) (string, bool)) string {
+	return envVarPlaceholderRegex.ReplaceAllStringFunc(content, func(match string) string {
+		varName := match[2 : len(match)-1]
+		if val, ok := lookup(varName); ok {
+			return val
+		}
+		return match
+	})
+}
+
 // LoadWithOptions 按「命令行 > 环境变量 > 配置文件 > 默认值」优先级解析完整配置并校验。
 func LoadWithOptions(opts Options) (*Config, error) {
 	lookup := opts.EnvLookup
@@ -244,11 +260,8 @@ func LoadWithOptions(opts Options) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
 
-	// 3. 展开配置内容中的 ${VAR} 环境变量
-	expanded := os.Expand(string(data), func(k string) string {
-		v, _ := lookup(k)
-		return v
-	})
+	// 3. 展开配置内容中的 ${VAR} 环境变量占位符
+	expanded := expandEnvPlaceholders(string(data), lookup)
 
 	// 4. 解析 TOML 到包含默认值的结构体中
 	cfg := DefaultConfig()

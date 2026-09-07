@@ -3,6 +3,7 @@ package logx
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -265,4 +266,156 @@ func TestInit_TextAndJson(t *testing.T) {
 	Init("debug", "json")
 	Init("warn", "text")
 	Init("unknown", "invalid") // 回退为 info + json
+}
+
+func TestLoggerOutput_SevenFormsRedaction(t *testing.T) {
+	var buf bytes.Buffer
+	logger := New(&buf, LevelInfo, "json")
+
+	type Cred struct {
+		User     string `json:"user"`
+		Password string `json:"password"`
+		DSN      string `json:"dsn"`
+	}
+
+	type Nested struct {
+		Inner Cred `json:"inner"`
+	}
+
+	cfg := sampleConfig{
+		DB: sampleDBConfig{
+			User:     "admin",
+			Password: "PlainPass_Form1_StructVal",
+			DSN:      "oracle://admin:PlainDsn_Form1_StructVal@host:1521/tp",
+		},
+	}
+	c := Cred{
+		User:     "root",
+		Password: "PlainPass_Form2_Ptr",
+		DSN:      "mysql://root:PlainDsn_Form2_Ptr@127.0.0.1:3306/db",
+	}
+	m := map[string]string{
+		"user":     "alice",
+		"password": "PlainPass_Form3_Map",
+		"token":    "agent_token_Form3_Map_9988",
+	}
+	s := []string{
+		"password=PlainPass_Form4_Slice",
+		"oracle://admin:PlainDsn_Form4_Slice@host:1521/tp",
+	}
+	err := errors.New("db connect failed: oracle://admin:PlainDsn_Form5_Error@adb.oraclecloud.com:1522/tp")
+	nested := Nested{
+		Inner: Cred{
+			User:     "bob",
+			Password: "PlainPass_Form6_Nested",
+			DSN:      "oracle://admin:PlainDsn_Form6_Nested@host:1521/tp",
+		},
+	}
+	dsnStr := "oracle://admin:PlainDsn_Form7_Dsn@adb.oraclecloud.com:1522/tp"
+	mAny := map[string]any{
+		"dsn": "oracle://admin:PlainDsn_Form8_MapAny@adb.oraclecloud.com:1522/tp",
+		"nested": map[string]any{
+			"dsn": "oracle://admin:PlainDsn_Form8_MapAnyNested@adb.oraclecloud.com:1522/tp",
+		},
+	}
+
+	// 依次打进日志
+	logger.Info("form1_cfg", "cfg", cfg)
+	logger.Info("form2_ptr", "cred", &c)
+	logger.Info("form3_map", "m", m)
+	logger.Info("form4_slice", "s", s)
+	logger.Info("form5_error", "err", err)
+	logger.Info("form6_nested", "outer", nested)
+	logger.Info("form7_dsn", "dsn", dsnStr)
+	logger.Info("form8_map_any", "m", mAny)
+
+	output := buf.String()
+
+	secrets := []string{
+		"PlainPass_Form1_StructVal",
+		"PlainDsn_Form1_StructVal",
+		"PlainPass_Form2_Ptr",
+		"PlainDsn_Form2_Ptr",
+		"PlainPass_Form3_Map",
+		"PlainPass_Form4_Slice",
+		"PlainDsn_Form4_Slice",
+		"PlainDsn_Form5_Error",
+		"PlainPass_Form6_Nested",
+		"PlainDsn_Form6_Nested",
+		"PlainDsn_Form7_Dsn",
+		"PlainDsn_Form8_MapAny",
+		"PlainDsn_Form8_MapAnyNested",
+	}
+
+	for _, secret := range secrets {
+		if strings.Contains(output, secret) {
+			t.Errorf("SECURITY LEAK DETECTED: secret %q leaked in log output:\n%s", secret, output)
+		}
+	}
+
+	// 验证 token 打码保留后 4 位
+	if strings.Contains(output, "agent_token_Form3_Map_9988") {
+		t.Errorf("token leaked in full: %s", output)
+	}
+	if !strings.Contains(output, "***9988") {
+		t.Errorf("expected token masked with last 4 chars '***9988', output:\n%s", output)
+	}
+
+	// 验证每行都是合法 JSON
+	for i, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		var js map[string]any
+		if err := json.Unmarshal([]byte(line), &js); err != nil {
+			t.Errorf("line %d is not valid JSON: %v, content: %s", i, err, line)
+		}
+	}
+}
+
+func TestSanitizeAny_CyclesAndDepth(t *testing.T) {
+	type Node struct {
+		Name string
+		Next *Node
+	}
+
+	n1 := &Node{Name: "n1"}
+	n2 := &Node{Name: "n2"}
+	n1.Next = n2
+	n2.Next = n1
+
+	// 1. 结构体指针自循环测试，不发生栈溢出且正确识别
+	sanitized := SanitizeAny(n1)
+	if sanitized == nil {
+		t.Fatalf("expected non-nil sanitized output for cyclic struct")
+	}
+
+	var buf bytes.Buffer
+	logger := New(&buf, LevelInfo, "json")
+	logger.Info("circular node", "node", n1)
+	if !strings.Contains(buf.String(), "circular reference") {
+		t.Errorf("expected '[circular reference]' in log output, got: %s", buf.String())
+	}
+
+	// 2. Map 自循环测试
+	buf.Reset()
+	m := make(map[string]any)
+	m["self"] = m
+	logger.Info("circular map", "map", m)
+	if !strings.Contains(buf.String(), "circular reference") {
+		t.Errorf("expected '[circular reference]' in map log output, got: %s", buf.String())
+	}
+
+	// 3. 深度超过 8 层防护
+	type DeepNode struct {
+		Child *DeepNode
+	}
+	root := &DeepNode{}
+	curr := root
+	for i := 0; i < 15; i++ {
+		curr.Child = &DeepNode{}
+		curr = curr.Child
+	}
+	buf.Reset()
+	logger.Info("deep node", "root", root)
+	if !strings.Contains(buf.String(), "max depth exceeded") {
+		t.Errorf("expected '[max depth exceeded]' for depth > 8, got: %s", buf.String())
+	}
 }

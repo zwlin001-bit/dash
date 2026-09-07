@@ -295,6 +295,57 @@ wallet_path = "${WALLET_DIR}/wallet"
 	}
 }
 
+func TestEnvVarExpansion_PreservesDollarAndUndefined(t *testing.T) {
+	// F2: os.Expand 会连 $VAR（无花括号）一起展开。DSN 里若含 $ 会被误吞。
+	// 改成只展开 ${VAR} 形式，或对未定义变量保留原样
+	tomlContent := `
+[db]
+driver = "oracle"
+user = "admin"
+password = "${MY_DB_PASS}"
+dsn = "root:p$ssword123$1@tcp(127.0.0.1:3306)/dash?$flag=1"
+wallet_path = "${UNDEFINED_WALLET}/wallet"
+`
+	tmpDir := t.TempDir()
+	confPath := filepath.Join(tmpDir, "config.toml")
+	if err := os.WriteFile(confPath, []byte(tomlContent), 0600); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	fakeEnv := map[string]string{
+		"MY_DB_PASS": "actual_secret_pass",
+		// 注意：未定义 UNDEFINED_WALLET
+	}
+
+	cfg, err := LoadWithOptions(Options{
+		ConfigFile: confPath,
+		EnvLookup: func(k string) (string, bool) {
+			v, ok := fakeEnv[k]
+			return v, ok
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// 1. ${MY_DB_PASS} 成功展开
+	if cfg.DB.Password != "actual_secret_pass" {
+		t.Errorf("expected password to expand to 'actual_secret_pass', got %q", cfg.DB.Password)
+	}
+
+	// 2. DSN 中的 $ssword123, $1, $flag（无花括号）不被误吞
+	expectedDSN := "root:p$ssword123$1@tcp(127.0.0.1:3306)/dash?$flag=1"
+	if cfg.DB.DSN != expectedDSN {
+		t.Errorf("DSN dollar signs were modified!\ngot:  %q\nwant: %q", cfg.DB.DSN, expectedDSN)
+	}
+
+	// 3. 未定义环境变量保留原样 ${UNDEFINED_WALLET}
+	expectedWallet := "${UNDEFINED_WALLET}/wallet"
+	if cfg.DB.WalletPath != expectedWallet {
+		t.Errorf("undefined env var placeholder was not preserved!\ngot:  %q\nwant: %q", cfg.DB.WalletPath, expectedWallet)
+	}
+}
+
 func TestDeployExampleConfigFile_ParsesSuccessfully(t *testing.T) {
 	examplePath := filepath.Join("..", "..", "deploy", "config.example.toml")
 	if _, err := os.Stat(examplePath); err != nil {
