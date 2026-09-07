@@ -21,6 +21,7 @@ import (
 // SystemSettings 定义第一期暴露给前端与外部调用的系统设置项。
 type SystemSettings struct {
 	SiteDomain           string `json:"site.domain"`
+	ConsoleDomain        string `json:"site.console_domain,omitempty"`
 	RetentionRawDays     int    `json:"retention.raw_days"`
 	Retention1mDays      int    `json:"retention.1m_days"`
 	Retention1hDays      int    `json:"retention.1h_days"`
@@ -80,6 +81,10 @@ func (s *Service) GetSettings(ctx context.Context) (*SystemSettings, error) {
 			if v != "" {
 				st.SiteDomain = v
 			}
+		case "site.console_domain":
+			if v != "" {
+				st.ConsoleDomain = v
+			}
 		case "retention.raw_days":
 			if n, err := strconv.Atoi(v); err == nil {
 				st.RetentionRawDays = n
@@ -123,16 +128,23 @@ func (s *Service) UpdateSettings(ctx context.Context, updates map[string]any, ac
 		hasServerConfig    bool
 	)
 
-	// 不允许修改 site.domain（第一期只读展示）
+	// 不允许修改 site.domain 与 site.console_domain（第一期只读展示）
 	if dom, ok := updates["site.domain"]; ok {
 		cur, _ := s.GetSettings(ctx)
 		if cur != nil && fmt.Sprintf("%v", dom) != cur.SiteDomain {
 			return nil, errors.New("domain_read_only")
 		}
 	}
+	if dom, ok := updates["site.console_domain"]; ok {
+		cur, _ := s.GetSettings(ctx)
+		if cur != nil && fmt.Sprintf("%v", dom) != cur.ConsoleDomain {
+			return nil, errors.New("domain_read_only")
+		}
+	}
 
 	validKeys := map[string]bool{
 		"site.domain":             true,
+		"site.console_domain":     true,
 		"retention.raw_days":      true,
 		"retention.1m_days":       true,
 		"retention.1h_days":       true,

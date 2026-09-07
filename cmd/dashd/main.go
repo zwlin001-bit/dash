@@ -129,6 +129,8 @@ func runInitDB(args []string) {
 	fs := flag.NewFlagSet("init-db", flag.ExitOnError)
 	configPath := fs.String("config", "/etc/dash/config.toml", "path to config.toml")
 	migDir := fs.String("dir", "migrations", "path to migrations directory")
+	agentDomainFlag := fs.String("agent-domain", "", "agent ingress domain (e.g. agent.example.com)")
+	consoleDomainFlag := fs.String("console-domain", "", "console internal domain (e.g. console.dash.internal)")
 	domainFlag := fs.String("domain", "", "site domain (e.g. dash.example.com)")
 	adminUserFlag := fs.String("admin-user", "admin", "admin username")
 	adminPassFlag := fs.String("admin-password", "", "admin password (auto-generated if empty and user does not exist)")
@@ -177,6 +179,10 @@ func runInitDB(args []string) {
 	}
 	fmt.Println("Database schema migration completed successfully.")
 
+	if *agentDomainFlag != "" && *domainFlag == "" {
+		*domainFlag = *agentDomainFlag
+	}
+
 	// 2. Set site.domain in settings if provided
 	if *domainFlag != "" {
 		domain := strings.TrimSpace(*domainFlag)
@@ -188,6 +194,17 @@ func runInitDB(args []string) {
 			os.Exit(1)
 		}
 		fmt.Printf("Site domain configured: %s\n", domain)
+	}
+
+	if *consoleDomainFlag != "" {
+		consoleDomain := strings.TrimSpace(*consoleDomainFlag)
+		upsertSQL := database.Dialect().UpsertSQL("settings", []string{"setting_key"}, []string{"setting_val", "updated_at_ms"})
+		nowMs := time.Now().UnixMilli()
+		if _, err := database.Exec(ctx, upsertSQL, "site.console_domain", consoleDomain, nowMs); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to configure console domain: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Console domain configured: %s\n", consoleDomain)
 	}
 
 	// 3. Create or update admin user in account_users
@@ -383,7 +400,7 @@ func parseCLIArgs(args []string) (subcmd string, cleanArgs []string) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		prevIsValFlag := i > 0 && (args[i-1] == "-config" || args[i-1] == "--config")
-		if subcmd == "" && !prevIsValFlag && (arg == "migrate" || arg == "serve") {
+		if subcmd == "" && !prevIsValFlag && (arg == "migrate" || arg == "serve" || arg == "init-db") {
 			subcmd = arg
 			continue
 		}
@@ -396,6 +413,10 @@ func main() {
 	subcmd, cleanArgs := parseCLIArgs(os.Args[1:])
 	if subcmd == "migrate" {
 		runMigrate(cleanArgs)
+		return
+	}
+	if subcmd == "init-db" {
+		runInitDB(cleanArgs)
 		return
 	}
 
