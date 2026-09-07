@@ -198,10 +198,16 @@ Go `text/template`，**函数白名单**，不允许任意函数调用。
 
 ## 6. 投递
 
-- 走 **Job 引擎**：失败重试 3 次，指数退避，全程有记录
-- 第三方（TG API）挂掉**不能拖垮事件写入**——`emit()` 永远是非阻塞的
-- Telegram 有速率限制，同一 chat 的发送要串行 + 限速
-- 每次投递写 `notify_deliveries`
+**投递用 `notify_deliveries` 自己做重试队列，不走 Job 引擎。**
+Job 引擎是给「多 step、异构、长耗时」的操作用的（建机器、装代理）；
+通知投递是单步、同构、高频的，塞进 Job 引擎是错配，也会让通知模块无谓地依赖它。
+
+- `notify_deliveries` 就是队列：`delivery_state` + `attempt_no` + `next_retry_at_ms`
+- 失败重试 3 次，指数退避 10s / 60s / 300s，超次数标 `failed` 并产生
+  `system.notify_failed` 事件
+- 第三方（TG API）挂掉**不能拖垮事件写入**——`emit()` 永远非阻塞
+- Telegram 对同一 chat 有速率限制，发送要**串行 + 限速**（每 chat 一个发送队列）
+- 每次尝试都更新 `notify_deliveries`，含渲染后的完整文本
 
 ---
 
