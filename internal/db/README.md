@@ -50,7 +50,7 @@ func (d *DB) Upsert(ctx context.Context, table string, keyCols, updCols []string
 ## 语义约定
 
 - `db.ErrNotFound`：包装 `sql.ErrNoRows`，业务层统一使用 `errors.Is(err, db.ErrNotFound)`。
-- 连接失败时敏感密码自动通过 `internal/logx.Redact` 进行脱敏打码。
+- 连接失败时敏感密码自动进行脱敏打码，不泄露明文。
 - 0 行记录传给 `BatchInsert` 时直接返回 `nil`，不向数据库发送语句。
 
 ## 依赖谁
@@ -58,4 +58,3 @@ func (d *DB) Upsert(ctx context.Context, table string, keyCols, updCols []string
 - `github.com/sijms/go-ora/v2`（纯 Go Oracle 驱动，无 CGO 依赖）
 - `github.com/go-sql-driver/mysql`（纯 Go MySQL 驱动）
 - `dash/internal/db/dialect`
-- `dash/internal/logx`

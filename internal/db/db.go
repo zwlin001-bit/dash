@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -11,7 +13,6 @@ import (
 	go_ora "github.com/sijms/go-ora/v2"
 
 	"dash/internal/db/dialect"
-	"dash/internal/logx"
 )
 
 // ErrNotFound aliases sql.ErrNoRows for business code to inspect via errors.Is(err, db.ErrNotFound).
@@ -118,7 +119,7 @@ func Open(cfg *Config) (*DB, error) {
 
 	sqlDB, err := sql.Open(sqlDriver, connStr)
 	if err != nil {
-		return nil, fmt.Errorf("db open failed: %s", logx.Redact(err.Error()))
+		return nil, fmt.Errorf("db open failed: %w", redactError(err, cfg.Password))
 	}
 
 	sqlDB.SetMaxOpenConns(maxOpen)
@@ -130,7 +131,7 @@ func Open(cfg *Config) (*DB, error) {
 
 	if err := sqlDB.PingContext(ctx); err != nil {
 		_ = sqlDB.Close()
-		return nil, fmt.Errorf("db ping failed: %s", logx.Redact(err.Error()))
+		return nil, fmt.Errorf("db ping failed: %w", redactError(err, cfg.Password))
 	}
 
 	return &DB{
@@ -255,4 +256,22 @@ func (tx *Tx) QueryPage(ctx context.Context, q string, limit, offset int, args .
 	pagedSQL, pageArgs := tx.dialect.Paginate(q, limit, offset)
 	allArgs := append(args, pageArgs...)
 	return tx.Query(ctx, pagedSQL, allArgs...)
+}
+
+var (
+	reURIPassword = regexp.MustCompile(`(?i)(://[^:]+:)([^@]+)(@)`)
+	reKVPassword  = regexp.MustCompile(`(?i)(password\s*=\s*)([^;\s&]+)`)
+)
+
+func redactError(err error, password string) error {
+	if err == nil {
+		return nil
+	}
+	s := err.Error()
+	if password != "" {
+		s = strings.ReplaceAll(s, password, "***")
+	}
+	s = reURIPassword.ReplaceAllString(s, "${1}***${3}")
+	s = reKVPassword.ReplaceAllString(s, "${1}***")
+	return errors.New(s)
 }

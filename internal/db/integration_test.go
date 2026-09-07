@@ -3,10 +3,11 @@ package db_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
-	"dash/internal/config"
 	"dash/internal/db"
 )
 
@@ -23,12 +24,35 @@ func getMySQLDB(t *testing.T) *db.DB {
 }
 
 func getOracleDB(t *testing.T) *db.DB {
-	appCfg, err := config.Load("/etc/dash/config.toml")
-	if err != nil || appCfg.DB.DSN == "" {
-		t.Skipf("Skipping Oracle test (missing DSN): %v", err)
+	dsn := os.Getenv("ADB_DSN")
+	if dsn == "" {
+		for _, path := range []string{".secrets/adb.env", "../../.secrets/adb.env", "../.secrets/adb.env"} {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			for _, line := range strings.Split(string(data), "\n") {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "ADB_DSN=") {
+					val := strings.TrimSpace(strings.TrimPrefix(line, "ADB_DSN="))
+					val = strings.Trim(val, "\"'")
+					dsn = val
+					break
+				}
+			}
+			if dsn != "" {
+				break
+			}
+		}
 	}
-	appCfg.DB.Driver = "oracle"
-	d, err := db.Open(&appCfg.DB)
+	if dsn == "" {
+		t.Skip("Skipping Oracle test (missing ADB_DSN)")
+	}
+	cfg := &db.Config{
+		Driver: "oracle",
+		DSN:    dsn,
+	}
+	d, err := db.Open(cfg)
 	if err != nil {
 		t.Skipf("Skipping Oracle test (cannot connect to ADB): %v", err)
 	}
