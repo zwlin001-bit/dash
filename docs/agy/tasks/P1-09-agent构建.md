@@ -3,6 +3,9 @@
 > 第一期 · 任务 09/19 ｜ 前置：08 ｜ 分支：`agy/p1-09-build-matrix`
 > 设计依据：[`../../03-agent.md`](../../03-agent.md) §1、§1.1
 
+> ★ **完成后必须自己 `git push -u origin <分支名>`**，并确认
+> `git log --oneline -1 origin/<分支名>` 能看到你的提交。只提交到本地等于没交付。
+
 ## 目标
 
 一份产物在 Alpine(musl) / Debian / Ubuntu 上直接跑。

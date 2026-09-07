@@ -3,6 +3,9 @@
 > 第二期 · 任务 24 ｜ 前置：21、23 ｜ 分支：`agy/p2-24-telegram` ｜ 迁移编号：无
 > 设计依据：[`../../09-events-notify.md`](../../09-events-notify.md) §3、§6
 
+> ★ **完成后必须自己 `git push -u origin <分支名>`**，并确认
+> `git log --oneline -1 origin/<分支名>` 能看到你的提交。只提交到本地等于没交付。
+
 ## 目标
 
 把渲染好的文本真的发到 Telegram。同时定义好「适配器」这个扩展点。

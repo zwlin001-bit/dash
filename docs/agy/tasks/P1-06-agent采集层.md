@@ -3,6 +3,9 @@
 > 第一期 · 任务 06/19 ｜ 前置：01 ｜ 分支：`agy/p1-06-collect`
 > 设计依据：[`../../03-agent.md`](../../03-agent.md) §3、[`../../adr/0003-agent-no-gopsutil.md`](../../adr/0003-agent-no-gopsutil.md)
 
+> ★ **完成后必须自己 `git push -u origin <分支名>`**，并确认
+> `git log --oneline -1 origin/<分支名>` 能看到你的提交。只提交到本地等于没交付。
+
 ## 目标
 
 Linux `/proc` 采集。**这是 agent「轻」的根基，也是最容易被一个 import 毁掉的地方。**

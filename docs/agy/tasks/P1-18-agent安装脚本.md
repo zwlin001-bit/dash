@@ -3,6 +3,9 @@
 > 第一期 · 任务 18/19 ｜ 前置：09、14 ｜ 分支：`agy/p1-18-agent-installer`
 > 设计依据：[`../../03-agent.md`](../../03-agent.md) §7、§1.1
 
+> ★ **完成后必须自己 `git push -u origin <分支名>`**，并确认
+> `git log --oneline -1 origin/<分支名>` 能看到你的提交。只提交到本地等于没交付。
+
 ## ★ 先补一块 agent 侧能力：自助注册（enroll）
 
 端到端联调时发现：**`dash-agent` 目前没有 enroll 能力**。

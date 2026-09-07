@@ -3,6 +3,9 @@
 > 第一期 · 任务 07/19 ｜ 前置：05 ｜ 分支：`agy/p1-07-transport`
 > 设计依据：[`../../04-protocol.md`](../../04-protocol.md) §1、§5
 
+> ★ **完成后必须自己 `git push -u origin <分支名>`**，并确认
+> `git log --oneline -1 origin/<分支名>` 能看到你的提交。只提交到本地等于没交付。
+
 ## 目标
 
 一条 WebSocket 长连接承载上报与下行指令，外加 HTTP 上报回退。
