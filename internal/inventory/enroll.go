@@ -109,7 +109,11 @@ VALUES (?, ?, ?, ?, ?, ?, ?)`
 		domain = "localhost:8080"
 	}
 
-	installCmd := fmt.Sprintf("curl -fsSL https://%s/install.sh | sh -s -- --enroll %s", domain, plainToken)
+	endpoint := domain
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "https://" + endpoint
+	}
+	installCmd := fmt.Sprintf("curl -fsSL %s/install.sh | sh -s -- --enroll %s", endpoint, plainToken)
 
 	_ = audit.Log(ctx, s.db, audit.Entry{
 		ActorKind:  actorKind,

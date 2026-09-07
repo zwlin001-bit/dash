@@ -48,6 +48,13 @@ func (m *ControlModule) Register(a *app.App) error {
 		a.Mux.Handle("/api/agent/v1/rpc", wsH)
 		a.Mux.Handle("/api/agent/v1/report", fbH)
 	}
+
+	installH := NewInstallScriptHandler(a.Config, a.DB)
+	dlH := NewDownloadHandler(a.Config)
+	a.Mux.Handle("GET /install.sh", installH)
+	a.Mux.Handle("GET /dl/{filename}", dlH)
+	a.Mux.Handle("GET /dl/", dlH)
+
 	return nil
 }
 
@@ -56,4 +63,9 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, registry *Registry, cfg
 	mux.Handle("/api/agent/v1/enroll", NewEnrollHandler(database))
 	mux.Handle("/api/agent/v1/rpc", NewWSHandler(database, registry, cfg))
 	mux.Handle("/api/agent/v1/report", NewFallbackHandler(database, registry))
+	installH := NewInstallScriptHandler(cfg, database)
+	dlH := NewDownloadHandler(cfg)
+	mux.Handle("GET /install.sh", installH)
+	mux.Handle("GET /dl/{filename}", dlH)
+	mux.Handle("GET /dl/", dlH)
 }

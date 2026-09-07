@@ -1,0 +1,21 @@
+[Unit]
+Description=dash agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dashagent
+Group=dashagent
+ExecStart=/usr/local/bin/dash-agent --config /etc/dash-agent/config.json
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/dash-agent
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target
