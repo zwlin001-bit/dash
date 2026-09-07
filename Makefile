@@ -38,3 +38,13 @@ migrate:
 
 clean:
 	rm -rf bin/
+
+.PHONY: build-web
+build-web:
+	@if command -v npm >/dev/null 2>&1 && [ -f web/package.json ]; then \
+		echo "Building web assets..."; \
+		(cd web && npm run build) && \
+		rm -rf internal/api/dist && \
+		mkdir -p internal/api/dist && \
+		cp -r web/dist/* internal/api/dist/; \
+	fi

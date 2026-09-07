@@ -1,0 +1,144 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-app);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--top-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-main);
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.brandName {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.8px;
+  color: var(--color-teal);
+  text-transform: uppercase;
+}
+
+.brandSub {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.who {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  background: var(--bg-card-sub);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-dim);
+}
+
+.bodyLayout {
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+}
+
+.sidebar {
+  width: var(--side-w);
+  flex: none;
+  background: var(--bg-side);
+  border-right: 1px solid var(--border-main);
+  position: sticky;
+  top: var(--top-h);
+  align-self: flex-start;
+  height: calc(100vh - var(--top-h));
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.menu {
+  padding: 12px 10px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  border-left: 3px solid transparent;
+  text-decoration: none;
+}
+
+.navLink:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.navLinkActive {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+
+.icon {
+  display: inline-block;
+  font-size: 14px;
+}
+
+.sideFoot {
+  padding: 12px 14px;
+  font-size: 11px;
+  color: var(--text-mute);
+  border-top: 1px solid var(--border-main);
+  font-family: var(--font-mono);
+}
+
+.mainContent {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 20px 24px 48px;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: 64px;
+  }
+  .navLink span:not(.icon) {
+    display: none;
+  }
+  .mainContent {
+    padding: 14px 16px 40px;
+  }
+}

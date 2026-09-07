@@ -12,7 +12,7 @@ master.key
 *.exe
 
 # 依赖
-/node_modules/
+node_modules/
 /web/dist/
 __pycache__/
 *.pyc

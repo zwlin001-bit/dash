@@ -1,0 +1,196 @@
+/* ==========================================================================
+   dash 设计系统 Token 契约
+   依循 docs/13-ui-spec.md 与 docs/agy/css/demo2.html / dash2.html
+   所有组件禁止使用字面量颜色值，一律走语义变量
+   ========================================================================== */
+
+:root {
+  /* 字体系统（无外部字体，内置中英文回退链） */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+               Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+               "Noto Sans CJK SC", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo,
+               Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* 尺寸与间距 */
+  --side-w: 220px;
+  --top-h: 48px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* 默认深色主题 Token (demo2.html) */
+  --bg-app: #0f141c;
+  --bg-card: #161d27;
+  --bg-card-sub: #1c2431;
+  --bg-hover: #222c3b;
+  --bg-header: #131a24;
+  --bg-side: #0f141c;
+
+  --border-main: #232e3d;
+  --border-light: #2d3b4e;
+  --border-dim: #1a2330;
+
+  --text-main: #d3dae3;
+  --text-dim: #8999af;
+  --text-mute: #55657a;
+
+  /* 图表系列色（仅给图表与可视化使用，不在业务状态中使用） */
+  --color-blue: #4da6ff;
+  --color-teal: #00d4aa;
+  --color-yellow: #ffb870;
+  --color-purple: #b392f0;
+  --color-cyan: #39d2c0;
+  --color-red: #f85149;
+
+  /* 状态与语义色 */
+  --accent: var(--color-blue);
+  --accent-hover: #6db6ff;
+  --accent-bg: rgba(77, 166, 255, 0.12);
+
+  --ok: var(--color-teal);
+  --ok-bg: rgba(0, 212, 170, 0.12);
+  --ok-border: rgba(0, 212, 170, 0.28);
+
+  --warn: var(--color-yellow);
+  --warn-bg: rgba(255, 184, 112, 0.12);
+  --warn-border: rgba(255, 184, 112, 0.28);
+
+  --err: var(--color-red);
+  --err-bg: rgba(248, 81, 73, 0.12);
+  --err-border: rgba(248, 81, 73, 0.28);
+
+  --input-bg: #0b0f15;
+  --input-border: #232e3d;
+
+  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --card-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --modal-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+
+  --glass-bg: rgba(22, 29, 40, 0.55);
+  --glass-bg-strong: rgba(17, 22, 31, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-blur: 14px;
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.36);
+}
+
+/* 浅色主题 Token 定义 (dash2.html / demo2.html) */
+:root[data-theme="light"] {
+  --bg-app: #f6f8fa;
+  --bg-card: #ffffff;
+  --bg-card-sub: #f6f8fa;
+  --bg-hover: #eaeef2;
+  --bg-header: #ffffff;
+  --bg-side: #ffffff;
+
+  --border-main: #d1d9e0;
+  --border-light: #d0d7de;
+  --border-dim: #d8dee4;
+
+  --text-main: #1f2328;
+  --text-dim: #59636e;
+  --text-mute: #6e7781;
+
+  --color-blue: #0969da;
+  --color-teal: #1a7f37;
+  --color-yellow: #9a6700;
+  --color-purple: #8250df;
+  --color-cyan: #0550ae;
+  --color-red: #cf222e;
+
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --accent-bg: rgba(9, 105, 218, 0.08);
+
+  --ok: #1a7f37;
+  --ok-bg: rgba(26, 127, 55, 0.08);
+  --ok-border: rgba(26, 127, 55, 0.25);
+
+  --warn: #9a6700;
+  --warn-bg: rgba(154, 103, 0, 0.08);
+  --warn-border: rgba(154, 103, 0, 0.25);
+
+  --err: #cf222e;
+  --err-bg: rgba(207, 34, 46, 0.08);
+  --err-border: rgba(207, 34, 46, 0.25);
+
+  --input-bg: #ffffff;
+  --input-border: #d1d9e0;
+
+  --card-shadow: 0 1px 3px rgba(31, 35, 40, 0.12);
+  --card-shadow-lg: 0 8px 24px rgba(140, 149, 159, 0.2);
+  --modal-shadow: 0 16px 32px rgba(140, 149, 159, 0.24);
+
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg-strong: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(209, 217, 224, 0.5);
+  --glass-highlight: rgba(255, 255, 255, 0.8);
+  --glass-blur: 14px;
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* 系统偏好浅色且未显式指定 dark */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg-app: #f6f8fa;
+    --bg-card: #ffffff;
+    --bg-card-sub: #f6f8fa;
+    --bg-hover: #eaeef2;
+    --bg-header: #ffffff;
+    --bg-side: #ffffff;
+
+    --border-main: #d1d9e0;
+    --border-light: #d0d7de;
+    --border-dim: #d8dee4;
+
+    --text-main: #1f2328;
+    --text-dim: #59636e;
+    --text-mute: #6e7781;
+
+    --color-blue: #0969da;
+    --color-teal: #1a7f37;
+    --color-yellow: #9a6700;
+    --color-purple: #8250df;
+    --color-cyan: #0550ae;
+    --color-red: #cf222e;
+
+    --accent: #0969da;
+    --accent-hover: #0550ae;
+    --accent-bg: rgba(9, 105, 218, 0.08);
+
+    --ok: #1a7f37;
+    --ok-bg: rgba(26, 127, 55, 0.08);
+    --ok-border: rgba(26, 127, 55, 0.25);
+
+    --warn: #9a6700;
+    --warn-bg: rgba(154, 103, 0, 0.08);
+    --warn-border: rgba(154, 103, 0, 0.25);
+
+    --err: #cf222e;
+    --err-bg: rgba(207, 34, 46, 0.08);
+    --err-border: rgba(207, 34, 46, 0.25);
+
+    --input-bg: #ffffff;
+    --input-border: #d1d9e0;
+
+    --card-shadow: 0 1px 3px rgba(31, 35, 40, 0.12);
+    --card-shadow-lg: 0 8px 24px rgba(140, 149, 159, 0.2);
+    --modal-shadow: 0 16px 32px rgba(140, 149, 159, 0.24);
+
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-bg-strong: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(209, 217, 224, 0.5);
+    --glass-highlight: rgba(255, 255, 255, 0.8);
+    --glass-blur: 14px;
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+}
