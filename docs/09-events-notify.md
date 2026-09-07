@@ -184,9 +184,12 @@ Go `text/template`，**函数白名单**，不允许任意函数调用。
 
 | event_type | 特有变量 |
 |---|---|
-| `node.online` / `node.offline` | `.NodeName` `.GroupName` `.PublicIP` `.LastSeenAtMs` `.OfflineSeconds` |
-| `node.enrolled` | `.NodeName` `.PublicIP` `.OSName` |
-| `system.db_unreachable` | `.ErrorMsg` `.FailedSeconds` |
+| `node.online` | `.NodeName` `.GroupName` `.PublicIP` `.OfflineSeconds` |
+| `node.offline` | `.NodeName` `.GroupName` `.PublicIP` `.LastSeenAtMs` |
+| `node.enrolled` | `.NodeName` `.PublicIP` `.OSName` `.Arch` |
+| `node.removed` | `.NodeName` `.Operator` |
+| `auth.login_failed` | `.Username` `.IP` `.FailCount` |
+| `system.db_unreachable` | `.ErrorMsg` `.FailedSeconds` `.DroppedBatches` |
 
 ### 5.3 渲染失败
 
