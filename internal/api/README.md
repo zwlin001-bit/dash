@@ -11,7 +11,9 @@
 
 ## 对外接口
 
-- `RegisterRoutes(mux *http.ServeMux, app *dashd.App)`：注册所有 HTTP/WebSocket 路由。
+- `NewModule() app.Module`：创建 Web 服务端子模块，供 `cmd/dashd` 装配。
+- `Handler() http.Handler`：返回内嵌 SPA 页面与静态资源路由 Handler。
+- `RegisterRoutes(mux *http.ServeMux)`：注册静态资源与 SPA 路由至 mux。
 
 ## 依赖谁
 

@@ -1,0 +1,105 @@
+.headerCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--card-shadow);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.nameGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nodeName {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 20px;
+  font-size: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-dim);
+}
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metaLabel {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.metaVal {
+  font-family: var(--font-mono);
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.chartSection {
+  margin-bottom: 20px;
+}
+
+.metricTabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.metricTab {
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-main);
+  color: var(--text-dim);
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.metricTab:hover {
+  color: var(--text-main);
+  border-color: var(--border-light);
+}
+
+.metricTab.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.factsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.factBox {
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-dim);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}

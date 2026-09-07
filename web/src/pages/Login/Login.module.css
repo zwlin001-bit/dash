@@ -1,0 +1,78 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-app);
+  padding: 16px;
+}
+
+.loginCard {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--modal-shadow);
+  padding: 32px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-teal);
+  letter-spacing: 1px;
+}
+
+.sub {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.errorBanner {
+  background: var(--err-bg);
+  border: 1px solid var(--err-border);
+  color: var(--err);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-mute);
+  font-family: var(--font-mono);
+}
