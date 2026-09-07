@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"dash/internal/api"
+	"dash/internal/api/metrics"
 	"dash/internal/app"
 	"dash/internal/config"
-	"dash/internal/control"
 	"dash/internal/db"
 	"dash/internal/logx"
 	"dash/internal/migrate"
@@ -34,7 +34,7 @@ type Module = app.Module
 // 约束：后续任务只允许向此列表追加模块，不改动装配与启动逻辑。
 var modules = []Module{
 	api.NewModule(),
-	control.NewModule(),
+	metrics.NewModule(),
 }
 
 // RegisterModules 按序执行各模块的注册逻辑。
