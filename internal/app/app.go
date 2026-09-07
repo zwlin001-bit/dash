@@ -9,6 +9,7 @@ import (
 
 	"dash/internal/config"
 	"dash/internal/db"
+	"dash/internal/logx"
 )
 
 // RouteInfo 记录注册在 App 上的路由及鉴权属性。
@@ -89,6 +90,11 @@ func (a *App) HandleAuthed(pattern string, h http.HandlerFunc) {
 		mw := a.getAuthMiddleware()
 		if mw != nil {
 			mw(h)(w, r)
+			return
+		}
+		if a.Config != nil && a.Config.Server.DevNoAuth {
+			logx.Warn("DEV_NO_AUTH request allowed", "method", r.Method, "path", r.URL.Path, "dev_no_auth", true)
+			h(w, r)
 			return
 		}
 		// 默认拒绝：若认证中间件未就绪，直接返回 401
@@ -198,6 +204,9 @@ func (a *App) HealthzHandler() http.HandlerFunc {
 			"agents_online":   agentsOnline,
 			"dropped_batches": droppedBatches,
 			"dropped_rows":    droppedRows,
+		}
+		if a.Config != nil && a.Config.Server.DevNoAuth {
+			resp["dev_no_auth"] = true
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

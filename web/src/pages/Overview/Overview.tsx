@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { checkHealth, getNodeGroups, getNodes, getTags } from '../../api/nodes';
-import { subscribeMetricsStream } from '../../api/metrics';
+import { subscribeMetricsStream, SSEConnectionStatus } from '../../api/metrics';
 import { MetricStreamEvent, NodeLatest, NodeStateStreamEvent } from '../../api/types';
 import { fmt, formatBytes, formatBps, formatTimeAgo } from '../../utils';
 import styles from './Overview.module.css';
@@ -12,6 +12,9 @@ export const Overview: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [selectedState, setSelectedState] = useState<'all' | 'online' | 'offline' | 'never'>('all');
+
+  // SSE 连接状态（'connecting' | 'connected' | 'disconnected'）
+  const [sseStatus, setSseStatus] = useState<SSEConnectionStatus>('connecting');
 
   // 实时 SSE 推送的指标与状态缓存（不轮询数据库，docs/12-api-spec.md §6）
   const [realtimeMetrics, setRealtimeMetrics] = useState<Record<string, Partial<NodeLatest>>>({});
@@ -28,11 +31,12 @@ export const Overview: React.FC = () => {
 
   const isDbUnavailable = healthData?.db === 'error';
 
-  // 初始加载节点列表
+  // 节点列表查询：SSE 连通时依靠推送，断开时降级为 15 秒轮询保底
   const { data: rawNodes = [], isLoading } = useQuery({
     queryKey: ['nodes'],
     queryFn: () => getNodes(),
     staleTime: 30000,
+    refetchInterval: sseStatus === 'connected' ? false : 15000,
   });
 
   // 加载分组与标签过滤候选项
@@ -48,9 +52,12 @@ export const Overview: React.FC = () => {
     staleTime: 60000,
   });
 
-  // 建立 SSE 订阅（实时刷新走 SSE，不轮询数据库）
+  // 建立 SSE 订阅（实时刷新走 SSE，断开自动重连，不可用时降级轮询）
   useEffect(() => {
     const unsubscribe = subscribeMetricsStream({
+      onStatusChange: (status) => {
+        setSseStatus(status);
+      },
       onMetrics: (ev: MetricStreamEvent) => {
         setRealtimeMetrics((prev) => ({
           ...prev,
@@ -73,6 +80,13 @@ export const Overview: React.FC = () => {
             last_seen_at_ms: ev.last_seen_at_ms,
           },
         }));
+        if (ev.conn_state !== 'online') {
+          setRealtimeMetrics((prev) => {
+            const next = { ...prev };
+            delete next[ev.node_id];
+            return next;
+          });
+        }
       },
     });
 
@@ -91,7 +105,7 @@ export const Overview: React.FC = () => {
       const mergedLastSeen = stateOverride?.last_seen_at_ms ?? node.last_seen_at_ms;
 
       let mergedLatest: NodeLatest | undefined = undefined;
-      if (node.latest || metricOverride) {
+      if (mergedConnState === 'online' && (node.latest || metricOverride)) {
         mergedLatest = {
           ...(node.latest || {}),
           ...(metricOverride || {}),
@@ -149,18 +163,19 @@ export const Overview: React.FC = () => {
         onlineNodesWithCpu.length
       : null;
 
-  const hasUpBps = liveNodes.some(
+  const onlineNodes = liveNodes.filter((n) => n.conn_state === 'online');
+  const hasUpBps = onlineNodes.some(
     (n) => n.latest?.net_up_bps !== undefined && n.latest?.net_up_bps !== null
   );
   const totalUpBps = hasUpBps
-    ? liveNodes.reduce((acc, n) => acc + (n.latest?.net_up_bps || 0), 0)
+    ? onlineNodes.reduce((acc, n) => acc + (n.latest?.net_up_bps || 0), 0)
     : null;
 
-  const hasDownBps = liveNodes.some(
+  const hasDownBps = onlineNodes.some(
     (n) => n.latest?.net_down_bps !== undefined && n.latest?.net_down_bps !== null
   );
   const totalDownBps = hasDownBps
-    ? liveNodes.reduce((acc, n) => acc + (n.latest?.net_down_bps || 0), 0)
+    ? onlineNodes.reduce((acc, n) => acc + (n.latest?.net_down_bps || 0), 0)
     : null;
 
   const hasFilterActive =
@@ -183,7 +198,16 @@ export const Overview: React.FC = () => {
       )}
 
       <div className="page-head">
-        <h2>节点总览</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h2>节点总览</h2>
+          <span
+            className={`health ${sseStatus === 'connected' ? 'ok' : 'err'}`}
+            title={sseStatus === 'connected' ? '实时监控已连接 (SSE)' : '实时监控已断开，已降级为 15 秒轮询'}
+          >
+            <span className="hdot" />
+            <span>{sseStatus === 'connected' ? '实时' : '已断开'}</span>
+          </span>
+        </div>
         <span className="count">共 {liveNodes.length} 台节点</span>
       </div>
 

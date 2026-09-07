@@ -437,3 +437,94 @@ master_key = "/etc/dash/master.key"
 		t.Fatalf("Expected DSN password masked to ***, got:\n%s", logOutput)
 	}
 }
+
+func TestDevNoAuth_ConfigAndEnv(t *testing.T) {
+	// 1. 默认值必须为 false
+	defCfg := DefaultConfig()
+	if defCfg.Server.DevNoAuth {
+		t.Fatalf("expected DefaultConfig DevNoAuth to be false, got true")
+	}
+
+	// 2. 配置文件不写时，默认为 false
+	tomlWithout := `
+[db]
+driver = "mysql"
+dsn = "user:pass@tcp(127.0.0.1:3306)/dash"
+[server]
+listen = ":8080"
+data_dir = "/tmp/dash"
+`
+	tmpDir := t.TempDir()
+	confPath1 := filepath.Join(tmpDir, "config1.toml")
+	if err := os.WriteFile(confPath1, []byte(tomlWithout), 0600); err != nil {
+		t.Fatalf("failed to write config1: %v", err)
+	}
+	cfg1, err := Load(confPath1)
+	if err != nil {
+		t.Fatalf("failed to load config1: %v", err)
+	}
+	if cfg1.Server.DevNoAuth {
+		t.Fatalf("expected DevNoAuth to be false when omitted, got true")
+	}
+
+	// 3. 配置文件显式写 dev_no_auth = true
+	tomlWith := `
+[db]
+driver = "mysql"
+dsn = "user:pass@tcp(127.0.0.1:3306)/dash"
+[server]
+listen = ":8080"
+data_dir = "/tmp/dash"
+dev_no_auth = true
+`
+	confPath2 := filepath.Join(tmpDir, "config2.toml")
+	if err := os.WriteFile(confPath2, []byte(tomlWith), 0600); err != nil {
+		t.Fatalf("failed to write config2: %v", err)
+	}
+	cfg2, err := Load(confPath2)
+	if err != nil {
+		t.Fatalf("failed to load config2: %v", err)
+	}
+	if !cfg2.Server.DevNoAuth {
+		t.Fatalf("expected DevNoAuth to be true from config file, got false")
+	}
+
+	// 4. 环境变量覆盖 DASH_SERVER_DEV_NO_AUTH
+	envMap := map[string]string{
+		"DASH_SERVER_DEV_NO_AUTH": "true",
+	}
+	mockLookup := func(key string) (string, bool) {
+		val, ok := envMap[key]
+		return val, ok
+	}
+	cfg3, err := LoadWithOptions(Options{
+		ConfigFile: confPath1,
+		EnvLookup:  mockLookup,
+	})
+	if err != nil {
+		t.Fatalf("failed to load with DASH_SERVER_DEV_NO_AUTH: %v", err)
+	}
+	if !cfg3.Server.DevNoAuth {
+		t.Fatalf("expected DevNoAuth to be true from DASH_SERVER_DEV_NO_AUTH, got false")
+	}
+
+	// 5. 环境变量覆盖 DEV_NO_AUTH
+	envMap2 := map[string]string{
+		"DEV_NO_AUTH": "1",
+	}
+	mockLookup2 := func(key string) (string, bool) {
+		val, ok := envMap2[key]
+		return val, ok
+	}
+	cfg4, err := LoadWithOptions(Options{
+		ConfigFile: confPath1,
+		EnvLookup:  mockLookup2,
+	})
+	if err != nil {
+		t.Fatalf("failed to load with DEV_NO_AUTH: %v", err)
+	}
+	if !cfg4.Server.DevNoAuth {
+		t.Fatalf("expected DevNoAuth to be true from DEV_NO_AUTH, got false")
+	}
+}
+

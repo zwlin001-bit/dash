@@ -18,13 +18,15 @@ import (
 // HelloHandler 处理 Agent 连接后的第一条请求 agent.hello。
 type HelloHandler struct {
 	database *db.DB
+	registry *Registry
 	config   *config.Config
 }
 
 // NewHelloHandler 创建 HelloHandler 实例。
-func NewHelloHandler(database *db.DB, cfg *config.Config) *HelloHandler {
+func NewHelloHandler(database *db.DB, registry *Registry, cfg *config.Config) *HelloHandler {
 	return &HelloHandler{
 		database: database,
+		registry: registry,
 		config:   cfg,
 	}
 }
@@ -101,6 +103,9 @@ func (h *HelloHandler) HandleHello(ctx context.Context, nodeID string, remoteIP 
 	                  SET agent_version = ?, conn_state = 'online', last_seen_at_ms = ?, updated_at_ms = ?
 	                  WHERE id = ?`
 	_, _ = h.database.Exec(ctx, updateNodeSQL, params.AgentVersion, nowMs, nowMs, nodeID)
+	if h.registry != nil {
+		h.registry.NotifyStateChange(nodeID, "online", nowMs)
+	}
 
 	var offlineSeconds int64
 	if prevLastSeen.Valid && prevLastSeen.Int64 > 0 {

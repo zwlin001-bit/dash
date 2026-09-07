@@ -7,10 +7,10 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Layout } from './components/Layout';
 import { Login, Overview, NodeDetail, Machines, Settings, Events } from './pages';
-import { queryClient, useCurrentUser, setUnauthorizedNavigator } from './api';
+import { queryClient, useCurrentUser, setUnauthorizedNavigator, checkHealth } from './api';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -49,10 +49,29 @@ const AuthNavigatorSync: React.FC = () => {
   return null;
 };
 
+export const DevNoAuthBanner: React.FC = () => {
+  const { data: health } = useQuery({
+    queryKey: ['healthz'],
+    queryFn: checkHealth,
+    staleTime: 30000,
+  });
+
+  if (!health?.dev_no_auth) {
+    return null;
+  }
+
+  return (
+    <div className="dev-no-auth-banner" role="alert">
+      ⚠️ 开发模式：鉴权已关闭
+    </div>
+  );
+};
+
 export const AppRoutes: React.FC = () => {
   return (
     <>
       <AuthNavigatorSync />
+      <DevNoAuthBanner />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
