@@ -11,6 +11,7 @@
 ## 对外接口
 
 - `lint-imports.sh`：执行 agent 依赖隔离纪律检查。
+- `lint-sql.sh`：执行可移植 SQL 方言检查（阻断业务代码中的 Oracle 与 MySQL 方言）。
 - 可通过 `make lint` 触发调用。
 
 ## 依赖谁
