@@ -9,7 +9,7 @@ import { formatBytes, formatBps, formatTimeAgo, formatDateTime, formatUptime } f
 import styles from './NodeDetail.module.css';
 
 export const NodeDetail: React.FC = () => {
-  const { id = '01JBX79N1A9W5K3E8S6T2Y4P0A' } = useParams<{ id: string }>();
+  const { id = '' } = useParams<{ id: string }>();
   const [span, setSpan] = useState<TimeSeriesSpan>('6h');
   const [activeMetricTab, setActiveMetricTab] = useState<'all' | 'cpu' | 'mem' | 'net' | 'sys'>('all');
 
@@ -18,6 +18,7 @@ export const NodeDetail: React.FC = () => {
     queryKey: ['node', id],
     queryFn: () => getNode(id),
     staleTime: 30000,
+    enabled: !!id,
   });
 
   // 实时 SSE 推送数据缓存
@@ -25,6 +26,8 @@ export const NodeDetail: React.FC = () => {
   const [liveState, setLiveState] = useState<{ conn_state: 'online' | 'offline' | 'never'; last_seen_at_ms: number } | null>(null);
 
   useEffect(() => {
+    if (!id) return;
+
     const unsubscribe = subscribeMetricsStream({
       onMetrics: (ev: MetricStreamEvent) => {
         if (ev.node_id === id) {
@@ -46,6 +49,9 @@ export const NodeDetail: React.FC = () => {
             conn_state: ev.conn_state,
             last_seen_at_ms: ev.last_seen_at_ms,
           });
+          if (ev.conn_state !== 'online') {
+            setLiveLatest(null);
+          }
         }
       },
     });
@@ -57,8 +63,9 @@ export const NodeDetail: React.FC = () => {
 
   const node = useMemo(() => {
     if (!nodeData) return null;
+    const effectiveConnState = liveState?.conn_state ?? nodeData.conn_state;
     let mergedLatest: NodeLatest | undefined = undefined;
-    if (nodeData.latest || liveLatest) {
+    if (effectiveConnState === 'online' && (nodeData.latest || liveLatest)) {
       mergedLatest = {
         ...(nodeData.latest || {}),
         ...(liveLatest || {}),
@@ -67,7 +74,7 @@ export const NodeDetail: React.FC = () => {
 
     return {
       ...nodeData,
-      conn_state: liveState?.conn_state ?? nodeData.conn_state,
+      conn_state: effectiveConnState,
       last_seen_at_ms: liveState?.last_seen_at_ms ?? nodeData.last_seen_at_ms,
       latest: mergedLatest,
     };

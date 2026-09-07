@@ -51,15 +51,16 @@ type Node struct {
 	Group   *GroupInfo      `json:"group,omitempty"`
 	Tags    []*Tag          `json:"tags"`
 	Billing *BillingSummary `json:"billing,omitempty"`
-	Latest  any             `json:"latest"`
+	Latest  any             `json:"latest,omitempty"`
 	Facts   *NodeFacts      `json:"facts,omitempty"`
 }
 
 type NodeService struct {
-	db      *db.DB
-	tags    *TagService
-	facts   *FactsService
-	billing *BillingService
+	db           *db.DB
+	tags         *TagService
+	facts        *FactsService
+	billing      *BillingService
+	latestGetter func(nodeID string) (any, bool)
 }
 
 func NewNodeService(database *db.DB, tags *TagService, facts *FactsService, billing *BillingService) *NodeService {
@@ -69,6 +70,11 @@ func NewNodeService(database *db.DB, tags *TagService, facts *FactsService, bill
 		facts:   facts,
 		billing: billing,
 	}
+}
+
+// SetLatestGetter 注入内存最新指标获取函数（从 Ingest LatestCache 纯内存读取）。
+func (s *NodeService) SetLatestGetter(fn func(nodeID string) (any, bool)) {
+	s.latestGetter = fn
 }
 
 type ListNodesFilter struct {
@@ -260,6 +266,17 @@ ORDER BY %s`, whereSQL, orderClause)
 		for _, n := range nodes {
 			if b, ok := billingMap[n.ID]; ok {
 				n.Billing = b
+			}
+		}
+	}
+
+	// 7. 批量装配 Latest 内存最新指标（仅对在线节点装配，离线/未上线节点留空，契约 docs/12-api-spec.md §4）
+	if s.latestGetter != nil {
+		for _, n := range nodes {
+			if n.ConnState == "online" {
+				if lat, ok := s.latestGetter(n.ID); ok {
+					n.Latest = lat
+				}
 			}
 		}
 	}
@@ -458,6 +475,13 @@ FROM nodes WHERE id = ?`
 			TrafficLimitKind: billing.TrafficLimitKind,
 			Currency:         billing.Currency,
 			Price:            billing.Price,
+		}
+	}
+
+	// 填充 Latest 内存最新指标（仅在线节点装配）
+	if n.ConnState == "online" && s.latestGetter != nil {
+		if lat, ok := s.latestGetter(id); ok {
+			n.Latest = lat
 		}
 	}
 

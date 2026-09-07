@@ -20,7 +20,6 @@ import {
   UpdateNodeParams,
   UpdateTagParams,
 } from './types';
-import { mockNodeDetail, mockNodes, mockSettings } from '../mock/mockData';
 
 export interface ListNodesParams {
   group_id?: string;
@@ -38,44 +37,27 @@ export async function getNodes(params?: ListNodesParams | unknown): Promise<Node
   const filter = params && typeof params === 'object' && !('queryKey' in params)
     ? (params as ListNodesParams)
     : undefined;
-  try {
-    const res = await getNodesPaged(filter);
-    return res.items;
-  } catch {
-    return mockNodes;
-  }
+  const res = await getNodesPaged(filter);
+  return res.items;
 }
 
 export async function getNodesPaged(params?: ListNodesParams): Promise<PageResult<NodeItem>> {
-  try {
-    const query = new URLSearchParams();
-    if (params?.group_id) query.set('group_id', params.group_id);
-    if (params?.tag_id) query.set('tag_id', params.tag_id);
-    if (params?.conn_state) query.set('conn_state', params.conn_state);
-    if (params?.q) query.set('q', params.q);
-    if (params?.sort) query.set('sort', params.sort);
-    if (params?.order) query.set('order', params.order);
-    if (params?.page) query.set('page', String(params.page));
-    if (params?.page_size) query.set('page_size', String(params.page_size));
+  const query = new URLSearchParams();
+  if (params?.group_id) query.set('group_id', params.group_id);
+  if (params?.tag_id) query.set('tag_id', params.tag_id);
+  if (params?.conn_state) query.set('conn_state', params.conn_state);
+  if (params?.q) query.set('q', params.q);
+  if (params?.sort) query.set('sort', params.sort);
+  if (params?.order) query.set('order', params.order);
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.page_size) query.set('page_size', String(params.page_size));
 
-    const qs = query.toString();
-    return await apiFetch<PageResult<NodeItem>>(`/api/v1/nodes${qs ? `?${qs}` : ''}`);
-  } catch {
-    return {
-      items: mockNodes,
-      total: mockNodes.length,
-      page: 1,
-      page_size: 50,
-    };
-  }
+  const qs = query.toString();
+  return await apiFetch<PageResult<NodeItem>>(`/api/v1/nodes${qs ? `?${qs}` : ''}`);
 }
 
 export async function getNode(id: string): Promise<NodeDetail> {
-  try {
-    return await apiFetch<NodeDetail>(`/api/v1/nodes/${id}`);
-  } catch {
-    return { ...mockNodeDetail, id };
-  }
+  return await apiFetch<NodeDetail>(`/api/v1/nodes/${id}`);
 }
 
 export async function createNode(params: CreateNodeParams): Promise<NodeDetail> {
@@ -225,11 +207,7 @@ export async function deleteEnrollToken(id: string): Promise<{ ok: boolean }> {
 
 // 系统设置
 export async function getSettings(): Promise<SystemSettings> {
-  try {
-    return await apiFetch<SystemSettings>('/api/v1/settings');
-  } catch {
-    return mockSettings;
-  }
+  return await apiFetch<SystemSettings>('/api/v1/settings');
 }
 
 export async function updateSettings(updates: Partial<SystemSettings>): Promise<SystemSettings> {

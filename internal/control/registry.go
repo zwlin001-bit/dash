@@ -101,16 +101,20 @@ func (s *Session) UpdateLastSeen(ts int64) {
 	s.LastSeenAtMs.Store(ts)
 }
 
+// StateChangeHandler 定义节点在线/离线状态变更回调函数类型。
+type StateChangeHandler func(nodeID string, connState string, lastSeenMs int64)
+
 // Registry 维护 Agent 在线长连接注册表及离线检测状态。
 type Registry struct {
-	mu           sync.RWMutex
-	sessions     map[string]*Session
-	fallbackCmds map[string][]*protocol.Request
-	database     *db.DB
-	logger       *logx.Logger
-	stopCh       chan struct{}
-	wg           sync.WaitGroup
-	stopped      atomic.Bool
+	mu            sync.RWMutex
+	sessions      map[string]*Session
+	fallbackCmds  map[string][]*protocol.Request
+	stateHandlers []StateChangeHandler
+	database      *db.DB
+	logger        *logx.Logger
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
+	stopped       atomic.Bool
 }
 
 // NewRegistry 创建 Registry 实例。
@@ -203,6 +207,27 @@ func (r *Registry) Kick(nodeID string) bool {
 		return true
 	}
 	return false
+}
+
+// OnStateChange 注册节点在线状态变更监听器。
+func (r *Registry) OnStateChange(fn StateChangeHandler) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.stateHandlers = append(r.stateHandlers, fn)
+}
+
+// NotifyStateChange 触发节点在线状态变更广播。
+func (r *Registry) NotifyStateChange(nodeID string, connState string, lastSeenMs int64) {
+	r.mu.RLock()
+	handlers := make([]StateChangeHandler, len(r.stateHandlers))
+	copy(handlers, r.stateHandlers)
+	r.mu.RUnlock()
+
+	for _, h := range handlers {
+		if h != nil {
+			h(nodeID, connState, lastSeenMs)
+		}
+	}
 }
 
 // RevokeToken 吊销节点的长期 Token，断开当前在线连接并写审计日志。
@@ -417,6 +442,8 @@ func (r *Registry) sweepInactive(ctx context.Context) {
 
 // emitOffline 发送节点离线事件 (P1-20)。
 func (r *Registry) emitOffline(ctx context.Context, nodeID string, lastSeenAtMs int64, defaultIP string) {
+	r.NotifyStateChange(nodeID, "offline", lastSeenAtMs)
+
 	if r.database == nil {
 		return
 	}

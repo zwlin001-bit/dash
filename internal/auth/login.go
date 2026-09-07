@@ -21,6 +21,7 @@ import (
 	"dash/internal/audit"
 	"dash/internal/db"
 	"dash/internal/events"
+	"dash/internal/logx"
 	"dash/internal/ulid"
 )
 
@@ -155,8 +156,9 @@ func (rl *RateLimiter) Reset(keys ...string) {
 
 // Service 提供认证相关的业务逻辑。
 type Service struct {
-	db      *db.DB
-	limiter *RateLimiter
+	db        *db.DB
+	limiter   *RateLimiter
+	DevNoAuth bool
 }
 
 func NewService(database *db.DB) *Service {
@@ -537,7 +539,8 @@ func JSONSuccess(w http.ResponseWriter, status int, data any) {
 
 // AuthModule 实现 app.Module，装配认证相关的 HTTP 路由与中间件。
 type AuthModule struct {
-	service *Service
+	service   *Service
+	devNoAuth bool
 }
 
 func NewModule() app.Module {
@@ -554,6 +557,12 @@ func (m *AuthModule) Register(a *app.App) error {
 	}
 	if a.DB != nil {
 		m.service = NewService(a.DB)
+	}
+	if a.Config != nil && a.Config.Server.DevNoAuth {
+		m.devNoAuth = true
+		if m.service != nil {
+			m.service.DevNoAuth = true
+		}
 	}
 	// 注入可复用的鉴权中间件至 App
 	a.SetAuthMiddleware(m.RequireAuth)
@@ -587,6 +596,21 @@ func (m *AuthModule) RegisterRoutes(mux *http.ServeMux) {
 func RequireAuth(svc *Service) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			if svc != nil && svc.DevNoAuth {
+				logx.Warn("DEV_NO_AUTH request allowed", "method", r.Method, "path", r.URL.Path, "dev_no_auth", true)
+				u := UserFromContext(r.Context())
+				if u == nil {
+					u = &User{
+						ID:       "dev-admin",
+						Username: "admin",
+						IsAdmin:  true,
+					}
+					r = r.WithContext(ContextWithUser(r.Context(), u))
+				}
+				next(w, r)
+				return
+			}
+
 			u := UserFromContext(r.Context())
 			var isExpired bool
 			if u == nil {
@@ -631,7 +655,25 @@ func (m *AuthModule) AuthMiddleware(next http.Handler) http.Handler {
 
 // RequireAuth 中间件保证只有已登录用户才能访问。
 func (m *AuthModule) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
-	return RequireAuth(m.service)(next)
+	if m.service != nil {
+		return RequireAuth(m.service)(next)
+	}
+	if m.devNoAuth {
+		return func(w http.ResponseWriter, r *http.Request) {
+			logx.Warn("DEV_NO_AUTH request allowed", "method", r.Method, "path", r.URL.Path, "dev_no_auth", true)
+			u := UserFromContext(r.Context())
+			if u == nil {
+				u = &User{
+					ID:       "dev-admin",
+					Username: "admin",
+					IsAdmin:  true,
+				}
+				r = r.WithContext(ContextWithUser(r.Context(), u))
+			}
+			next(w, r)
+		}
+	}
+	return RequireAuth(nil)(next)
 }
 
 // RequireAuth 也是 Service 的方法以方便直接基于 Service 调用。
@@ -725,8 +767,16 @@ func (m *AuthModule) HandleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if u == nil {
-		JSONError(w, http.StatusUnauthorized, "unauthorized", "未登录或会话已过期", nil)
-		return
+		if (m.service != nil && m.service.DevNoAuth) || m.devNoAuth {
+			u = &User{
+				ID:       "dev-admin",
+				Username: "admin",
+				IsAdmin:  true,
+			}
+		} else {
+			JSONError(w, http.StatusUnauthorized, "unauthorized", "未登录或会话已过期", nil)
+			return
+		}
 	}
 
 	JSONSuccess(w, http.StatusOK, map[string]any{

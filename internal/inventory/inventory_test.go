@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"dash/internal/db"
 	"dash/internal/ulid"
@@ -637,3 +639,94 @@ func TestHTTPModuleEndpoints(t *testing.T) {
 	recDelGrp := httptest.NewRecorder()
 	mux.ServeHTTP(recDelGrp, reqDelGrp)
 }
+
+func TestNodeLatest_OnlineAndOffline(t *testing.T) {
+	database, nodes, _, _, _, _, _ := setupInventoryServices(t)
+	defer database.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	suffix := ulid.New()[:6]
+	n, err := nodes.CreateNode(ctx, CreateNodeParams{
+		Name: "node-latest-" + suffix,
+	}, "user", "admin-1", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
+	defer func() {
+		_ = nodes.DeleteNode(ctx, n.ID, "user", "admin-1", "127.0.0.1")
+	}()
+
+	type mockLatest struct {
+		CpuPct float64 `json:"cpu_pct"`
+	}
+	fakeLatest := mockLatest{CpuPct: 15.5}
+
+	nodes.SetLatestGetter(func(nodeID string) (any, bool) {
+		if nodeID == n.ID {
+			return fakeLatest, true
+		}
+		return nil, false
+	})
+
+	// 1. 默认状态为 'never' (离线)，Latest 应为 nil
+	n1, err := nodes.GetNode(ctx, n.ID)
+	if err != nil {
+		t.Fatalf("failed to get node: %v", err)
+	}
+	if n1.Latest != nil {
+		t.Fatalf("expected n1.Latest to be nil when not online, got %+v", n1.Latest)
+	}
+
+	// 2. 将节点更新为 'online'
+	now := time.Now().UnixMilli()
+	_, err = database.Exec(ctx, "UPDATE nodes SET conn_state = 'online', last_seen_at_ms = ? WHERE id = ?", now, n.ID)
+	if err != nil {
+		t.Fatalf("failed to update node to online: %v", err)
+	}
+
+	n2, err := nodes.GetNode(ctx, n.ID)
+	if err != nil {
+		t.Fatalf("failed to get node: %v", err)
+	}
+	if n2.Latest == nil {
+		t.Fatalf("expected n2.Latest to be populated when online, got nil")
+	}
+
+	// ListNodes 同样装配
+	p, err := nodes.ListNodes(ctx, ListNodesFilter{Q: "node-latest-" + suffix})
+	if err != nil {
+		t.Fatalf("failed to list nodes: %v", err)
+	}
+	items := p.Items.([]*Node)
+	if len(items) == 0 || items[0].Latest == nil {
+		t.Fatalf("expected ListNodes to have populated Latest for online node")
+	}
+
+	// 序列化 JSON 验证包含 "latest"
+	bOnline, _ := json.Marshal(n2)
+	if !strings.Contains(string(bOnline), `"latest"`) {
+		t.Fatalf("expected serialized JSON to contain latest, got: %s", string(bOnline))
+	}
+
+	// 3. 将节点置为 'offline'，Latest 应恢复为 nil 并在 JSON 中省略
+	_, err = database.Exec(ctx, "UPDATE nodes SET conn_state = 'offline' WHERE id = ?", n.ID)
+	if err != nil {
+		t.Fatalf("failed to set node offline: %v", err)
+	}
+
+	n3, err := nodes.GetNode(ctx, n.ID)
+	if err != nil {
+		t.Fatalf("failed to get node: %v", err)
+	}
+	if n3.Latest != nil {
+		t.Fatalf("expected n3.Latest to be nil when offline, got %+v", n3.Latest)
+	}
+
+	bOffline, _ := json.Marshal(n3)
+	if strings.Contains(string(bOffline), `"latest"`) {
+		t.Fatalf("expected serialized JSON to omit latest when offline (omitempty), got: %s", string(bOffline))
+	}
+}
+

@@ -433,3 +433,20 @@ textarea:disabled {
   border-radius: 50%;
   animation: dash-spin 0.8s linear infinite;
 }
+
+/* 开发免登录模式常驻横幅 (不可关闭，使用 --warn 色) */
+.dev-no-auth-banner {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-bottom: 1px solid var(--warn-border);
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}

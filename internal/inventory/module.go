@@ -5,6 +5,7 @@ import (
 
 	"dash/internal/app"
 	"dash/internal/db"
+	"dash/internal/ingest"
 )
 
 // InventoryModule 实现 app.Module，装配机器资产与清单维护的全部 API。
@@ -28,6 +29,16 @@ func (m *InventoryModule) Name() string {
 
 func (m *InventoryModule) Register(a *app.App) error {
 	m.Init(a.DB)
+	if m.nodes != nil {
+		m.nodes.SetLatestGetter(func(nodeID string) (any, bool) {
+			if a != nil && a.Ingester != nil {
+				if s, ok := a.Ingester.(interface{ Latest() *ingest.LatestCache }); ok {
+					return s.Latest().Get(nodeID)
+				}
+			}
+			return nil, false
+		})
+	}
 	m.RegisterAppRoutes(a)
 	return nil
 }

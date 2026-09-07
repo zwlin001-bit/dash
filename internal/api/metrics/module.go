@@ -67,6 +67,25 @@ func (m *Module) Register(a *app.App) error {
 		}
 	}
 
+	// 若已注入 Registry，监听在线状态变更并广播 SSE node_state 事件
+	if a.Registry != nil {
+		if reg, ok := a.Registry.(interface {
+			OnStateChange(fn func(nodeID string, connState string, lastSeenMs int64))
+		}); ok {
+			reg.OnStateChange(func(nodeID string, connState string, lastSeenMs int64) {
+				m.store.BroadcastNodeState(nodeID, connState, lastSeenMs)
+				if connState == "offline" {
+					m.store.DeleteLatest(nodeID)
+					if a.Ingester != nil {
+						if s, ok := a.Ingester.(interface{ Latest() *ingest.LatestCache }); ok {
+							s.Latest().Delete(nodeID)
+						}
+					}
+				}
+			})
+		}
+	}
+
 	m.handler.RegisterAppRoutes(a)
 	return nil
 }

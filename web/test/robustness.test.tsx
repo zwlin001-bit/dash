@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, after } from 'node:test';
 import assert from 'node:assert';
 import './auth.test';
+import './overview_real.test';
 
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { Overview } from '../src/pages/Overview';

@@ -1106,11 +1106,15 @@ cmd_status() {
     VER=""
     DB_STATUS="unknown"
     AGENTS_ONLINE="0"
+    DEV_NO_AUTH="false"
 
     if [ -n "$HEALTH_JSON" ]; then
         VER=$(extract_json_val "$HEALTH_JSON" "version")
         DB_STATUS=$(extract_json_val "$HEALTH_JSON" "db")
         AGENTS_ONLINE=$(extract_json_int "$HEALTH_JSON" "agents_online")
+        if printf '%s' "$HEALTH_JSON" | grep -q '"dev_no_auth"[[:space:]]*:[[:space:]]*true'; then
+            DEV_NO_AUTH="true"
+        fi
     fi
 
     if [ -z "$VER" ]; then
@@ -1170,6 +1174,9 @@ cmd_status() {
     echo "dashd 服务状态"
     echo "----------------------------------------"
     echo "dashd 状态:     $SERVICE_STATUS"
+    if [ "$DEV_NO_AUTH" = "true" ]; then
+        echo "⚠️ 鉴权模式:    开发免登录模式已开启 (dev_no_auth=true)"
+    fi
     echo "Nginx 状态:     $NGINX_STATUS"
     echo "程序版本:       $VER"
     echo "数据库连通性:   $DB_STATUS"
