@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"dash/internal/app"
 	"dash/internal/db"
 )
 
@@ -36,6 +37,15 @@ func (h *Handler) Store() *LatestStore {
 // Engine 返回关联的时序查询引擎。
 func (h *Handler) Engine() *QueryEngine {
 	return h.engine
+}
+
+// RegisterAppRoutes 将时序查询与 SSE 路由以鉴权方式注册到 App。
+func (h *Handler) RegisterAppRoutes(a *app.App) {
+	a.HandleAuthed("GET /api/v1/nodes/{id}/metrics", h.HandleMetrics)
+	a.HandleAuthed("GET /api/v1/nodes/{id}/latest", h.HandleLatest)
+	a.HandleAuthed("GET /api/v1/metrics/stream", h.HandleStream)
+	// 同时兼容 docs/12-api-spec.md §6 路径
+	a.HandleAuthed("GET /api/v1/stream", h.HandleStream)
 }
 
 // RegisterRoutes 将时序查询与 SSE 路由注册到指定 ServeMux。

@@ -320,8 +320,8 @@ func runServe(args []string) {
 		os.Exit(1)
 	}
 
-	// 注册统一健康检查端点 (12-api-spec.md §9)
-	a.Mux.HandleFunc("/healthz", a.HealthzHandler())
+	// 免鉴权白名单：注册统一健康检查探活端点 (12-api-spec.md §9)
+	a.HandlePublic("/healthz", a.HealthzHandler())
 
 	// 6. 启动 HTTP 服务，监听地址从 config.Server.Listen 读取
 	listenAddr := cfg.Server.Listen

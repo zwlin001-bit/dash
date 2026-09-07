@@ -555,7 +555,9 @@ func (m *AuthModule) Register(a *app.App) error {
 	if a.DB != nil {
 		m.service = NewService(a.DB)
 	}
-	m.RegisterRoutes(a.Mux)
+	// 注入可复用的鉴权中间件至 App
+	a.SetAuthMiddleware(m.RequireAuth)
+	m.RegisterAppRoutes(a)
 	return nil
 }
 
@@ -563,11 +565,54 @@ func (m *AuthModule) Service() *Service {
 	return m.service
 }
 
+// RegisterAppRoutes 将认证模块路由注册到 App（区分免鉴权与鉴权路由）。
+func (m *AuthModule) RegisterAppRoutes(a *app.App) {
+	// 免鉴权白名单：用户登录接口
+	a.HandlePublic("POST /api/v1/login", m.HandleLogin)
+
+	// 控制台核心接口需鉴权
+	a.HandleAuthed("POST /api/v1/logout", m.HandleLogout)
+	a.HandleAuthed("GET /api/v1/me", m.HandleMe)
+	a.HandleAuthed("POST /api/v1/me/password", m.HandleChangePassword)
+}
+
 func (m *AuthModule) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/login", m.HandleLogin)
-	mux.HandleFunc("POST /api/v1/logout", m.HandleLogout)
-	mux.HandleFunc("GET /api/v1/me", m.HandleMe)
-	mux.HandleFunc("POST /api/v1/me/password", m.HandleChangePassword)
+	mux.HandleFunc("POST /api/v1/logout", m.RequireAuth(m.HandleLogout))
+	mux.HandleFunc("GET /api/v1/me", m.RequireAuth(m.HandleMe))
+	mux.HandleFunc("POST /api/v1/me/password", m.RequireAuth(m.HandleChangePassword))
+}
+
+// RequireAuth 导出接收 Service 的独立鉴权中间件，供各模块或测试直接复用。
+func RequireAuth(svc *Service) func(http.HandlerFunc) http.HandlerFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			u := UserFromContext(r.Context())
+			var isExpired bool
+			if u == nil {
+				token := ExtractSessionToken(r)
+				if token != "" && svc != nil {
+					var err error
+					u, err = svc.AuthenticateToken(r.Context(), token)
+					if err != nil && err.Error() == "session_expired" {
+						isExpired = true
+					} else if err == nil && u != nil {
+						r = r.WithContext(ContextWithUser(r.Context(), u))
+					}
+				}
+			}
+
+			if u == nil {
+				if isExpired {
+					JSONError(w, http.StatusUnauthorized, "session_expired", "会话已过期，请重新登录", nil)
+					return
+				}
+				JSONError(w, http.StatusUnauthorized, "unauthorized", "请先登录", nil)
+				return
+			}
+			next(w, r)
+		}
+	}
 }
 
 // AuthMiddleware 负责解析会话令牌并将 User 注入上下文。
@@ -586,26 +631,12 @@ func (m *AuthModule) AuthMiddleware(next http.Handler) http.Handler {
 
 // RequireAuth 中间件保证只有已登录用户才能访问。
 func (m *AuthModule) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		u := UserFromContext(r.Context())
-		if u == nil {
-			// Try parsing token directly if middleware was not wrapped
-			token := ExtractSessionToken(r)
-			if token != "" && m.service != nil {
-				var err error
-				u, err = m.service.AuthenticateToken(r.Context(), token)
-				if err == nil && u != nil {
-					r = r.WithContext(ContextWithUser(r.Context(), u))
-				}
-			}
-		}
+	return RequireAuth(m.service)(next)
+}
 
-		if u == nil {
-			JSONError(w, http.StatusUnauthorized, "unauthorized", "请先登录", nil)
-			return
-		}
-		next(w, r)
-	}
+// RequireAuth 也是 Service 的方法以方便直接基于 Service 调用。
+func (s *Service) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return RequireAuth(s)(next)
 }
 
 type loginReq struct {

@@ -27,12 +27,8 @@ func (m *InventoryModule) Name() string {
 }
 
 func (m *InventoryModule) Register(a *app.App) error {
-	if a.Mux == nil {
-		a.Mux = http.NewServeMux()
-	}
-
 	m.Init(a.DB)
-	m.RegisterRoutes(a.Mux)
+	m.RegisterAppRoutes(a)
 	return nil
 }
 
@@ -55,7 +51,51 @@ func (m *InventoryModule) FactsService() *FactsService     { return m.facts }
 func (m *InventoryModule) BillingService() *BillingService { return m.billing }
 func (m *InventoryModule) EnrollService() *EnrollService   { return m.enroll }
 
-// RegisterRoutes 注册所有机器清单相关的 HTTP API 路由。
+// RegisterAppRoutes 注册所有机器清单相关的 HTTP API 路由到 App（控制台 API 默认走鉴权）。
+func (m *InventoryModule) RegisterAppRoutes(a *app.App) {
+	// 节点相关路由
+	a.HandleAuthed("GET /api/v1/nodes", m.handleNodesList)
+	a.HandleAuthed("POST /api/v1/nodes", m.handleNodesCreate)
+	a.HandleAuthed("GET /api/v1/nodes/{id}", m.handleNodesGet)
+	a.HandleAuthed("PATCH /api/v1/nodes/{id}", m.handleNodesUpdate)
+	a.HandleAuthed("DELETE /api/v1/nodes/{id}", m.handleNodesDelete)
+	a.HandleAuthed("POST /api/v1/nodes/{id}/token:revoke", m.handleNodesRevokeToken)
+
+	// 节点事实
+	a.HandleAuthed("GET /api/v1/nodes/{id}/facts", m.handleFactsGet)
+	a.HandleAuthed("PUT /api/v1/nodes/{id}/facts", m.handleFactsPut)
+
+	// 节点计费
+	a.HandleAuthed("GET /api/v1/nodes/{id}/billing", m.handleBillingGet)
+	a.HandleAuthed("PATCH /api/v1/nodes/{id}/billing", m.handleBillingUpdate)
+	a.HandleAuthed("PUT /api/v1/nodes/{id}/billing", m.handleBillingUpdate)
+	a.HandleAuthed("DELETE /api/v1/nodes/{id}/billing", m.handleBillingDelete)
+
+	// 标签关联
+	a.HandleAuthed("POST /api/v1/nodes/{id}/tags", m.handleReplaceNodeTags)
+	a.HandleAuthed("POST /api/v1/nodes/{id}/tags/{tagId}", m.handleAttachNodeTag)
+	a.HandleAuthed("DELETE /api/v1/nodes/{id}/tags/{tagId}", m.handleDetachNodeTag)
+	a.HandleAuthed("POST /api/v1/nodes/tags:batch", m.handleBatchNodeTags)
+
+	// 分组 CRUD
+	a.HandleAuthed("GET /api/v1/node-groups", m.handleGroupsList)
+	a.HandleAuthed("POST /api/v1/node-groups", m.handleGroupsCreate)
+	a.HandleAuthed("PATCH /api/v1/node-groups/{id}", m.handleGroupsUpdate)
+	a.HandleAuthed("DELETE /api/v1/node-groups/{id}", m.handleGroupsDelete)
+
+	// 标签 CRUD
+	a.HandleAuthed("GET /api/v1/tags", m.handleTagsList)
+	a.HandleAuthed("POST /api/v1/tags", m.handleTagsCreate)
+	a.HandleAuthed("PATCH /api/v1/tags/{id}", m.handleTagsUpdate)
+	a.HandleAuthed("DELETE /api/v1/tags/{id}", m.handleTagsDelete)
+
+	// 注册令牌
+	a.HandleAuthed("GET /api/v1/enroll-tokens", m.handleEnrollList)
+	a.HandleAuthed("POST /api/v1/enroll-tokens", m.handleEnrollCreate)
+	a.HandleAuthed("DELETE /api/v1/enroll-tokens/{id}", m.handleEnrollDelete)
+}
+
+// RegisterRoutes 注册所有机器清单相关的 HTTP API 路由至原生 ServeMux（用于内部测试）。
 func (m *InventoryModule) RegisterRoutes(mux *http.ServeMux) {
 	// 节点相关路由
 	mux.HandleFunc("GET /api/v1/nodes", m.handleNodesList)

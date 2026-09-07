@@ -4,11 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 
 	"dash/internal/config"
 	"dash/internal/db"
 )
+
+// RouteInfo 记录注册在 App 上的路由及鉴权属性。
+type RouteInfo struct {
+	Pattern string // 路由匹配表达式，如 "GET /api/v1/nodes"
+	Authed  bool   // 是否需要认证
+}
+
+// AuthMiddlewareFunc 定义认证中间件函数类型。
+type AuthMiddlewareFunc func(http.HandlerFunc) http.HandlerFunc
 
 // App 包含 dashd 运行时的核心组件（配置、数据库、路由、后台任务等）。
 // 供各模块在 Register 时进行依赖注入和路由装配。
@@ -19,6 +29,10 @@ type App struct {
 	Registry any    // 供 control / settings 等模块共享的长连接注册表
 	Ingester any    // 供 control / ingest 共享的指标落库器
 	Version  string // 服务端当前运行版本
+
+	mu             sync.RWMutex
+	routes         []RouteInfo
+	authMiddleware AuthMiddlewareFunc
 	// 后续任务按需扩充字段
 }
 
@@ -36,6 +50,81 @@ func NewApp(database *db.DB, cfg *config.Config, ver string) *App {
 		Config:  cfg,
 		Version: ver,
 	}
+}
+
+// SetAuthMiddleware 注入全局认证中间件（通常由 auth 模块在注册时注入）。
+func (a *App) SetAuthMiddleware(mw AuthMiddlewareFunc) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.authMiddleware = mw
+}
+
+func (a *App) getAuthMiddleware() AuthMiddlewareFunc {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.authMiddleware
+}
+
+// Routes 返回所有注册在 App 上的路由信息快照。
+func (a *App) Routes() []RouteInfo {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	res := make([]RouteInfo, len(a.routes))
+	copy(res, a.routes)
+	return res
+}
+
+// HandleAuthed 注册需要鉴权的 HTTP API 路由（控制台 API 默认使用该方法）。
+// 未携带合法会话或令牌的请求一律返回 401 统一错误体。
+func (a *App) HandleAuthed(pattern string, h http.HandlerFunc) {
+	a.mu.Lock()
+	a.routes = append(a.routes, RouteInfo{Pattern: pattern, Authed: true})
+	a.mu.Unlock()
+
+	if a.Mux == nil {
+		a.Mux = http.NewServeMux()
+	}
+
+	a.Mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		mw := a.getAuthMiddleware()
+		if mw != nil {
+			mw(h)(w, r)
+			return
+		}
+		// 默认拒绝：若认证中间件未就绪，直接返回 401
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"code":    "unauthorized",
+				"message": "请先登录",
+				"detail":  nil,
+			},
+		})
+	})
+}
+
+// HandlePublic 注册免鉴权的 HTTP 路由（仅限白名单端点使用，调用时须注释说明理由）。
+func (a *App) HandlePublic(pattern string, h http.HandlerFunc) {
+	a.mu.Lock()
+	a.routes = append(a.routes, RouteInfo{Pattern: pattern, Authed: false})
+	a.mu.Unlock()
+
+	if a.Mux == nil {
+		a.Mux = http.NewServeMux()
+	}
+
+	a.Mux.HandleFunc(pattern, h)
+}
+
+// HandlePublicHandler 注册免鉴权的 http.Handler 路由。
+func (a *App) HandlePublicHandler(pattern string, h http.Handler) {
+	a.HandlePublic(pattern, h.ServeHTTP)
+}
+
+// HandleAuthedHandler 注册需要鉴权的 http.Handler 路由。
+func (a *App) HandleAuthedHandler(pattern string, h http.Handler) {
+	a.HandleAuthed(pattern, h.ServeHTTP)
 }
 
 // FlushIngest 触发指标落库缓冲区刷写与优雅关闭。

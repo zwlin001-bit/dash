@@ -116,3 +116,107 @@ func TestApp_HealthzHandler_MethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected 405 Method Not Allowed for POST /healthz, got %d", rec.Code)
 	}
 }
+
+func TestApp_HandleAuthed_DefaultReject(t *testing.T) {
+	a := app.NewApp(nil, config.DefaultConfig(), "test-ver")
+
+	called := false
+	a.HandleAuthed("GET /api/v1/protected", func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/protected", nil)
+	rec := httptest.NewRecorder()
+	a.Mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when auth middleware not set, got %d", rec.Code)
+	}
+	if called {
+		t.Fatal("handler should not have been called")
+	}
+
+	var errResp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("failed to decode json error body: %v", err)
+	}
+	errObj, ok := errResp["error"].(map[string]any)
+	if !ok || errObj["code"] != "unauthorized" {
+		t.Fatalf("expected error.code = unauthorized, got %v", errResp)
+	}
+}
+
+func TestApp_HandleAuthed_WithAuthMiddleware(t *testing.T) {
+	a := app.NewApp(nil, config.DefaultConfig(), "test-ver")
+
+	// Set a mock middleware that checks for a special header
+	a.SetAuthMiddleware(func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Test-Auth") != "allowed" {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":{"code":"unauthorized"}}`))
+				return
+			}
+			next(w, r)
+		}
+	})
+
+	called := false
+	a.HandleAuthed("GET /api/v1/test", func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Unauthorized request
+	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+	rec1 := httptest.NewRecorder()
+	a.Mux.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec1.Code)
+	}
+	if called {
+		t.Fatal("handler should not be called")
+	}
+
+	// Authorized request
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+	req2.Header.Set("X-Test-Auth", "allowed")
+	rec2 := httptest.NewRecorder()
+	a.Mux.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec2.Code)
+	}
+	if !called {
+		t.Fatal("handler should have been called")
+	}
+}
+
+func TestApp_HandlePublic(t *testing.T) {
+	a := app.NewApp(nil, config.DefaultConfig(), "test-ver")
+
+	called := false
+	a.HandlePublic("GET /public-endpoint", func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/public-endpoint", nil)
+	rec := httptest.NewRecorder()
+	a.Mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !called {
+		t.Fatal("handler should have been called")
+	}
+
+	routes := a.Routes()
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if routes[0].Pattern != "GET /public-endpoint" || routes[0].Authed {
+		t.Fatalf("unexpected route info: %+v", routes[0])
+	}
+}

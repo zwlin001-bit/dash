@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"dash/internal/app"
 	"dash/internal/events"
 )
 
@@ -16,6 +17,17 @@ type Handler struct {
 // NewHandler 创建事件 API Handler。
 func NewHandler(s *events.Store) *Handler {
 	return &Handler{store: s}
+}
+
+// RegisterAppRoutes 注册事件相关 API 到 App（以鉴权方式注册）。
+func RegisterAppRoutes(a *app.App, s *events.Store) {
+	h := NewHandler(s)
+
+	a.HandleAuthed("GET /api/v1/events", h.handleListEvents)
+	a.HandleAuthed("POST /api/v1/events/read", h.handleMarkRead)
+	a.HandleAuthed("GET /api/v1/events/unread-count", h.handleUnreadCount)
+	a.HandleAuthed("GET /api/v1/event-types", h.handleListTypes)
+	a.HandleAuthed("PATCH /api/v1/event-types/{event_type}", h.handleUpdateType)
 }
 
 // RegisterRoutes 注册事件相关 API 到 http.ServeMux (12-api-spec.md §7)。
