@@ -34,7 +34,7 @@ lint:
 	@if [ -f scripts/lint-sql.sh ]; then ./scripts/lint-sql.sh; fi
 
 migrate:
-	@echo "Migration target ready (framework will be provided in P1-04)"
+	go run ./cmd/dashd migrate
 
 clean:
 	rm -rf bin/
