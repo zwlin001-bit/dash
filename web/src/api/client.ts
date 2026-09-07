@@ -35,6 +35,9 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
   try {
     response = await fetch(url, config);
   } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw err;
+    }
     throw new ApiException(
       {
         code: 'network_error',

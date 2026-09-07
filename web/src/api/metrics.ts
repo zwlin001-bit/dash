@@ -10,7 +10,11 @@ export interface GetMetricsParams {
   span?: TimeSeriesSpan;
 }
 
-export async function getMetrics(nodeId: string, params: GetMetricsParams): Promise<MetricsQueryResponse> {
+export async function getMetrics(
+  nodeId: string,
+  params: GetMetricsParams,
+  signal?: AbortSignal
+): Promise<MetricsQueryResponse> {
   const query = new URLSearchParams();
   query.set('from_ms', params.from_ms.toString());
   query.set('to_ms', params.to_ms.toString());
@@ -18,9 +22,12 @@ export async function getMetrics(nodeId: string, params: GetMetricsParams): Prom
   if (params.max_points) query.set('max_points', params.max_points.toString());
 
   try {
-    return await apiFetch<MetricsQueryResponse>(`/api/v1/nodes/${nodeId}/metrics?${query.toString()}`);
-  } catch {
-    // 脚手架阶段回退到符合契约的 Mock 时序数据
+    return await apiFetch<MetricsQueryResponse>(`/api/v1/nodes/${nodeId}/metrics?${query.toString()}`, { signal });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw err;
+    }
+    // 接口未就绪或开发环境回退到符合契约的 Mock 时序数据
     const span = params.span || '6h';
     return generateMockMetrics(nodeId, span);
   }
