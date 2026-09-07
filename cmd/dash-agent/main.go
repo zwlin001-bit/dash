@@ -23,7 +23,7 @@ func main() {
 	flag.BoolVar(&showVersion, "v", false, "print version and exit")
 	flag.Parse()
 
-	if showVersion || (len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version" || os.Args[1] == "-v")) {
+	if showVersion {
 		fmt.Println(formatVersion())
 		os.Exit(0)
 	}

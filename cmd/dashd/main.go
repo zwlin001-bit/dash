@@ -47,7 +47,7 @@ func main() {
 	flag.BoolVar(&showVersion, "v", false, "print version and exit")
 	flag.Parse()
 
-	if showVersion || (len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version" || os.Args[1] == "-v")) {
+	if showVersion {
 		fmt.Printf("dashd %s (commit: %s, built: %s)\n", version, gitCommit, buildTime)
 		os.Exit(0)
 	}
