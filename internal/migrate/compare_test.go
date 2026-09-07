@@ -35,6 +35,8 @@ var expectedTables = []string{
 	"sample_dim_1m",
 	"sample_dim_1h",
 	"sample_dim_1d",
+	"event_types",
+	"events",
 }
 
 func getMySQLDB(t *testing.T) *db.DB {
@@ -146,8 +148,8 @@ func TestSchemaEquivalence(t *testing.T) {
 	}
 
 	// 1. Verify table counts
-	if len(expectedTables) != 22 {
-		t.Fatalf("expected 22 tables defined, got %d", len(expectedTables))
+	if len(expectedTables) != 24 {
+		t.Fatalf("expected 24 tables defined, got %d", len(expectedTables))
 	}
 
 	for _, tbl := range expectedTables {
@@ -232,7 +234,7 @@ func TestMigrateIdempotency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status query failed: %v", err)
 	}
-	if len(statusList) != 1 || !statusList[0].Applied {
+	if len(statusList) != 2 || !statusList[0].Applied || !statusList[1].Applied {
 		t.Fatalf("unexpected migration status: %+v", statusList)
 	}
 }

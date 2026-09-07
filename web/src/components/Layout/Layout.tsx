@@ -1,11 +1,20 @@
 import React from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ThemeToggle } from './ThemeToggle';
 import { logout } from '../../api/auth';
+import { fetchUnreadCount } from '../../api';
 import styles from './Layout.module.css';
 
 export const Layout: React.FC = () => {
   const navigate = useNavigate();
+
+  const { data: unreadData } = useQuery({
+    queryKey: ['events-unread-count'],
+    queryFn: fetchUnreadCount,
+    refetchInterval: 5000,
+  });
+  const unreadCount = unreadData?.unread_count || 0;
 
   const handleLogout = async () => {
     await logout();
@@ -27,6 +36,10 @@ export const Layout: React.FC = () => {
         </div>
 
         <div className={styles.topRight}>
+          <Link to="/events" className={styles.bellBtn} title="事件中心">
+            <span className={styles.icon}>🔔</span>
+            {unreadCount > 0 && <span className={styles.bellDot} />}
+          </Link>
           <ThemeToggle />
           <span className={styles.who}>admin</span>
           <button type="button" className="btn mini ghost" onClick={handleLogout} title="退出登录">
@@ -57,6 +70,20 @@ export const Layout: React.FC = () => {
             >
               <span className={styles.icon}>🖥️</span>
               <span>机器清单</span>
+            </NavLink>
+            <NavLink
+              to="/events"
+              className={({ isActive }) =>
+                `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
+              }
+            >
+              <span className={styles.icon}>🔔</span>
+              <span>事件中心</span>
+              {unreadCount > 0 && (
+                <span className={styles.badge}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </NavLink>
             <NavLink
               to="/settings"
