@@ -1,4 +1,4 @@
-.PHONY: all build build-dashd build-agent build-agent-all test lint migrate clean
+.PHONY: all build build-dashd build-agent build-agent-all test lint migrate clean verify-agent-matrix
 
 VERSION ?= dev
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -24,6 +24,10 @@ build-agent-all:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -tags nethttpomithttp2 -ldflags "$(LDFLAGS)" -o bin/dash-agent-linux-armv7 ./cmd/dash-agent
 	@cd bin && sha256sum dash-agent-linux-amd64 dash-agent-linux-arm64 dash-agent-linux-armv7 > sha256sums.txt
 	@echo "Built all agent binaries and generated bin/sha256sums.txt"
+
+verify-agent-matrix:
+	@./scripts/verify-agent-matrix.sh
+
 
 test:
 	go test -v ./...
