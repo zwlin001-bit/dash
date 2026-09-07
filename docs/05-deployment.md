@@ -1,5 +1,11 @@
 # 05 部署
 
+> ⚠️ **本文档的单域名方案已被取代。**
+> 现行方案见 [`14-dual-domain-deploy.md`](14-dual-domain-deploy.md)：
+> 双域名（内网控制台 + 公网 agent 接入）、nginx 终结 TLS、dashd 只监听回环。
+> 本文件保留作历史记录，**不要照做**。
+
+
 目标：**`./setup.sh install`，只问域名，装完即用，443 端口，证书自动。**
 
 ---

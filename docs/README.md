@@ -18,6 +18,7 @@
 | [`11-collect-spec.md`](11-collect-spec.md) | **采集算法规格**：每个指标怎么算、每个坑在哪 |
 | [`12-api-spec.md`](12-api-spec.md) | **接口规格**：端点、参数、返回、状态码 |
 | [`13-ui-spec.md`](13-ui-spec.md) | **界面规格**：设计 token、双主题、布局、组件类名 |
+| [`14-dual-domain-deploy.md`](14-dual-domain-deploy.md) | **双域名部署架构**：内网控制台 + 公网 agent 接入、nginx、证书。取代 05 的单域名方案 |
 | `adr/` | 关键决策记录 |
 | [`agy/`](agy/README.md) | **给 AGY（反重力）的实施说明**。第一期任务清单：[`agy/tasks/`](agy/tasks/README.md) |
 
