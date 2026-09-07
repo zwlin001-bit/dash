@@ -1,4 +1,4 @@
-.PHONY: all build build-dashd build-agent build-agent-all test lint migrate clean verify-agent-matrix
+.PHONY: all build build-dashd build-agent build-agent-all test lint lint-dist migrate clean verify-agent-matrix
 
 VERSION ?= dev
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -7,9 +7,9 @@ LDFLAGS := -s -w -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X m
 
 all: lint test build
 
-build: build-dashd build-agent
+build: lint-dist build-dashd build-agent
 
-build-dashd:
+build-dashd: lint-dist
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dashd ./cmd/dashd
 
@@ -32,7 +32,10 @@ verify-agent-matrix:
 test:
 	go test -v ./...
 
-lint:
+lint-dist:
+	@./scripts/lint-dist.sh
+
+lint: lint-dist
 	@./scripts/lint-imports.sh
 	@go vet ./...
 	@if [ -f scripts/lint-sql.sh ]; then ./scripts/lint-sql.sh; fi
@@ -50,7 +53,11 @@ build-web:
 		(cd web && npm run build) && \
 		rm -rf internal/api/dist && \
 		mkdir -p internal/api/dist && \
-		cp -r web/dist/* internal/api/dist/; \
+		cp -r web/dist/* internal/api/dist/ && \
+		./scripts/lint-dist.sh --write; \
+	else \
+		echo "❌ npm not found or web/package.json missing" >&2; \
+		exit 1; \
 	fi
 
 .PHONY: bench-dashd
