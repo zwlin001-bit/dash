@@ -15,13 +15,13 @@ build-dashd:
 
 build-agent:
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dash-agent ./cmd/dash-agent
+	CGO_ENABLED=0 go build -trimpath -tags nethttpomithttp2 -ldflags "$(LDFLAGS)" -o bin/dash-agent ./cmd/dash-agent
 
 build-agent-all:
 	@mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dash-agent-linux-amd64 ./cmd/dash-agent
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dash-agent-linux-arm64 ./cmd/dash-agent
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dash-agent-linux-armv7 ./cmd/dash-agent
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -tags nethttpomithttp2 -ldflags "$(LDFLAGS)" -o bin/dash-agent-linux-amd64 ./cmd/dash-agent
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -tags nethttpomithttp2 -ldflags "$(LDFLAGS)" -o bin/dash-agent-linux-arm64 ./cmd/dash-agent
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -tags nethttpomithttp2 -ldflags "$(LDFLAGS)" -o bin/dash-agent-linux-armv7 ./cmd/dash-agent
 	@cd bin && sha256sum dash-agent-linux-amd64 dash-agent-linux-arm64 dash-agent-linux-armv7 > sha256sums.txt
 	@echo "Built all agent binaries and generated bin/sha256sums.txt"
 
