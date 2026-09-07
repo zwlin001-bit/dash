@@ -113,3 +113,48 @@ done
 ## 边界
 
 不做权限分级（多用户 / 只读角色），本期只做「登录与否」。
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-07 · ✅ 通过
+
+分支 `agy/p1-22-auth`，提交 `1f9ef0f`。
+
+### ★ 全部实跑验证（不是看代码）
+
+**① 不带任何凭据的读接口 —— 全部 401**
+
+| 端点 | 修复前 | 修复后 |
+|---|---|---|
+| `/api/v1/nodes` | 200 🔴 | **401** ✅ |
+| `/api/v1/settings` | 200 🔴 | **401** ✅ |
+| `/api/v1/events` | 200 🔴 | **401** ✅ |
+| `/api/v1/node-groups` | 200 🔴 | **401** ✅ |
+| `/api/v1/tags` | 200 🔴 | **401** ✅ |
+| `/api/v1/enroll-tokens` | 200 🔴 | **401** ✅ |
+| `/api/v1/me` | 401 | 401 ✅ |
+
+**② 写接口 —— 全部 401**（此前分别是 200 / 404 / 400，都不是鉴权拒绝）
+
+```
+POST   /api/v1/enroll-tokens  → 401 ✅   （此前 200，能匿名铸造装机令牌）
+DELETE /api/v1/nodes/{id}     → 401 ✅   （此前 404，真 ID 会被删掉）
+POST   /api/v1/node-groups    → 401 ✅   （此前 400）
+```
+
+**③ 伪造 cookie** `dash_session=bogus` → **401** ✅
+
+**④ 免鉴权白名单仍可用**：`/healthz` `/install.sh` `/dl/sha256sums.txt` `/` `/assets/*.css` 全部 200 ✅
+
+**⑤ 登录后恢复正常**：登录 200 → `/api/v1/nodes`、`/api/v1/me`、`/api/v1/settings` 全部 200 ✅
+
+**⑥ 登录失败限流**：连续错密码 5 次均 401，**第 6 次 429** ✅
+
+**⑦ agent 链路未被误伤**：生成 token → `POST /api/agent/v1/enroll` 200 →
+agent `WSConnected` → `/healthz` 显示 `agents_online: 2` ✅
+
+**⑧ 回归**：22 个包测试全过，两个 lint 通过 ✅
+
+**任务 22 关闭。**
