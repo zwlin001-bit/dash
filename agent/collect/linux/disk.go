@@ -12,12 +12,14 @@ func init() {
 	collect.Register(NewDiskCollector())
 }
 
-type StatfsFunc func(path string) (total, used int64, err error)
+// StatfsFunc 抽象 statfs 调用，返回 (total, used, dev, err)。
+// dev 为底层设备唯一标识（Stat_t.Dev 或 Statfs_t.Fsid），用于 bind mount 去重。
+type StatfsFunc func(path string) (total, used int64, dev uint64, err error)
 
-func defaultStatfs(path string) (total, used int64, err error) {
+func defaultStatfs(path string) (total, used int64, dev uint64, err error) {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(path, &st); err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	t := int64(st.Blocks) * int64(st.Bsize)
 	free := int64(st.Bfree) * int64(st.Bsize)
@@ -25,7 +27,16 @@ func defaultStatfs(path string) (total, used int64, err error) {
 	if u < 0 {
 		u = 0
 	}
-	return t, u, nil
+
+	var devID uint64
+	var stat syscall.Stat_t
+	if err := syscall.Stat(path, &stat); err == nil {
+		devID = stat.Dev
+	} else {
+		// 回退使用 Fsid
+		devID = uint64(uint32(st.Fsid.X__val[0]))<<32 | uint64(uint32(st.Fsid.X__val[1]))
+	}
+	return t, u, devID, nil
 }
 
 // DiskCollector 采集磁盘挂载点用量与总已用。
@@ -100,6 +111,7 @@ func (c *DiskCollector) Collect(sample *collect.Sample) error {
 
 	var diskUsedSum int64
 	seenMounts := make(map[string]struct{})
+	seenDevs := make(map[uint64]struct{})
 
 	rem := data
 	for len(rem) > 0 {
@@ -145,12 +157,22 @@ func (c *DiskCollector) Collect(sample *collect.Sample) error {
 		}
 		seenMounts[mountPoint] = struct{}{}
 
-		total, used, statErr := c.Statfs(mountPoint)
+		total, used, dev, statErr := c.Statfs(mountPoint)
 		if statErr != nil || total <= 0 {
 			continue
 		}
 
-		diskUsedSum += used
+		// 按设备号去重后累加已用量（bind mount 场景避免多计）
+		if dev != 0 {
+			if _, seen := seenDevs[dev]; !seen {
+				seenDevs[dev] = struct{}{}
+				diskUsedSum += used
+			}
+		} else {
+			diskUsedSum += used
+		}
+
+		// 每个有效挂载点均上报一条维度数据
 		sample.AddDisk(mountPoint, used, total)
 	}
 

@@ -49,20 +49,14 @@ func isAllDigits(s string) bool {
 
 // Collect 读取 /proc 目录下所有由纯数字命名的子目录（代表每个进程）。
 func (c *ProcCollector) Collect(sample *collect.Sample) error {
-	dir, err := os.Open(c.procPath)
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-
-	names, err := dir.Readdirnames(-1)
+	entries, err := os.ReadDir(c.procPath)
 	if err != nil {
 		return err
 	}
 
 	var count int32
-	for _, name := range names {
-		if isAllDigits(name) {
+	for _, entry := range entries {
+		if entry.IsDir() && isAllDigits(entry.Name()) {
 			count++
 		}
 	}

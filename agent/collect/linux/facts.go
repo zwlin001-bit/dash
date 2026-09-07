@@ -319,6 +319,7 @@ func (c *FactsCollector) readDiskTotal() int64 {
 	diskCollector := &DiskCollector{Statfs: c.Statfs}
 	var totalDisk int64
 	seenMounts := make(map[string]struct{})
+	seenDevs := make(map[uint64]struct{})
 
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
@@ -337,8 +338,14 @@ func (c *FactsCollector) readDiskTotal() int64 {
 		}
 		seenMounts[mountPoint] = struct{}{}
 
-		total, _, statErr := c.Statfs(mountPoint)
+		total, _, dev, statErr := c.Statfs(mountPoint)
 		if statErr == nil && total > 0 {
+			if dev != 0 {
+				if _, seen := seenDevs[dev]; seen {
+					continue
+				}
+				seenDevs[dev] = struct{}{}
+			}
 			totalDisk += total
 		}
 	}
