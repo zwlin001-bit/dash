@@ -124,3 +124,35 @@ return nil                                               // ★ 永远走不到
 
 不做双域名、不做 nginx、不做 TLS —— 那些是 19 的重做范围（见 `14-dual-domain-deploy.md`）。
 本任务只管进程自己的生命周期与资源。
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-07 · ✅ 通过
+
+分支 `agy/p1-21-bootstrap`，提交 `4165a06`。已合并到 main：`cbe6ae8`。
+
+| 验收项 | 实测 |
+|---|---|
+| ❶ `Register()` 不再阻塞 | ✅ 服务启动搬到 `runServe`，日志 `dashd dev listening on 127.0.0.1:18443 (loaded 8 modules)` |
+| ❷ **优雅退出六步** | ✅ 实测 `kill -TERM` 后日志依次出现：收到信号 → flushing ingest buffer → ingest flush completed → closing database → exited gracefully；代码里 `server.Shutdown(10s)` → `FlushIngest()` → `Registry.Stop()` → `DB.Close()` 顺序正确，进程干净退出 |
+| ❸ `SetMemoryLimit(1<<30)` | ✅ |
+| ❹ `scripts/dashd-bench.sh` | ✅ 另交付 `scripts/mock-agents/` 压测工具 |
+| 顺带修 1：启动日志 URL | ✅ `localhost127.0.0.1` 已修正 |
+| 顺带修 2：`/api/v1/settings` | ✅ 返回完整设置项 |
+| 回归 | ✅ 22 个包全过，两个 lint 通过 |
+
+### 超出要求的改进
+
+把 `/healthz` 上移到 `app.HealthzHandler()` 由 main 统一注册，
+**从根上消除了模块间重复注册的可能**（我此前是在 ingest 侧打补丁绕过的）。
+`/healthz` 现在还聚合了 ingest 的 `dropped_batches` / `dropped_rows`。
+
+### 合并时由设计方处理
+
+21 基于 `be21f8d`（19 合并前），`cmd/dashd/main.go` 缺 19 的 `init-db` 子命令，
+已取并集补回（连带 `generateSecurePassword` 与 imports）。
+删除 `internal/api/web_test.go` 里指向已移走符号的旧测试，`internal/app` 已有等价测试。
+
+**任务 21 关闭。**

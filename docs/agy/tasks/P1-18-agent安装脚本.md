@@ -137,3 +137,48 @@ systemd unit 见 [`../../03-agent.md`](../../03-agent.md) §7.1，照抄即可�
 ## 边界
 
 不做 agent 自升级下发（第二期）。
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-07 · ✅ 通过
+
+分支 `agy/p1-18-agent-installer`，提交 `41fbc6c`。已合并到 main：`c9c4524`。
+
+> ⚠️ **本轮按 AGY 实际收到的任务书版本验收。**
+> 「agent 侧自助注册」是我在 `556b54b` 才补进任务书的，它开工时没有这一段。
+> 见下方「后续项」。
+
+| 验收项 | 实测 |
+|---|---|
+| `sh -n scripts/install-agent.sh` | ✅ 通过 |
+| init 系统探测 | ✅ `/run/systemd/system` → systemd，否则 OpenRC（另判 `/etc/alpine-release`） |
+| enroll 换取长期 token | ✅ 脚本 `--enroll/-e <token>` → `POST /api/agent/v1/enroll` → 解析 `agent_token` → 写配置 |
+| 重复安装保留已有 token | ✅ 检测到已有配置且未给 `--enroll` 时保留 |
+| 初装缺 token 时报错 | ✅ 明确提示 `初次安装必须提供注册令牌` |
+| 服务文件 | ✅ `deploy/dash-agent.service`、`deploy/dash-agent.initd` |
+| **`/install.sh` 端点** | ✅ 实测返回完整脚本 |
+| **`/dl/` 下载端点** | ✅ `sha256sums.txt` 200；`dash-agent-linux-amd64` 200，5480600 字节 |
+| 回归 | ✅ 22 个包全过，两个 lint 通过 |
+
+`/dl/` 从 `<DataDir>/dl/` 提供，目录不存在时返回 404 —— 这是正确行为，由 `setup.sh` 负责填充。
+
+### 未验证（需 root / docker）
+
+三系统干净容器实跑安装、重复执行幂等、`ps -o user=` 非 root、开机自启。
+
+### 后续项（不阻塞本轮，另开任务）
+
+★ **agent 侧自助注册尚未实现。** 目前 enroll 逻辑在安装脚本（shell）里，
+agent 二进制只认 `-token`，没有 `--enroll`，配置里的 `enroll_token` 也不被消费。
+
+装机场景下这已经够用。但两个场景会暴露不足：
+1. **配置丢失或 token 轮换后 agent 无法自愈** —— 只能重跑安装脚本
+2. shell 里用 `sed` 解析 JSON 响应，格式一变就悄悄失败
+
+建议作为第二期的小任务补上（agent 启动时若无长期 token 但有 `enroll_token`，
+自行调 enroll、原子写回配置、清除 `enroll_token`；失败按
+`400/410` 立即退出、网络错误退避重试）。
+
+**任务 18 关闭。**
