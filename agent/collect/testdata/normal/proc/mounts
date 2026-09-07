@@ -1,0 +1,9 @@
+rootfs / rootfs rw 0 0
+sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
+proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
+udev /dev devtmpfs rw,nosuid,relatime,size=985876k,nr_inodes=246469,mode=755 0 0
+devpts /dev/pts devpts rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=000 0 0
+tmpfs /run tmpfs rw,nosuid,nodev,noexec,relatime,size=200876k,mode=755 0 0
+/dev/sda1 / ext4 rw,relatime,discard,errors=remount-ro 0 0
+/dev/sdb1 /data ext4 rw,relatime 0 0
+tmpfs /dev/shm tmpfs rw,nosuid,nodev 0 0
