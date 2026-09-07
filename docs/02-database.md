@@ -283,6 +283,11 @@ job_steps(id, job_id, step_no i32, step_name str(64), step_state str(16),
 
 ### 4.5 告警
 
+> **第二期内容，第一期不建这些表。** 规则模型、四种 `rule_kind`、评估状态机、
+> 通知渠道、到期与流量提醒的完整设计见 [`07-monitoring.md`](07-monitoring.md)，
+> 那里还补充了 `ping_tasks` 与 `alert_rule_channels` 两张表。
+
+
 ```
 alert_rules(id, name str(64), is_enabled bool,
             scope_kind str(16), scope_ref str(26) NULL,   -- all / group / tag / node

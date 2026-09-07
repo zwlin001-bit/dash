@@ -10,9 +10,10 @@
 | [`03-agent.md`](03-agent.md) | Agent 设计：采集分级、资源预算、兼容性、安装 |
 | [`04-protocol.md`](04-protocol.md) | Agent ↔ Server 协议（JSON-RPC over WebSocket） |
 | [`05-deployment.md`](05-deployment.md) | `setup.sh` 部署流程、证书、域名维护 |
-| [`06-speedtest.md`](06-speedtest.md) | 三网测速模块（电信/联通/移动 + 自定义） |
+| [`06-speedtest.md`](06-speedtest.md) | 三网测速模块（电信/联通/移动 + 自定义）·第三期 |
+| [`07-monitoring.md`](07-monitoring.md) | Ping 探测、告警引擎、通知渠道、到期与流量提醒 ·第二期 |
 | `adr/` | 关键决策记录 |
-| [`agy/`](agy/README.md) | **给 AGY（反重力）的实施任务清单与验收标准**（派发队列见 [`agy/02-queue.md`](agy/02-queue.md)） |
+| [`agy/`](agy/README.md) | **给 AGY（反重力）的实施说明**。第一期任务清单：[`agy/tasks/`](agy/tasks/README.md) |
 
 ## 参考来源
 
