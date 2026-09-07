@@ -35,7 +35,17 @@ func (m *ControlModule) Register(a *app.App) error {
 	m.Registry = NewRegistry(a.DB, nil)
 	if a.DB != nil {
 		m.Registry.Start(context.Background())
-		RegisterRoutes(a.Mux, a.DB, m.Registry, a.Config)
+		wsH := NewWSHandler(a.DB, m.Registry, a.Config)
+		fbH := NewFallbackHandler(a.DB, m.Registry)
+		if a.Ingester != nil {
+			if ing, ok := a.Ingester.(MetricsIngester); ok {
+				wsH.SetIngester(ing)
+				fbH.SetIngester(ing)
+			}
+		}
+		a.Mux.Handle("/api/agent/v1/enroll", NewEnrollHandler(a.DB))
+		a.Mux.Handle("/api/agent/v1/rpc", wsH)
+		a.Mux.Handle("/api/agent/v1/report", fbH)
 	}
 	return nil
 }

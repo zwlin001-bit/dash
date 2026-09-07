@@ -1,21 +1,9 @@
 package metrics
 
+import "dash/internal/ingest"
+
 // NodeLatest 表示节点的最新采样数据（缓存在内存中，对应 08-field-map.md §1）。
-type NodeLatest struct {
-	TsMs             int64    `json:"ts_ms"`
-	CpuPct           float64  `json:"cpu_pct"`
-	MemUsed          int64    `json:"mem_used"`
-	MemTotal         *int64   `json:"mem_total,omitempty"`
-	DiskUsed         *int64   `json:"disk_used,omitempty"`
-	DiskTotal        *int64   `json:"disk_total,omitempty"`
-	NetUpBps         int64    `json:"net_up_bps"`
-	NetDownBps       int64    `json:"net_down_bps"`
-	TrafficMonthUp   *int64   `json:"traffic_month_up,omitempty"`
-	TrafficMonthDown *int64   `json:"traffic_month_down,omitempty"`
-	UptimeS          *int64   `json:"uptime_s,omitempty"`
-	Load1            *float64 `json:"load1,omitempty"`
-	TcpCount         *int     `json:"tcp_count,omitempty"`
-}
+type NodeLatest = ingest.NodeLatest
 
 // MetricsQueryResponse 表示时序查询 API 响应结构（列式结构，08-field-map.md §4）。
 type MetricsQueryResponse struct {

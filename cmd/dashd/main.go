@@ -13,8 +13,10 @@ import (
 	"dash/internal/app"
 	"dash/internal/auth"
 	"dash/internal/config"
+	"dash/internal/control"
 	"dash/internal/db"
 	"dash/internal/events"
+	"dash/internal/ingest"
 	"dash/internal/inventory"
 	"dash/internal/logx"
 	"dash/internal/migrate"
@@ -38,6 +40,8 @@ type Module = app.Module
 var modules = []Module{
 	auth.NewModule(),
 	inventory.NewModule(),
+	ingest.NewModule(),
+	control.NewModule(),
 	metrics.NewModule(),
 	events.NewModule(),
 	api.NewModule(), // ★ 必须最后：它挂 "/" 作为 SPA 兜底路由

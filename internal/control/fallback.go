@@ -26,6 +26,7 @@ type FallbackReportResponse struct {
 type FallbackHandler struct {
 	database *db.DB
 	registry *Registry
+	ingester MetricsIngester
 }
 
 // NewFallbackHandler 创建 FallbackHandler 实例。
@@ -34,6 +35,11 @@ func NewFallbackHandler(database *db.DB, registry *Registry) *FallbackHandler {
 		database: database,
 		registry: registry,
 	}
+}
+
+// SetIngester 设置指标落库注入器。
+func (h *FallbackHandler) SetIngester(ingester MetricsIngester) {
+	h.ingester = ingester
 }
 
 func (h *FallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +121,10 @@ func (h *FallbackHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					              SET clock_skew_ms = ?, last_seen_at_ms = ?, conn_state = 'online', updated_at_ms = ?
 					              WHERE id = ?`
 					_, _ = h.database.Exec(ctx, updateSQL, skew, effectiveTs, serverNow, nodeID)
+
+					if h.ingester != nil {
+						h.ingester.Ingest(nodeID, effectiveTs, &m)
+					}
 				}
 			}
 
