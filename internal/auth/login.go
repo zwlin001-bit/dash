@@ -20,6 +20,7 @@ import (
 	"dash/internal/app"
 	"dash/internal/audit"
 	"dash/internal/db"
+	"dash/internal/events"
 	"dash/internal/ulid"
 )
 
@@ -101,11 +102,12 @@ func (rl *RateLimiter) Check(keys ...string) bool {
 	return true
 }
 
-func (rl *RateLimiter) RecordFailure(keys ...string) {
+func (rl *RateLimiter) RecordFailure(keys ...string) int {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
 	now := time.Now()
+	maxCount := 1
 	for _, key := range keys {
 		if key == "" {
 			continue
@@ -121,10 +123,25 @@ func (rl *RateLimiter) RecordFailure(keys ...string) {
 			rec.count++
 		}
 
+		if rec.count > maxCount {
+			maxCount = rec.count
+		}
+
 		if rec.count >= MaxFailedAttempts {
 			rec.lockedUntil = now.Add(LockoutDuration)
 		}
 	}
+	return maxCount
+}
+
+func (rl *RateLimiter) FailCount(key string) int {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if rec, ok := rl.failures[key]; ok {
+		return rec.count
+	}
+	return 1
 }
 
 func (rl *RateLimiter) Reset(keys ...string) {
@@ -238,12 +255,26 @@ func (s *Service) Login(ctx context.Context, username, password, userAgent, ip s
 	userKey := "user:" + username
 
 	if !s.limiter.Check(ipKey, userKey) {
+		failCount := s.limiter.FailCount(userKey)
+		events.Emit(ctx, events.Event{
+			Type:       "auth.login_failed",
+			Source:     "auth",
+			TargetKind: "user",
+			TargetID:   username,
+			Title:      fmt.Sprintf("用户 %s 登录失败 (已锁定)", username),
+			DedupKey:   fmt.Sprintf("auth.login_failed:%s", username),
+			Payload: map[string]any{
+				"username":   username,
+				"ip":         ip,
+				"fail_count": failCount,
+			},
+		})
 		return nil, "", errors.New("rate_limited")
 	}
 
 	user, err := s.GetUserByUsername(ctx, username)
 	if err != nil || !CheckPassword(password, user.PasswdHash) {
-		s.limiter.RecordFailure(ipKey, userKey)
+		failCount := s.limiter.RecordFailure(ipKey, userKey)
 		_ = audit.Log(ctx, s.db, audit.Entry{
 			ActorKind:  "user",
 			Action:     "auth.login",
@@ -251,6 +282,19 @@ func (s *Service) Login(ctx context.Context, username, password, userAgent, ip s
 			Detail:     fmt.Sprintf(`{"username":%q,"reason":"bad_credentials"}`, username),
 			Result:     "failed",
 			IP:         ip,
+		})
+		events.Emit(ctx, events.Event{
+			Type:       "auth.login_failed",
+			Source:     "auth",
+			TargetKind: "user",
+			TargetID:   username,
+			Title:      fmt.Sprintf("用户 %s 登录失败", username),
+			DedupKey:   fmt.Sprintf("auth.login_failed:%s", username),
+			Payload: map[string]any{
+				"username":   username,
+				"ip":         ip,
+				"fail_count": failCount,
+			},
 		})
 		return nil, "", errors.New("bad_credentials")
 	}

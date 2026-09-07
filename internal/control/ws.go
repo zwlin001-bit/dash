@@ -289,6 +289,9 @@ func (h *WSHandler) cleanupSession(sess *Session) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		nowMs := time.Now().UnixMilli()
+		if h.registry != nil {
+			h.registry.emitOffline(ctx, sess.NodeID, sess.LastSeenAtMs.Load(), sess.RemoteIP)
+		}
 		_, _ = h.database.Exec(ctx,
 			`UPDATE nodes SET conn_state = 'offline', updated_at_ms = ? WHERE id = ?`,
 			nowMs, sess.NodeID)
