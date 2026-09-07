@@ -240,3 +240,62 @@ git ls-files agent/collect/testdata | grep -E "/(1|2|100)/"   # 必须有文件
 ---
 
 ## 第 2 轮 · 待验收
+
+## 第 2 轮 · 2026-09-07 · ✅ 通过
+
+提交 `329d8b2`。
+
+| 项 | 实测 |
+|---|---|
+| F1 改读 sockstat | ✅ `conns.go` 优先读 `/proc/net/sockstat[6]`，缺失时回退 `tcp[6]/udp[6]` 并只记一次日志；testdata 补了两份样本 |
+| F2 testdata 进程目录 | ✅ `proc/1/stat`、`proc/2/stat`、`proc/100/stat` 已入库，空目录问题消除 |
+| F2 测试全过 | ✅ `go test ./agent/...` 通过 |
+| F3 bind mount 去重 | ✅ 改用 `Stat_t.Dev`（回退 `Statfs_t.Fsid`）作为去重键，并补了 `TestDiskCollectorBindMount` |
+| 零分配未退化 | ✅ 仍是 **0 B/op、0 allocs/op** |
+| 缓冲越界保护 | ✅ `diskValBuf`/`nicValBuf` 固定 32 项，写入前有 `idx < len(...)` 检查 |
+
+### 真机实测（对照系统真实值，全部吻合）
+
+```
+采集结果: cpu=3.64%  mem_used=609202176  load1=0.30
+          tcp=37  udp=6  proc=110  disk_used=8288350208  disks=4  nics=6
+          net up=3014B/s down=1456B/s
+          facts: amd64 debian/12 kernel=6.1.0-50-cloud-amd64 virt=kvm cores=1/2
+系统对照: TCP=37  UDP=6  proc=110  load1=0.30
+```
+
+### 合并时由设计方一并处理的改动
+
+任务 05 已移除 `FactsParams` 的 `ipv4`/`ipv6`（`11-collect-spec.md` §9.3：
+**agent 不查公网 IP，由服务端从连接来源记录**），因此合并时删除了
+`facts.go` 的 `IPLookup` 字段与 `defaultIPLookup` 实现，`ComputeFactsHash` 也去掉了 IP 两项。
+
+### ★ 给任务 08 的提醒：实际 API 与任务书原稿不同
+
+实现采用了比原稿**更好**的形状，任务书已按实际实现更新：
+
+```go
+func Collectors() []Collector            // 全部
+func CollectorsByTier(t Tier) []Collector
+func NewSample() *Sample
+func (s *Sample) Reset(tier Tier)        // 按档清空，不是无参
+
+// Sample 直接持有 protocol 的结构体，内部预分配 backing 值，
+// 传输层可零转换、零分配地直接序列化：
+type Sample struct {
+    TsMs     int64
+    CPUPct   *float64
+    MemUsed  *int64
+    SwapUsed *int64
+    Load     *[3]float64
+    Net      *protocol.NetReport
+    UptimeS  *int64
+    Slow     *protocol.SlowReport
+    Facts    *protocol.FactsParams
+    // ...内部复用的值存储区
+}
+```
+
+这比原稿的 `F64{V, OK}` 少一层转换，**任务 08 直接用这个形状，不要再做映射**。
+
+**任务 06 关闭。已合并到 main：见下方提交。**
