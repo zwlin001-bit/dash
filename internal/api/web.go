@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"dash/internal/app"
+	eventsapi "dash/internal/api/events"
 )
 
 //go:embed all:dist
@@ -136,5 +137,6 @@ func serveIndexHTML(w http.ResponseWriter, fsys fs.FS) {
 
 // RegisterRoutes 注册静态资源及 SPA 前端路由至 mux。
 func RegisterRoutes(mux *http.ServeMux) {
+	eventsapi.RegisterRoutes(mux, nil)
 	mux.Handle("/", Handler())
 }

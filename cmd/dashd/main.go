@@ -12,6 +12,7 @@ import (
 	"dash/internal/app"
 	"dash/internal/config"
 	"dash/internal/db"
+	"dash/internal/events"
 	"dash/internal/logx"
 	"dash/internal/migrate"
 )
@@ -32,6 +33,7 @@ type Module = app.Module
 // modules 为所有需要装配进 dashd 的模块列表。
 // 约束：后续任务只允许向此列表追加模块，不改动装配与启动逻辑。
 var modules = []Module{
+	events.NewModule(),
 	api.NewModule(),
 }
 

@@ -8,7 +8,7 @@ import {
 } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components/Layout';
-import { Login, Overview, NodeDetail, Machines, Settings } from './pages';
+import { Login, Overview, NodeDetail, Machines, Settings, Events } from './pages';
 import { authService } from './api';
 
 const queryClient = new QueryClient({
@@ -47,6 +47,7 @@ const AppRoutes: React.FC = () => {
         <Route path="nodes" element={<Overview />} />
         <Route path="nodes/:id" element={<NodeDetail />} />
         <Route path="machines" element={<Machines />} />
+        <Route path="events" element={<Events />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/nodes" replace />} />
