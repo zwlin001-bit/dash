@@ -23,7 +23,8 @@ export interface LoginRequest {
 export interface UserMe {
   id: string;
   username: string;
-  role: string;
+  is_admin?: boolean;
+  role?: string;
 }
 
 // 时序跨度
