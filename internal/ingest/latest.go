@@ -61,6 +61,13 @@ func (c *LatestCache) Set(nodeID string, l NodeLatest) {
 	}
 }
 
+// Delete 从缓存中移除指定节点的最新采样数据。
+func (c *LatestCache) Delete(nodeID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.nodes, nodeID)
+}
+
 // UpdateFromMetrics 根据收到的指标上报报文增量刷新节点最新值，保留静态与长期字段。
 func (c *LatestCache) UpdateFromMetrics(nodeID string, m *protocol.MetricsParams, trafficUp, trafficDown *int64) NodeLatest {
 	if m == nil {
