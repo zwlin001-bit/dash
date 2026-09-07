@@ -24,6 +24,7 @@ Options for 'install':
   --agent-domain <domain>     Domain for public agent ingress (e.g. agent.example.com)
   --domain <domain>           Fallback domain (if single domain specified)
   --internal-ip <ip>          Internal IP to bind console (default: auto-detect WireGuard/LAN IP)
+  --acme-email <email>        Email for Let's Encrypt / ACME HTTP-01 certificate on agent domain
   --db-driver <driver>        Database driver: oracle (default) or mysql
   --db-user <user>            Database user (default: admin)
   --db-password <password>    Database password (or DASH_DB_PASSWORD env)
@@ -113,14 +114,14 @@ detect_internal_ip() {
 
 ensure_dependencies() {
     detect_distro
-    echo "--> 正在检查并安装系统依赖 (nginx, openssl, libcap, curl)..."
+    echo "--> 正在检查并安装系统依赖 (nginx, openssl, libcap, curl, certbot)..."
     if [ "$DISTRO" = "alpine" ]; then
-        apk add --no-cache nginx openssl libcap curl
+        apk add --no-cache nginx openssl libcap curl certbot 2>/dev/null || apk add --no-cache nginx openssl libcap curl
     elif command -v apt-get >/dev/null 2>&1; then
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq && apt-get install -y -qq nginx openssl libcap2-bin curl
+        apt-get update -qq && apt-get install -y -qq nginx openssl libcap2-bin curl certbot
     else
-        echo "⚠️ 请确保系统已安装: nginx, openssl, setcap (libcap), curl" >&2
+        echo "⚠️ 请确保系统已安装: nginx, openssl, setcap (libcap), curl, certbot" >&2
     fi
 }
 
@@ -287,6 +288,14 @@ server {
         proxy_set_header X-Forwarded-Proto https;
     }
 
+    location = /install.sh {
+        proxy_pass http://${_listen};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
     # 核心安全控制：公网不暴露控制台 API 与前端界面
     location / {
         return 404;
@@ -308,6 +317,188 @@ NGINX_EOF
     fi
 }
 
+diagnose_acme_failure() {
+    _target_domain="$1"
+    _log_file="$2"
+
+    echo "🔍 正在诊断 ACME 证书申请失败原因:" >&2
+
+    # 1. 检查 80 端口占用与监听情况
+    LISTEN_80=""
+    if command -v ss >/dev/null 2>&1; then
+        LISTEN_80=$(ss -tlnp 2>/dev/null | grep -E ':(80)[[:space:]]' || true)
+    elif command -v netstat >/dev/null 2>&1; then
+        LISTEN_80=$(netstat -tlnp 2>/dev/null | grep -E ':(80)[[:space:]]' || true)
+    fi
+
+    if [ -n "$LISTEN_80" ]; then
+        if printf '%s' "$LISTEN_80" | grep -qi 'nginx'; then
+            echo "  [80 端口]: 正常由 Nginx 监听。" >&2
+        else
+            echo "  ❌ [80 端口被占]: 80 端口被其他非 Nginx 进程占用:" >&2
+            printf '%s\n' "$LISTEN_80" >&2
+            echo "     解决建议: 请停止占用 80 端口的程序并释放端口后重试。" >&2
+        fi
+    else
+        echo "  ❌ [80 端口未监听]: 80 端口未检测到监听服务，Nginx 可能未正常运行。" >&2
+        echo "     解决建议: 请检查 nginx 运行状态及日志 (nginx -t 或 journalctl -u nginx)。" >&2
+    fi
+
+    # 2. 检查 DNS 解析与本机公网 IP 是否匹配
+    PUBLIC_IP=""
+    for ip_svc in "https://api.ipify.org" "https://ifconfig.me" "https://icanhazip.com"; do
+        PUBLIC_IP=$(curl -s -m 3 "$ip_svc" 2>/dev/null || true)
+        if [ -n "$PUBLIC_IP" ]; then
+            break
+        fi
+    done
+
+    RESOLVED_IP=""
+    if command -v getent >/dev/null 2>&1; then
+        RESOLVED_IP=$(getent hosts "$_target_domain" 2>/dev/null | awk '{print $1}' | head -n 1)
+    elif command -v host >/dev/null 2>&1; then
+        RESOLVED_IP=$(host "$_target_domain" 2>/dev/null | sed -n 's/.*has address \([0-9.]*\).*/\1/p' | head -n 1)
+    elif command -v nslookup >/dev/null 2>&1; then
+        RESOLVED_IP=$(nslookup "$_target_domain" 2>/dev/null | awk '/^Address: / { print $2 }' | tail -n 1)
+    fi
+
+    if [ -n "$RESOLVED_IP" ]; then
+        if [ -n "$PUBLIC_IP" ] && [ "$RESOLVED_IP" != "$PUBLIC_IP" ]; then
+            echo "  ❌ [域名未解析到本机]: 域名 ${_target_domain} 当前解析至 ${RESOLVED_IP}，但本机公网 IP 为 ${PUBLIC_IP}。" >&2
+            echo "     解决建议: 请在 DNS 服务商处将 ${_target_domain} 的 A 记录修改为本机公网 IP (${PUBLIC_IP})，待生效后重试。" >&2
+        else
+            echo "  [DNS 解析]: 域名 ${_target_domain} 解析至 ${RESOLVED_IP}。" >&2
+        fi
+    else
+        echo "  ❌ [域名未解析到本机]: 无法解析域名 ${_target_domain}。" >&2
+        echo "     解决建议: 请在 DNS 服务商处添加 ${_target_domain} 的 A 记录并指向本机公网 IP (${PUBLIC_IP:-未获取到})。" >&2
+    fi
+
+    # 3. 检查常见 Let's Encrypt 错误特征
+    if [ -f "$_log_file" ]; then
+        if grep -qiE 'rate.*limit|too many requests' "$_log_file"; then
+            echo "  ❌ [速率限制/限流]: Let's Encrypt 触发了请求速率限制 (Rate Limit)。" >&2
+            echo "     解决建议: 短期内向 Let's Encrypt 请求证书次数过多，请稍候几小时或更换域名重试。" >&2
+        elif grep -qiE 'connection refused|timeout|failed to connect' "$_log_file"; then
+            echo "  ❌ [连接超时/防火墙拦截]: Let's Encrypt CA 验证服务器无法连通本机 80 端口。" >&2
+            echo "     解决建议: 请检查云服务商安全组 (Security Group) 与主机防火墙规则，确保入方向 80 端口对公网放行。" >&2
+        fi
+    fi
+}
+
+setup_acme_renewal() {
+    _target_domain="$1"
+
+    echo "--> 配置 ACME 证书自动续期 (certbot timer / cron)..."
+
+    # 1. 部署 hook：续期成功后自动拷贝证书并 reload nginx
+    HOOK_DIR="/etc/letsencrypt/renewal-hooks/deploy"
+    mkdir -p "$HOOK_DIR"
+    cat > "$HOOK_DIR/dash-nginx.sh" <<'HOOK_EOF'
+#!/bin/sh
+for d in /etc/letsencrypt/live/*; do
+    if [ -d "$d" ] && [ -f "$d/fullchain.pem" ]; then
+        cp -L "$d/fullchain.pem" /etc/dash/certs/agent.crt
+        cp -L "$d/privkey.pem" /etc/dash/certs/agent.key
+        chmod 0644 /etc/dash/certs/agent.crt
+        chmod 0600 /etc/dash/certs/agent.key
+        nginx -s reload 2>/dev/null || true
+    fi
+done
+HOOK_EOF
+    chmod 0755 "$HOOK_DIR/dash-nginx.sh"
+
+    # 2. 启用 systemd certbot.timer 或配置 cron
+    if [ "$INIT_SYSTEM" = "systemd" ] && command -v systemctl >/dev/null 2>&1; then
+        systemctl enable --now certbot.timer 2>/dev/null || true
+    fi
+
+    if [ -d /etc/cron.d ]; then
+        cat > /etc/cron.d/certbot-dash <<'CRON_EOF'
+0 3 * * * root certbot renew -q
+CRON_EOF
+        chmod 0644 /etc/cron.d/certbot-dash
+    elif [ -d /etc/periodic/daily ]; then
+        cat > /etc/periodic/daily/certbot-dash <<'CRON_EOF'
+#!/bin/sh
+certbot renew -q
+CRON_EOF
+        chmod 0755 /etc/periodic/daily/certbot-dash
+    fi
+}
+
+request_agent_acme_cert() {
+    _a_domain="$1"
+    _email="$2"
+
+    echo "--> 正在通过 ACME HTTP-01 为 Agent 接入域名 ${_a_domain} 申请 Let's Encrypt 证书..."
+
+    if ! command -v certbot >/dev/null 2>&1 && ! command -v acme.sh >/dev/null 2>&1; then
+        echo "❌ 错误: 未检测到 certbot 或 acme.sh 工具，无法执行 ACME 证书申请。" >&2
+        echo "   请安装 certbot (例如 apt-get install -y certbot 或 apk add certbot) 后重试。" >&2
+        exit 1
+    fi
+
+    mkdir -p /var/lib/dash/acme/.well-known/acme-challenge
+    chmod -R 0755 /var/lib/dash/acme
+
+    ACME_SUCCESS=0
+    ACME_LOG=$(mktemp 2>/dev/null || echo "/tmp/acme_$$.log")
+
+    if command -v certbot >/dev/null 2>&1; then
+        echo "--> 使用 certbot (webroot 模式) 申请证书..."
+        if certbot certonly --webroot -w /var/lib/dash/acme \
+            --non-interactive --agree-tos --no-eff-email \
+            --email "$_email" \
+            -d "$_a_domain" \
+            --keep-until-expiring >"$ACME_LOG" 2>&1; then
+
+            CERT_PATH="/etc/letsencrypt/live/${_a_domain}/fullchain.pem"
+            KEY_PATH="/etc/letsencrypt/live/${_a_domain}/privkey.pem"
+            if [ -f "$CERT_PATH" ] && [ -f "$KEY_PATH" ]; then
+                cp -L "$CERT_PATH" /etc/dash/certs/agent.crt
+                cp -L "$KEY_PATH" /etc/dash/certs/agent.key
+                chmod 0644 /etc/dash/certs/agent.crt
+                chmod 0600 /etc/dash/certs/agent.key
+                ACME_SUCCESS=1
+                echo "✅ Agent 接入域名 Let's Encrypt ACME 证书签发成功。"
+            fi
+        fi
+    elif command -v acme.sh >/dev/null 2>&1; then
+        echo "--> 使用 acme.sh (webroot 模式) 申请证书..."
+        if acme.sh --issue -d "$_a_domain" -w /var/lib/dash/acme >"$ACME_LOG" 2>&1; then
+            if acme.sh --install-cert -d "$_a_domain" \
+                --key-file /etc/dash/certs/agent.key \
+                --fullchain-file /etc/dash/certs/agent.crt \
+                --reloadcmd "nginx -s reload 2>/dev/null || true" >/dev/null 2>&1; then
+                chmod 0644 /etc/dash/certs/agent.crt
+                chmod 0600 /etc/dash/certs/agent.key
+                ACME_SUCCESS=1
+                echo "✅ Agent 接入域名 acme.sh 证书签发成功。"
+            fi
+        fi
+    fi
+
+    if [ "$ACME_SUCCESS" -ne 1 ]; then
+        echo "❌ 错误: Agent 接入域名 (${_a_domain}) ACME 证书申请失败！" >&2
+        echo "----------------------------------------" >&2
+        cat "$ACME_LOG" >&2
+        echo "----------------------------------------" >&2
+
+        diagnose_acme_failure "$_a_domain" "$ACME_LOG"
+        rm -f "$ACME_LOG"
+        exit 1
+    fi
+    rm -f "$ACME_LOG"
+
+    setup_acme_renewal "$_a_domain"
+
+    # 重载 Nginx 应用新证书
+    if command -v nginx >/dev/null 2>&1; then
+        nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null || rc-service nginx reload 2>/dev/null || true
+    fi
+}
+
 extract_json_val() {
     printf '%s' "$1" | sed -n 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 }
@@ -323,6 +514,7 @@ cmd_install() {
     AGENT_DOMAIN=""
     INTERNAL_IP=""
     DOMAIN=""
+    ACME_EMAIL="${DASH_ACME_EMAIL:-}"
     DB_DRIVER="${DASH_DB_DRIVER:-oracle}"
     DB_USER="${DASH_DB_USER:-admin}"
     DB_PASSWORD="${DASH_DB_PASSWORD:-}"
@@ -349,6 +541,10 @@ cmd_install() {
                 ;;
             --internal-ip)
                 INTERNAL_IP="$2"
+                shift 2
+                ;;
+            --acme-email)
+                ACME_EMAIL="$2"
                 shift 2
                 ;;
             --db-driver)
@@ -437,6 +633,20 @@ cmd_install() {
         fi
     fi
 
+    # ACME 证书通知邮箱输入与警告提示
+    if [ -z "$ACME_EMAIL" ]; then
+        if [ "$NON_INTERACTIVE" -eq 0 ] && [ -t 0 ]; then
+            printf "请输入 Agent 接入域名 ACME 证书通知邮箱 (用于 Let's Encrypt，留空使用自签测试证书): "
+            read -r INPUT_EMAIL
+            ACME_EMAIL="$INPUT_EMAIL"
+        fi
+    fi
+
+    if [ -z "$ACME_EMAIL" ]; then
+        echo "⚠️ 警告: 未提供 --acme-email，Agent 接入域名将使用自签测试证书。"
+        echo "⚠️ 警告: agent 将无法校验证书，仅供测试！生产环境请指定 --acme-email 以签发受信任证书。"
+    fi
+
     echo "==> [1/8] 检查系统环境与依赖 (Nginx, OpenSSL, setcap, curl)..."
     ensure_dependencies
     detect_init
@@ -499,6 +709,11 @@ CFG_EOF
 
     echo "==> [4/8] 配置并启动 Nginx 双入口反向代理..."
     configure_nginx "$CONSOLE_DOMAIN" "$AGENT_DOMAIN" "$INTERNAL_IP" "$SERVER_LISTEN"
+
+    # 若提供了 --acme-email，执行 ACME HTTP-01 证书申请并自动配置续期
+    if [ -n "$ACME_EMAIL" ]; then
+        request_agent_acme_cert "$AGENT_DOMAIN" "$ACME_EMAIL"
+    fi
 
     echo "==> [5/8] 准备 dashd 可执行程序..."
     BIN_SRC=""
@@ -642,6 +857,11 @@ OPENRC_EOF
     echo "管理控制台:   https://${CONSOLE_DOMAIN}"
     echo "控制台绑定:   ${INTERNAL_IP}:443 (仅内网/WireGuard 访问，不监听公网)"
     echo "Agent 接入:   https://${AGENT_DOMAIN} (公网接入，仅暴露 Agent 协议)"
+    if [ -n "$ACME_EMAIL" ]; then
+        echo "Agent 证书:   Let's Encrypt ACME 证书 (通知邮箱: ${ACME_EMAIL})"
+    else
+        echo "Agent 证书:   自签测试证书 (未提供 --acme-email)"
+    fi
     echo "初始管理员:   ${ADMIN_USER}"
     if [ -n "$ADMIN_PW" ]; then
         echo "初始密码:     ${ADMIN_PW}"
@@ -823,8 +1043,10 @@ cmd_uninstall() {
         pkill -f /usr/local/bin/dashd 2>/dev/null || true
     fi
 
-    echo "--> 清除 Nginx 反向代理配置..."
+    echo "--> 清除 Nginx 反向代理配置与证书续期任务..."
     rm -f /etc/nginx/conf.d/dash.conf /etc/nginx/http.d/dash.conf /etc/nginx/sites-enabled/dash.conf
+    rm -f /etc/letsencrypt/renewal-hooks/deploy/dash-nginx.sh
+    rm -f /etc/cron.d/certbot-dash /etc/periodic/daily/certbot-dash
     nginx -s reload 2>/dev/null || true
 
     echo "--> 删除 dashd 二进制文件..."
@@ -904,14 +1126,33 @@ cmd_status() {
     AGENT_CERT_EXPIRY="尚未生成"
     if [ -f /etc/dash/certs/console.crt ] && command -v openssl >/dev/null 2>&1; then
         EXP_DATE=$(openssl x509 -enddate -noout -in /etc/dash/certs/console.crt 2>/dev/null | sed 's/notAfter=//')
-        [ -n "$EXP_DATE" ] && CONSOLE_CERT_EXPIRY="$EXP_DATE"
+        [ -n "$EXP_DATE" ] && CONSOLE_CERT_EXPIRY="$EXP_DATE (自签/内部)"
     fi
     if [ -f /etc/dash/certs/agent.crt ] && command -v openssl >/dev/null 2>&1; then
         EXP_DATE=$(openssl x509 -enddate -noout -in /etc/dash/certs/agent.crt 2>/dev/null | sed 's/notAfter=//')
-        [ -n "$EXP_DATE" ] && AGENT_CERT_EXPIRY="$EXP_DATE"
+        ISSUER=$(openssl x509 -issuer -noout -in /etc/dash/certs/agent.crt 2>/dev/null | sed 's/issuer=//')
+        if printf '%s' "$ISSUER" | grep -qi "Let's Encrypt"; then
+            AGENT_CERT_EXPIRY="$EXP_DATE (Let's Encrypt / ACME)"
+        elif printf '%s' "$ISSUER" | grep -qi "acme"; then
+            AGENT_CERT_EXPIRY="$EXP_DATE (ACME)"
+        else
+            AGENT_CERT_EXPIRY="$EXP_DATE (自签/未校验)"
+        fi
     fi
 
-    # 5. 读取配置域名与绑定信息
+    # 5. ACME 自动续期状态
+    ACME_RENEWAL_STATUS="未配置"
+    if [ -d /etc/letsencrypt/live ] && [ -n "$(ls -A /etc/letsencrypt/live 2>/dev/null)" ]; then
+        if [ "$INIT_SYSTEM" = "systemd" ] && systemctl is-enabled certbot.timer >/dev/null 2>&1; then
+            ACME_RENEWAL_STATUS="已启用 (systemd certbot.timer)"
+        elif [ -f /etc/cron.d/certbot-dash ] || [ -f /etc/periodic/daily/certbot-dash ]; then
+            ACME_RENEWAL_STATUS="已启用 (cron 定时任务)"
+        else
+            ACME_RENEWAL_STATUS="已签发 (独立证书目录)"
+        fi
+    fi
+
+    # 6. 读取配置域名与绑定信息
     CONF_FILE="/etc/nginx/conf.d/dash.conf"
     [ -f /etc/nginx/http.d/dash.conf ] && CONF_FILE="/etc/nginx/http.d/dash.conf"
 
@@ -936,6 +1177,7 @@ cmd_status() {
     echo "控制台证书到期: $CONSOLE_CERT_EXPIRY"
     echo "Agent 接入入口: $AGENT_INFO"
     echo "Agent 证书到期: $AGENT_CERT_EXPIRY"
+    echo "ACME 续期状态:  $ACME_RENEWAL_STATUS"
     echo "在线 agent 数:  $AGENTS_ONLINE"
     echo "----------------------------------------"
 }
