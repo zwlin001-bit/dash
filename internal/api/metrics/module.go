@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"dash/internal/app"
+	"dash/internal/ingest"
 )
 
 // Module 实现 app.Module 契约，装配时序查询与 SSE 服务。
@@ -59,6 +60,15 @@ func (m *Module) Register(a *app.App) error {
 	// 若 App 中已注入数据库实例，绑定至 QueryEngine
 	if a.DB != nil {
 		m.handler.engine = NewQueryEngine(a.DB)
+	}
+
+	// 若已注入 Ingester，连接 LatestCache 更新至 SSE 广播
+	if a.Ingester != nil {
+		if s, ok := a.Ingester.(interface{ Latest() *ingest.LatestCache }); ok {
+			s.Latest().OnUpdate(func(nodeID string, l ingest.NodeLatest) {
+				m.store.BroadcastMetrics(nodeID, l)
+			})
+		}
 	}
 
 	m.handler.RegisterRoutes(a.Mux)

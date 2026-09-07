@@ -32,6 +32,12 @@ type WSHandler struct {
 	registry     *Registry
 	helloHandler *HelloHandler
 	config       *config.Config
+	ingester     MetricsIngester
+}
+
+// MetricsIngester 接收时序采集数据。
+type MetricsIngester interface {
+	Ingest(nodeID string, effectiveTs int64, m *protocol.MetricsParams)
 }
 
 // NewWSHandler 创建 WSHandler 实例。
@@ -42,6 +48,11 @@ func NewWSHandler(database *db.DB, registry *Registry, cfg *config.Config) *WSHa
 		helloHandler: NewHelloHandler(database, cfg),
 		config:       cfg,
 	}
+}
+
+// SetIngester 设置指标落库注入器。
+func (h *WSHandler) SetIngester(ingester MetricsIngester) {
+	h.ingester = ingester
 }
 
 func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -202,6 +213,10 @@ func (h *WSHandler) handleIncomingMessage(ctx context.Context, sess *Session, pa
 				              SET clock_skew_ms = ?, last_seen_at_ms = ?, updated_at_ms = ?
 				              WHERE id = ?`
 				_, _ = h.database.Exec(ctx, updateSQL, skew, effectiveTs, serverNow, sess.NodeID)
+
+				if h.ingester != nil {
+					h.ingester.Ingest(sess.NodeID, effectiveTs, &m)
+				}
 			}
 		}
 
