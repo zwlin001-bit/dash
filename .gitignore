@@ -1,0 +1,23 @@
+# 机密：绝不入库
+/.secrets/
+/wallet/
+*.env
+!*.env.example
+/etc-dash/
+master.key
+
+# 构建产物
+/bin/
+/dist/
+*.exe
+
+# 依赖
+/node_modules/
+/web/dist/
+__pycache__/
+*.pyc
+/providers/*/venv/
+
+# 本地
+.DS_Store
+*.log
