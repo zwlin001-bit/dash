@@ -1,20 +1,13 @@
 package api
 
 import (
-	"context"
 	"embed"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"net/http"
-	"os"
-	"os/signal"
 	"path"
 	"strings"
-	"syscall"
-	"time"
 
 	"dash/internal/app"
 	eventsapi "dash/internal/api/events"
@@ -23,7 +16,7 @@ import (
 //go:embed all:dist
 var distFS embed.FS
 
-// WebModule 实现 app.Module 接口，负责挂载内嵌前端产物与启动 Web 服务。
+// WebModule 实现 app.Module 接口，负责挂载内嵌前端产物至 Web 服务路由。
 type WebModule struct{}
 
 // NewModule 创建 WebModule 实例。
@@ -41,41 +34,6 @@ func (m *WebModule) Register(a *app.App) error {
 	}
 
 	RegisterRoutes(a.Mux)
-
-	// 若在单测或不需要监听端口的场景下，由环境变量控制不阻塞
-	if os.Getenv("DASH_TEST_NO_SERVE") == "1" {
-		return nil
-	}
-
-	addr := os.Getenv("DASH_SERVER_LISTEN")
-	if addr == "" {
-		addr = os.Getenv("PORT")
-	}
-	if addr == "" {
-		addr = ":8080"
-	}
-
-	server := &http.Server{
-		Addr:    addr,
-		Handler: a.Mux,
-	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		<-stop
-		log.Printf("收到终止信号，正在关闭 Web 控制台...")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(ctx)
-	}()
-
-	log.Printf("dashd 控制台已启动: http://localhost%s (监听地址 %s)", addr, addr)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("web server failed: %w", err)
-	}
-
 	return nil
 }
 

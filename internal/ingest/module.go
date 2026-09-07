@@ -39,9 +39,6 @@ func (m *Module) Register(a *app.App) error {
 	m.service = NewService(a.DB, a.Config, nil)
 	a.Ingester = m.service
 
-	// 注册 /healthz 端点暴露服务状态与丢批计数
-	a.Mux.HandleFunc("GET /healthz", m.service.HandleHealthz)
-
 	if a.DB != nil {
 		_ = m.service.Start(context.Background())
 	}
