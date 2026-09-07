@@ -14,11 +14,14 @@ const bundlePath = path.join(outDir, 'test-bundle.cjs');
 
 try {
   await build({
-    entryPoints: [path.join(webDir, 'src/__tests__/robustness.test.tsx')],
+    entryPoints: [path.join(webDir, 'test/robustness.test.tsx')],
     outfile: bundlePath,
     bundle: true,
     format: 'cjs',
     platform: 'node',
+    logOverride: {
+      'empty-import-meta': 'silent',
+    },
     loader: {
       '.css': 'empty',
     },

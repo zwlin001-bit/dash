@@ -2,13 +2,13 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import test, { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
 import assert from 'node:assert';
 
-import { ErrorBoundary } from '../components/ErrorBoundary';
-import { Overview } from '../pages/Overview';
-import { Machines } from '../pages/Machines';
-import { NodeDetail } from '../pages/NodeDetail';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
+import { Overview } from '../src/pages/Overview';
+import { Machines } from '../src/pages/Machines';
+import { NodeDetail } from '../src/pages/NodeDetail';
 import {
   fmt,
   formatBytes,
@@ -16,8 +16,8 @@ import {
   formatTimeAgo,
   formatDateTime,
   formatUptime,
-} from '../utils';
-import { NodeItem } from '../api/types';
+} from '../src/utils';
+import { NodeItem } from '../src/api/types';
 
 describe('P1-23 前端空值健壮性与错误边界测试', () => {
   describe('❶ 数值格式化 helper (fmt) 健壮性', () => {
@@ -86,7 +86,7 @@ describe('P1-23 前端空值健壮性与错误边界测试', () => {
 
     it('渲染 /machines 页面不抛异常，正常显示最小节点且未分组、未配置计费显示 --', () => {
       const queryClient = new QueryClient({
-        defaultOptions: { queries: { retry: false } },
+        defaultOptions: { queries: { retry: false, gcTime: 0 } },
       });
       queryClient.setQueryData(['nodes-inventory'], [minimalNode]);
       queryClient.setQueryData(['groups'], []);
@@ -117,7 +117,7 @@ describe('P1-23 前端空值健壮性与错误边界测试', () => {
 
     it('渲染 / 节点总览 (Overview) 页面不抛异常，缺失指标显示 --', () => {
       const queryClient = new QueryClient({
-        defaultOptions: { queries: { retry: false } },
+        defaultOptions: { queries: { retry: false, gcTime: 0 } },
       });
       queryClient.setQueryData(['nodes'], [minimalNode]);
       queryClient.setQueryData(['node-groups'], []);
@@ -142,7 +142,7 @@ describe('P1-23 前端空值健壮性与错误边界测试', () => {
 
     it('渲染 /nodes/:id (NodeDetail) 页面面对空 facts / billing / latest 不抛异常', () => {
       const queryClient = new QueryClient({
-        defaultOptions: { queries: { retry: false } },
+        defaultOptions: { queries: { retry: false, gcTime: 0 } },
       });
       queryClient.setQueryData(['node', 'x'], minimalNode);
 
@@ -237,7 +237,7 @@ describe('P1-23 前端空值健壮性与错误边界测试', () => {
       assert.strictEqual(boundary.state.hasError, true);
 
       // resetKey 改变时重置错误
-      boundary.props = {
+      (boundary as any).props = {
         level: 'route',
         resetKey: '/nodes',
         children: <div>正常工作</div>,
@@ -256,5 +256,14 @@ describe('P1-23 前端空值健壮性与错误边界测试', () => {
       const html = renderToString(boundary.render() as React.ReactElement);
       assert(html.includes('正常工作'));
     });
+  });
+
+  after(() => {
+    // 确保测试跑完后立即退出，不等待 react-query 默认的 5 分钟 gcTime 定时器
+    setTimeout(() => {
+      if (typeof process !== 'undefined') {
+        process.exit(0);
+      }
+    }, 50);
   });
 });

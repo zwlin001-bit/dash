@@ -83,7 +83,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     const isDev = Boolean(
       (typeof import.meta !== 'undefined' && import.meta.env?.DEV) ||
-      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development')
+      (typeof globalThis !== 'undefined' && (globalThis as any).process?.env?.NODE_ENV === 'development')
     );
     const errorMsg = error?.message || '未知异常';
     const errorStack = error?.stack;
