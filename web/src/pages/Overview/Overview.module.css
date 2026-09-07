@@ -35,6 +35,67 @@
   font-family: var(--font-mono);
 }
 
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+}
+
+.filterSelect {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--text-main);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  outline: none;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.filterSelect:focus {
+  border-color: var(--accent);
+}
+
+.stateTabs {
+  display: inline-flex;
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.stateTab {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.stateTab:hover {
+  color: var(--text-main);
+}
+
+.stateTab.active {
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
 .nodeLink {
   font-weight: 600;
   color: var(--text-main);
@@ -51,3 +112,47 @@
   gap: 4px;
   flex-wrap: wrap;
 }
+
+.offlineRow {
+  opacity: 0.72;
+}
+
+.offlineRow td {
+  color: var(--text-dim) !important;
+}
+
+.offlineRow a {
+  color: var(--text-dim) !important;
+}
+
+.timeAgo {
+  font-size: 11px;
+  color: var(--text-mute);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.clockBadge {
+  margin-left: 6px;
+  font-size: 10px;
+}
+
+.trafficWarn {
+  color: var(--warn);
+}
+
+.trafficErr {
+  color: var(--err);
+  font-weight: 600;
+}
+
+.dbBannerAlert {
+  margin-bottom: 16px;
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+

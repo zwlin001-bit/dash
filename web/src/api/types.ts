@@ -94,6 +94,10 @@ export interface NodeGroup {
 export interface NodeBilling {
   expires_at_ms?: number;
   traffic_limit?: number;
+  traffic_limit_kind?: string;
+  currency?: string;
+  price?: number;
+  cycle_days?: number;
 }
 
 // 节点硬件事实（node_facts，08-field-map.md §3）
@@ -130,6 +134,19 @@ export interface NodeItem {
 // 节点详情
 export interface NodeDetail extends NodeItem {
   facts?: NodeFacts;
+  note?: string;
+}
+
+// 节点列表过滤与查询参数
+export interface ListNodesFilterParams {
+  group_id?: string;
+  tag_id?: string;
+  conn_state?: 'online' | 'offline' | 'never' | string;
+  q?: string;
+  sort?: string;
+  order?: 'asc' | 'desc' | string;
+  page?: number;
+  page_size?: number;
 }
 
 // 系统设置
@@ -152,6 +169,8 @@ export interface MetricStreamEvent {
   mem_used: number;
   net_up_bps: number;
   net_down_bps: number;
+  disk_used?: number;
+  load1?: number;
 }
 
 export interface NodeStateStreamEvent {

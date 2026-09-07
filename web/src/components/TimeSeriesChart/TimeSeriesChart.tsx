@@ -343,7 +343,12 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       <div className={styles.header}>
         <div className={styles.titleArea}>
           {title && <span className={styles.title}>{title}</span>}
-          {data?.source && <span className={styles.sourceBadge}>source: {data.source}</span>}
+          {data?.source && (
+            <span className={styles.sourceBadge}>
+              表: {data.source}
+              {data.ts_ms ? ` (${data.ts_ms.length} 采样点)` : ''}
+            </span>
+          )}
         </div>
         <div className={styles.controls}>
           <div className={styles.spanButtons}>
