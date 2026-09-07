@@ -9,10 +9,13 @@ import (
 	"time"
 
 	"dash/internal/api"
+	"dash/internal/api/metrics"
 	"dash/internal/app"
+	"dash/internal/auth"
 	"dash/internal/config"
 	"dash/internal/db"
 	"dash/internal/events"
+	"dash/internal/inventory"
 	"dash/internal/logx"
 	"dash/internal/migrate"
 )
@@ -33,8 +36,11 @@ type Module = app.Module
 // modules 为所有需要装配进 dashd 的模块列表。
 // 约束：后续任务只允许向此列表追加模块，不改动装配与启动逻辑。
 var modules = []Module{
+	auth.NewModule(),
+	inventory.NewModule(),
+	metrics.NewModule(),
 	events.NewModule(),
-	api.NewModule(),
+	api.NewModule(), // ★ 必须最后：它挂 "/" 作为 SPA 兜底路由
 }
 
 // RegisterModules 按序执行各模块的注册逻辑。
