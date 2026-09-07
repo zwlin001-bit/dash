@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ThemeToggle } from './ThemeToggle';
-import { logout } from '../../api/auth';
+import { logout, useCurrentUser } from '../../api';
 import { fetchUnreadCount } from '../../api';
 import { ErrorBoundary } from '../ErrorBoundary';
 import styles from './Layout.module.css';
@@ -10,6 +10,8 @@ import styles from './Layout.module.css';
 export const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const { data: currentUser } = useCurrentUser();
 
   const { data: unreadData } = useQuery({
     queryKey: ['events-unread-count'],
@@ -20,7 +22,7 @@ export const Layout: React.FC = () => {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -43,7 +45,7 @@ export const Layout: React.FC = () => {
             {unreadCount > 0 && <span className={styles.bellDot} />}
           </Link>
           <ThemeToggle />
-          <span className={styles.who}>admin</span>
+          <span className={styles.who}>{currentUser?.username || 'admin'}</span>
           <button type="button" className="btn mini ghost" onClick={handleLogout} title="退出登录">
             退出
           </button>
