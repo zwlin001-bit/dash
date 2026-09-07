@@ -25,6 +25,15 @@ scripts/agent-bench.sh   ★ 一条命令打印四项指标和是否达标
 | 磁盘写入 | **≤ 1 次/分钟** | 0 | `/proc/<pid>/io` 的 `write_bytes` |
 | 二进制体积 | **≤ 6 MB** | 5 MB | `ls -l bin/dash-agent` |
 
+## 采集层实际 API
+
+★ **任务 06 的实际 API 与最初任务书原稿不同**（实现更优，任务书已更新）。
+开工前看 [`P1-06-agent采集层.md`](P1-06-agent采集层.md) 的「类型定义」一节。
+
+要点：`Collectors()` / `CollectorsByTier(t)` / `NewSample()` / `Reset(tier)`；
+`Sample` **直接持有 `protocol.NetReport` / `SlowReport` / `FactsParams`**，
+传输层可零转换直接序列化，**不要再写一层映射**。
+
 ## 配置项与状态文件
 
 **配置项全表**见 [`../../03-agent.md`](../../03-agent.md) §8。

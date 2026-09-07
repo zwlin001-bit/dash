@@ -38,6 +38,10 @@ agent/collect/
 
 ## 类型定义（照这个写）
 
+> ★ **以下为实际实现的形状（已按第 2 轮验收结果更新）。**
+> 它比最初的 `F64{V, OK}` 方案少一层转换：`Sample` 直接持有 `protocol` 的结构体，
+> 传输层可零转换、零分配地序列化。**任务 07、08 直接用这个形状。**
+
 ```go
 package collect
 
@@ -49,42 +53,38 @@ const (
     TierFacts             // 变更时
 )
 
-// 可选值：用 OK 标志而不是指针，热路径零分配
-type F64 struct { V float64; OK bool }
-type I64 struct { V int64;   OK bool }
-type I32 struct { V int32;   OK bool }
-
+// Sample 由主循环持有并复用；指针为 nil 表示未采集或采集失败（不填 0）
 type Sample struct {
-    TsMs int64
+    TsMs     int64
 
-    // Fast
-    CPUPct       F64
-    MemUsed      I64
-    SwapUsed     I64
-    Load1        F64
-    Load5        F64
-    Load15       F64
-    NetUpBps     I64
-    NetDownBps   I64
-    NetTotalUp   I64
-    NetTotalDown I64
-    UptimeS      I64
+    CPUPct   *float64
+    MemUsed  *int64
+    SwapUsed *int64
+    Load     *[3]float64
+    Net      *protocol.NetReport
+    UptimeS  *int64
 
-    // Slow（HasSlow=false 时整体省略）
-    HasSlow   bool
-    DiskUsed  I64
-    ProcCount I32
-    TCPCount  I32
-    UDPCount  I32
-    Disks     []DiskUsage
-    NICs      []NICUsage
+    Slow  *protocol.SlowReport   // slow 档到期那轮才非 nil
+    Facts *protocol.FactsParams  // facts 变更时才非 nil
+
+    // 内部预分配的 backing 值存储区（含 diskValBuf/nicValBuf [32]，
+    // 写入前有越界检查），保证稳态零分配
 }
 
-type DiskUsage struct { Mount string; Used, Total I64 }
-type NICUsage  struct { Name  string; TotalUp, TotalDown I64 }
+func NewSample() *Sample
+func (s *Sample) Reset(tier Tier)   // 按档清空，保留切片容量
 
-// Reset 清空标志位但保留切片容量，供主循环复用
-func (s *Sample) Reset()
+// setter 由采集器调用，负责把 backing 值的地址挂到导出字段上
+func (s *Sample) SetCPUPct(v float64)
+func (s *Sample) SetMem(used, swap int64, hasSwap bool)
+func (s *Sample) SetLoad(l [3]float64)
+func (s *Sample) SetNet(upBps, downBps, totalUp, totalDown int64, hasRate bool)
+func (s *Sample) SetUptime(sec int64)
+func (s *Sample) SetDiskUsed(v int64)
+func (s *Sample) SetProcCount(v int32)
+func (s *Sample) SetTCPCount(v int32)
+func (s *Sample) SetUDPCount(v int32)
+func (s *Sample) SetFacts(f protocol.FactsParams)
 
 type Collector interface {
     Code() string
@@ -93,7 +93,8 @@ type Collector interface {
 }
 
 func Register(c Collector)
-func Collectors(t Tier) []Collector
+func Collectors() []Collector             // 全部
+func CollectorsByTier(t Tier) []Collector // 按档
 ```
 
 ★ **`Sample` 由主循环持有并复用**，采集器只往里写，不返回新对象。
