@@ -77,7 +77,8 @@ type NICEntry struct {
 }
 
 // ---- agent.facts（notification）----
-// 字段与 node_facts 表一一对应，见 10-schema-spec.md §2
+// 字段与 node_facts 表对应，见 10-schema-spec.md §2
+// ★ 不含 ipv4/ipv6：agent 不查公网 IP，由服务端从连接来源记录（11-collect-spec.md §9.3）
 
 type FactsParams struct {
 	Arch       string `json:"arch,omitempty"`
@@ -91,8 +92,6 @@ type FactsParams struct {
 	MemTotal   int64  `json:"mem_total,omitempty"`
 	SwapTotal  int64  `json:"swap_total,omitempty"`
 	DiskTotal  int64  `json:"disk_total,omitempty"`
-	IPv4       string `json:"ipv4,omitempty"`
-	IPv6       string `json:"ipv6,omitempty"`
 	BootAtMs   int64  `json:"boot_at_ms,omitempty"`
 	FactsHash  string `json:"facts_hash"`
 }

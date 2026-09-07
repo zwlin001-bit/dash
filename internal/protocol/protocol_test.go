@@ -226,8 +226,6 @@ func TestProtocolDocExamples(t *testing.T) {
   "mem_total": 4120000000,
   "swap_total": 1073741824,
   "disk_total": 42000000000,
-  "ipv4": "198.51.100.1",
-  "ipv6": "2001:db8::1",
   "boot_at_ms": 1757222400000,
   "facts_hash": "3f2a5b6c"
 }}`
@@ -281,12 +279,6 @@ func TestProtocolDocExamples(t *testing.T) {
 		}
 		if facts.DiskTotal != 42000000000 {
 			t.Errorf("expected disk_total 42000000000, got %d", facts.DiskTotal)
-		}
-		if facts.IPv4 != "198.51.100.1" {
-			t.Errorf("expected ipv4 198.51.100.1, got %s", facts.IPv4)
-		}
-		if facts.IPv6 != "2001:db8::1" {
-			t.Errorf("expected ipv6 2001:db8::1, got %s", facts.IPv6)
 		}
 		if facts.BootAtMs != 1757222400000 {
 			t.Errorf("expected boot_at_ms 1757222400000, got %d", facts.BootAtMs)
@@ -496,8 +488,6 @@ func TestRoundTripSerialization(t *testing.T) {
 			MemTotal:   8589934592,
 			SwapTotal:  0,
 			DiskTotal:  85899345920,
-			IPv4:       "203.0.113.10",
-			IPv6:       "2001:db8::10",
 			BootAtMs:   1757220000000,
 			FactsHash:  "9f8e7d6c5b",
 		}
