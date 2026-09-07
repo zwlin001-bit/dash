@@ -133,3 +133,110 @@ func Collectors(t Tier) []Collector
 ## 边界
 
 **只做采集，不做上报、不做定时、不碰网络。** 提供一个可以被调用的采集函数即可。
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-07 · ❌ 未通过（3 项必修）
+
+分支 `agy/p1-06-collect`，提交 `608c292`。
+
+### ✅ 已通过 —— 不要再动这些
+
+| 验收项 | 实测 |
+|---|---|
+| 未引入 gopsutil | ✅ `go list -m all` 无任何第三方依赖，`go.mod` 干净 |
+| **零分配** | ✅ `BenchmarkFastCollection` **0 B/op、0 allocs/op**，远超「个位数」要求 |
+| 未用 `bufio.Scanner` | ✅ 全部走复用缓冲 |
+| CPU 公式 | ✅ `busy = user+nice+system+irq+softirq+steal`，**`guest`/`guest_nice` 未重复计入**，`steal` 已计入 |
+| `/proc/net/dev` 解析 | ✅ 按 `:` 定位切分，不是按空白——长网卡名不会解析错 |
+| statfs 公式 | ✅ `used = total - Bfree*Bsize`，与 `df` 口径一致 |
+| 挂载点来源 | ✅ 读 `/proc/mounts` |
+| 注册表形状 | ✅ `Collector` 接口 + `Register()`，主循环不含 switch |
+| Alpine 精简 meminfo | ✅ testdata 里有 alpine 样本 |
+
+### ❌ F1 必须修 —— 连接数读错了文件，违反 `11-collect-spec.md` §6
+
+```go
+// conns.go
+tcp4, _ := countLinesInFile(filepath.Join(netDir, "tcp"),  c.buf)
+tcp6, _ := countLinesInFile(filepath.Join(netDir, "tcp6"), c.buf)
+udp4, _ := countLinesInFile(filepath.Join(netDir, "udp"),  c.buf)
+udp6, _ := countLinesInFile(filepath.Join(netDir, "udp6"), c.buf)
+```
+
+规格明确要求读 **`/proc/net/sockstat`**，而不是数 `/proc/net/tcp` 的行数。
+★ **这正是 komari 那条被我们特意优化掉的路径。**
+代理落地机上连接数上千时，`/proc/net/tcp` 每次要读几百 KB 并逐行扫描；
+`sockstat` 只有三行。这是 slow 档最贵的一项，也是 CPU 预算能达标的关键。
+
+现在基准测的是 fast 档，所以没暴露出来——**slow 档在真实负载下会很贵**。
+
+**修法**（`11-collect-spec.md` §6）：
+
+```
+/proc/net/sockstat   →  TCP: inuse 12 orphan 0 tw 3 alloc 20 mem 1
+                        UDP: inuse 5 mem 2
+/proc/net/sockstat6  →  TCP6: inuse 5
+                        UDP6: inuse 1
+
+tcp_count = TCP.inuse + TCP6.inuse
+udp_count = UDP.inuse + UDP6.inuse
+```
+
+- `sockstat6` 在纯 IPv4 内核上不存在 → 按 0 处理，不报错
+- 文件缺失时**才**回退到数 `/proc/net/tcp` 的行数，并只记一次日志
+- testdata 要补 `sockstat` / `sockstat6` 样本
+
+### ❌ F2 必须修 —— testdata 依赖空目录，测试在别的机器上必挂
+
+```
+go test ./agent/... →  FAIL: TestProcCollector
+                       collect_test.go:237: expected ProcCount 3, got 0
+```
+
+原因：`TestProcCollector` 期望 `testdata/normal/proc/` 下有 `1/`、`2/`、`100/`
+三个进程目录，但**它们是空目录，git 不跟踪空目录**，push 后就没了。
+
+```
+git ls-files agent/collect/linux/testdata | grep -E "/(1|2|100)/"   → 空
+```
+
+★ **在你的机器上能过，在任何其他机器和 CI 上都过不了。**
+
+**修法**：每个假进程目录里放一个占位文件（如 `1/stat`、`2/stat`、`100/stat`，
+内容随意），或者改成测试里用 `t.TempDir()` 现场创建。
+
+### ❌ F3 必须修 —— 磁盘去重按挂载点，挡不住 bind mount
+
+```go
+seenMounts := make(map[string]struct{})
+if _, seen := seenMounts[mountPoint]; seen { continue }
+```
+
+规格要求「同一设备挂载多次（bind mount）要去重……**按 `Fsid` 或设备号去重**」。
+按挂载点去重挡不住 bind mount——`/` 和 `/mnt/x` 是两个不同的挂载点、同一个设备，
+两者都会通过 fstype 过滤，于是 `disk_total` 和 `disk_used` **被算成两倍**。
+
+容器和用了 bind mount 的机器上这个问题一定会出现。
+
+**修法**：用 `Statfs_t.Fsid` 或 `Stat_t.Dev` 作为去重键。
+挂载点仍然作为 `dim_key` 上报（每个挂载点一条维度数据），
+**但汇总的 `disk_total`/`disk_used` 按设备去重后再求和**。
+
+### 复验方式
+
+```sh
+go test ./agent/...                                   # 必须全过
+go test ./agent/collect/linux/ -bench . -benchmem      # allocs/op 仍须为 0
+grep -n "sockstat" agent/collect/linux/conns.go        # 必须命中
+git ls-files agent/collect/testdata | grep -E "/(1|2|100)/"   # 必须有文件
+```
+
+另外补一个 bind mount 的单元测试：两个不同挂载点、相同设备号，
+断言 `disk_total` 只算一次。
+
+---
+
+## 第 2 轮 · 待验收
