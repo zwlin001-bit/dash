@@ -141,6 +141,18 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
 
   // 从 CSS 变量实时读取颜色（禁止在 JS 中写死十六进制）
   const themeColors = useMemo(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return {
+        seriesColors: ['#4da6ff', '#00d4aa', '#ffb870', '#b392f0', '#39d2c0', '#f85149'],
+        borderLight: '#2d3b4e',
+        borderDim: '#1a2330',
+        textMain: '#d3dae3',
+        textDim: '#8999af',
+        textMute: '#55657a',
+        bgCard: '#161d27',
+        bgCardSub: '#1c2431',
+      };
+    }
     const stylesObj = getComputedStyle(document.documentElement);
     return {
       seriesColors: DEFAULT_COLOR_VARS.map((varName) => stylesObj.getPropertyValue(varName).trim() || '#4da6ff'),
@@ -187,7 +199,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
     // 构建 ECharts 系列
     const echartsSeries: echarts.SeriesOption[] = seriesConfigs.map((cfg, idx) => {
       const color = themeColors.seriesColors[idx % themeColors.seriesColors.length];
-      const seriesValues = dataSeries[cfg.key] || [];
+      const seriesValues = (dataSeries && dataSeries[cfg.key]) || [];
 
       // 时间戳 (ms) 与值一一对应配对
       const points: [number, number | null][] = ts_ms.map((t, i) => [t, seriesValues[i] ?? null]);

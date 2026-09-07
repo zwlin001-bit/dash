@@ -1,13 +1,15 @@
 import React from 'react';
-import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ThemeToggle } from './ThemeToggle';
 import { logout } from '../../api/auth';
 import { fetchUnreadCount } from '../../api';
+import { ErrorBoundary } from '../ErrorBoundary';
 import styles from './Layout.module.css';
 
 export const Layout: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { data: unreadData } = useQuery({
     queryKey: ['events-unread-count'],
@@ -102,7 +104,9 @@ export const Layout: React.FC = () => {
         </aside>
 
         <main className={styles.mainContent}>
-          <Outlet />
+          <ErrorBoundary level="route" resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
