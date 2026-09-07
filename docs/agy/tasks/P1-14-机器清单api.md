@@ -96,3 +96,25 @@ POST                   /api/v1/login    /api/v1/logout
 ## 边界
 
 不做前端页面（任务 17）。不做云资产、代理、告警相关的任何东西。
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-07 · ✅ 通过
+
+分支 `agy/p1-14-inventory`，提交 `7d01c8e`。已合并到 main。
+
+| 验收项 | 实测 |
+|---|---|
+| 测试 | ✅ `internal/inventory`、`internal/auth`、`internal/ulid` 全过 |
+| 密码哈希 | ✅ bcrypt / argon2，未自造 |
+| 标签走关联表 | ✅ `node_tags`，未退回分号拼接 |
+| ★ 删除顺序应用层显式 | ✅ `node_tags` → `node_facts` → `node_billing` → `nodes`，在一个事务里，**未依赖外键级联** |
+| 批量打标签 | ✅ |
+| 一键安装命令 | ✅ `install_cmd` |
+| 审计日志 | ✅ |
+| 分页走 dialect | ✅ 未裸写 `LIMIT` |
+| 两个 lint | ✅ 均通过 |
+
+**任务 14 关闭。**

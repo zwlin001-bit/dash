@@ -95,3 +95,26 @@ DELETE FROM sample_host WHERE ts_ms >= ? AND ts_ms < ?
 ## 边界
 
 不碰上报链路，不碰查询 API。
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-07 · ✅ 通过
+
+分支 `agy/p1-12-rollup`，提交 `720adec`。已合并到 main。
+
+| 验收项 | 实测 |
+|---|---|
+| 测试 | ✅ `internal/ingest` 通过 |
+| ★ 加权平均 | ✅ `SUM(val_avg * sample_cnt) / SUM(CASE WHEN val_avg IS NOT NULL THEN sample_cnt ELSE 0 END)`，**分母做了 NULL 安全处理，且除零返回 NULL** |
+| 幂等（先 DELETE 再 INSERT） | ✅ `DELETE FROM sample_host_1m WHERE bucket_ms >= ? AND bucket_ms < ?` |
+| `FLOOR()` 分桶 | ✅ 8 处 |
+| 可移植 SQL | ✅ `lint-sql.sh` 通过，清理未用 `LIMIT` |
+| 调度器 | ✅ `scheduler.go` 已交付 |
+
+### 待环境补验
+
+「灌 3 天模拟数据抽查 `_1m` 与 raw 直算一致」需要有数据的库，等任务 11 落库跑起来后补。
+
+**任务 12 关闭。**
