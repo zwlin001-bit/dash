@@ -10,6 +10,10 @@
 **基址**：控制台 `/api/v1`，Agent `/api/agent/v1`
 
 **认证**
+- ★ **控制台 API 默认全部需要登录，免鉴权的是显式白名单**（见下）。
+  未登录一律 401，**不要重定向**
+- 免鉴权白名单：`POST /api/v1/login`、`/api/agent/v1/**`、`/healthz`、
+  `/install.sh`、`/dl/**`、前端静态资源与 SPA 路由
 - 控制台：登录后下发 `dash_session` Cookie（`HttpOnly` + `Secure` + `SameSite=Lax`）
 - Agent：`Authorization: Bearer <agent_token>`
 - 未认证一律 `401`，**不要重定向**（前端自己处理跳转）
@@ -117,7 +121,12 @@ WS 不可用时用它。**请求体是一批 JSON-RPC notification 的数组**�
 | POST | `/api/v1/nodes/tags:batch` | `{"node_ids":[…],"tag_ids":[…],"op":"add"\|"remove"}` **批量打标签** |
 | POST | `/api/v1/nodes/{id}/token:revoke` | 吊销 agent token |
 
-列表项返回（总览页用，**一次请求拿齐，不要前端 N+1**）：
+★ **可选字段：下列字段在无数据时会被后端 `omitempty` 省略，前端必须按「可能不存在」处理**——
+`group`（未分组）、`billing`（未配置计费）、`latest`（从未上报或离线）、
+`latest` 内的各指标（采集失败时单项省略）、`clock_skew_ms`（未测得）、`facts`（未上报 facts）。
+**不要用 `|| 0` 掩盖缺失**：监控界面上 `0%` 和「没数据」是两回事。
+
+列表项返回（总览页用，**一次请求拿齐，不要前端 N+1**；下例是字段齐全的情况）：
 
 ```jsonc
 {"id":"01J…","name":"hk-01","conn_state":"online","last_seen_at_ms":…,
