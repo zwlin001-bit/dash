@@ -12,8 +12,11 @@ master.key
 *.exe
 
 # 依赖
-/node_modules/
+# ★ 不加前导斜杠：/node_modules/ 只匹配仓库根目录，
+#   会漏掉 web/node_modules/（曾导致 4706 个文件被误提交）
+node_modules/
 /web/dist/
+# 注意：internal/api/dist 是 go:embed 的前端产物，必须入库，不要加 dist/ 通配规则
 __pycache__/
 *.pyc
 /providers/*/venv/
