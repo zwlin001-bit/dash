@@ -1,7 +1,9 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--sp-4);
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .header {
@@ -9,46 +11,411 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--sp-3);
+}
+
+.titleArea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
 }
 
 .title {
   font-size: 20px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-main);
+  margin: 0;
 }
 
 .subtitle {
   font-size: 13px;
-  color: var(--text-muted);
-  margin-top: 4px;
+  color: var(--text-dim);
+  margin: 0;
 }
 
-.toolbar {
+.tabs {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--border-main);
+  padding-bottom: var(--sp-2);
+  flex-wrap: wrap;
 }
 
-.searchInput {
-  padding: 7px 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
+.tabBtn {
+  background: transparent;
+  border: none;
+  padding: var(--sp-2) var(--sp-4);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+}
+
+.tabBtn:hover {
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+}
+
+.tabBtnActive {
+  color: var(--accent);
+  background-color: var(--bg-card);
+  font-weight: 600;
+  box-shadow: var(--card-shadow);
+}
+
+.filterCard {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: center;
+  box-shadow: var(--card-shadow);
+}
+
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.label {
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.select,
+.input {
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-main);
+  color: var(--text-main);
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
   font-size: 13px;
   outline: none;
-  min-width: 220px;
-  transition: border-color var(--transition-fast);
+  transition: border-color 0.15s ease;
 }
 
-.searchInput:focus {
-  border-color: var(--border-focus);
+.select:focus,
+.input:focus {
+  border-color: var(--accent);
+}
+
+.tableCard {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.table th {
+  background-color: var(--bg-card-sub);
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-main);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-dim);
+  color: var(--text-main);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover td {
+  background-color: var(--bg-hover);
+}
+
+.rowOffline {
+  opacity: 0.75;
+}
+
+.batchBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--accent-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: var(--sp-2) var(--sp-4);
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.batchInfo {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.batchActions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
 .emptyState {
   text-align: center;
-  padding: 48px;
-  color: var(--text-muted);
-  font-size: 14px;
+  padding: var(--sp-6);
+  color: var(--text-dim);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-main);
+}
+
+.notice {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background-color: var(--ok-bg);
+  color: var(--ok);
+  border: 1px solid var(--ok-border);
+}
+
+.errorBanner {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background-color: var(--err-bg);
+  color: var(--err);
+  border: 1px solid var(--err-border);
+}
+
+/* 弹窗遮罩与卡片 */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--sp-3);
+}
+
+.modalContent {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--modal-shadow);
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.modalTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.modalCloseBtn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+
+.modalCloseBtn:hover {
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+}
+
+.modalBody {
+  padding: var(--sp-4);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border-dim);
+  background-color: var(--bg-card-sub);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.formGroupFull {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-mute);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.tagSelector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-sm);
+  min-height: 42px;
+}
+
+.tagChoice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border-light);
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.tagChoiceSelected {
+  border-color: var(--accent);
+  background-color: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.warningBox {
+  background-color: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dangerBox {
+  background-color: var(--err-bg);
+  border: 1px solid var(--err-border);
+  color: var(--err);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.installCodeBox {
+  display: flex;
+  align-items: stretch;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.installCmd {
+  flex: 1;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ok);
+  overflow-x: auto;
+  white-space: nowrap;
+  user-select: all;
+}
+
+.copyBtn {
+  background-color: var(--bg-card-sub);
+  border: none;
+  border-left: 1px solid var(--border-main);
+  color: var(--text-main);
+  padding: 0 var(--sp-3);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.copyBtn:hover {
+  background-color: var(--bg-hover);
+  color: var(--accent);
+}
+
+.colorDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
 }

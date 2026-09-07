@@ -287,3 +287,50 @@ func TestAuthFullFlowWithDB(t *testing.T) {
 	}
 }
 
+func TestChangePassword(t *testing.T) {
+	d := getTestDB(t)
+	defer d.Close()
+
+	svc := NewService(d)
+	ctx := context.Background()
+
+	username := "pwduser_" + ulid.New()[:8]
+	oldPwd := "InitialPassword123"
+	newPwd := "UpdatedSecret456"
+
+	user, err := svc.CreateUser(ctx, username, oldPwd, false)
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// 1. Wrong old password
+	err = svc.ChangePassword(ctx, user.ID, "WrongPassword", newPwd, "127.0.0.1")
+	if err == nil || err.Error() != "bad_old_password" {
+		t.Fatalf("expected bad_old_password, got: %v", err)
+	}
+
+	// 2. Short new password
+	err = svc.ChangePassword(ctx, user.ID, oldPwd, "123", "127.0.0.1")
+	if err == nil || err.Error() != "password_too_short" {
+		t.Fatalf("expected password_too_short, got: %v", err)
+	}
+
+	// 3. Successful change
+	err = svc.ChangePassword(ctx, user.ID, oldPwd, newPwd, "127.0.0.1")
+	if err != nil {
+		t.Fatalf("ChangePassword failed: %v", err)
+	}
+
+	// 4. Verify login with new password succeeds and old password fails
+	_, _, err = svc.Login(ctx, username, oldPwd, "test-agent", "127.0.0.1")
+	if err == nil {
+		t.Fatal("expected login with old password to fail")
+	}
+
+	_, _, err = svc.Login(ctx, username, newPwd, "test-agent", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("login with new password failed: %v", err)
+	}
+}
+
+

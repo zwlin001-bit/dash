@@ -375,6 +375,52 @@ WHERE s.token_hash = ?`
 	return &u, nil
 }
 
+// ChangePassword 修改用户密码，验证旧密码并更新为新密码哈希。
+func (s *Service) ChangePassword(ctx context.Context, userID, oldPassword, newPassword, ip string) error {
+	if strings.TrimSpace(oldPassword) == "" || strings.TrimSpace(newPassword) == "" {
+		return errors.New("empty_password")
+	}
+	if len(newPassword) < 6 {
+		return errors.New("password_too_short")
+	}
+
+	var passwdHash string
+	err := s.db.QueryRow(ctx, `SELECT passwd_hash FROM account_users WHERE id = ?`, userID).Scan(&passwdHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return db.ErrNotFound
+		}
+		return err
+	}
+
+	if !CheckPassword(oldPassword, passwdHash) {
+		return errors.New("bad_old_password")
+	}
+
+	newHash, err := HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	now := time.Now().UnixMilli()
+	_, err = s.db.Exec(ctx, `UPDATE account_users SET passwd_hash = ?, updated_at_ms = ? WHERE id = ?`, newHash, now, userID)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+
+	_ = audit.Log(ctx, s.db, audit.Entry{
+		ActorKind:  "user",
+		ActorID:    userID,
+		Action:     "auth.change_password",
+		TargetKind: "user",
+		TargetID:   userID,
+		Result:     "ok",
+		IP:         ip,
+	})
+
+	return nil
+}
+
 func generateSessionToken() (plainToken string, tokenHash string, err error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -477,6 +523,7 @@ func (m *AuthModule) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/login", m.HandleLogin)
 	mux.HandleFunc("POST /api/v1/logout", m.HandleLogout)
 	mux.HandleFunc("GET /api/v1/me", m.HandleMe)
+	mux.HandleFunc("POST /api/v1/me/password", m.HandleChangePassword)
 }
 
 // AuthMiddleware 负责解析会话令牌并将 User 注入上下文。
@@ -615,3 +662,50 @@ func (m *AuthModule) HandleMe(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 }
+
+type changePasswordReq struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
+func (m *AuthModule) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
+	u := UserFromContext(r.Context())
+	if u == nil {
+		token := ExtractSessionToken(r)
+		if token != "" && m.service != nil {
+			u, _ = m.service.AuthenticateToken(r.Context(), token)
+		}
+	}
+	if u == nil {
+		JSONError(w, http.StatusUnauthorized, "unauthorized", "未登录或会话已过期", nil)
+		return
+	}
+
+	var req changePasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		JSONError(w, http.StatusBadRequest, "invalid_param", "请求体解析失败", nil)
+		return
+	}
+
+	ip := ClientIP(r)
+	err := m.service.ChangePassword(r.Context(), u.ID, req.OldPassword, req.NewPassword, ip)
+	if err != nil {
+		if err.Error() == "bad_old_password" {
+			JSONError(w, http.StatusBadRequest, "invalid_param", "旧密码错误", "old_password")
+			return
+		}
+		if err.Error() == "password_too_short" {
+			JSONError(w, http.StatusBadRequest, "invalid_param", "新密码长度不能少于 6 位", "new_password")
+			return
+		}
+		if err.Error() == "empty_password" {
+			JSONError(w, http.StatusBadRequest, "invalid_param", "密码不能为空", nil)
+			return
+		}
+		JSONError(w, http.StatusInternalServerError, "server_error", "修改密码失败", nil)
+		return
+	}
+
+	JSONSuccess(w, http.StatusOK, map[string]any{"ok": true})
+}
+

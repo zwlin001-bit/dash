@@ -33,6 +33,7 @@ func (m *ControlModule) Register(a *app.App) error {
 	}
 
 	m.Registry = NewRegistry(a.DB, nil)
+	a.Registry = m.Registry
 	if a.DB != nil {
 		m.Registry.Start(context.Background())
 		wsH := NewWSHandler(a.DB, m.Registry, a.Config)

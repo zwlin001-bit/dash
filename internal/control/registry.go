@@ -283,6 +283,35 @@ func (r *Registry) PopFallbackCommands(nodeID string) []*protocol.Request {
 	return cmds
 }
 
+// BroadcastServerConfig 向所有当前在线的长连接 Agent 下发 server.config 通知。
+func (r *Registry) BroadcastServerConfig(params *protocol.ServerConfigParams) error {
+	if r == nil || params == nil {
+		return nil
+	}
+	payload, err := json.Marshal(params)
+	if err != nil {
+		return fmt.Errorf("marshal server.config params: %w", err)
+	}
+
+	req := &protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion,
+		Method:  protocol.MethodServerConfig,
+		Params:  payload,
+	}
+
+	r.mu.RLock()
+	sessions := make([]*Session, 0, len(r.sessions))
+	for _, sess := range r.sessions {
+		sessions = append(sessions, sess)
+	}
+	r.mu.RUnlock()
+
+	for _, sess := range sessions {
+		_ = sess.SendRequest(req)
+	}
+	return nil
+}
+
 // Start 启动后台保活与离线超时扫描任务（每 15 秒检查一次）。
 func (r *Registry) Start(ctx context.Context) {
 	r.wg.Add(1)

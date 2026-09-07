@@ -38,12 +38,21 @@ export async function getMe(): Promise<UserMe> {
   }
 }
 
+export async function changePassword(data: { old_password: string; new_password: string }): Promise<{ ok: boolean }> {
+  return await apiFetch<{ ok: boolean }>('/api/v1/me/password', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export const authService = {
   login,
   logout,
   getMe,
+  changePassword,
   isAuthenticated: () => {
     return localStorage.getItem('dash_mock_auth') === '1';
   },
 };
+
 
