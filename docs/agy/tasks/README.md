@@ -45,6 +45,7 @@
 | 18 | [Agent 安装脚本](P1-18-agent安装脚本.md) | 09, 14 | `scripts/install-agent.sh` |
 | 19 | [setup.sh 一键部署](P1-19-一键部署.md) | 04, 15 | `setup.sh` |
 | 20 | [事件总线骨架](P1-20-事件总线骨架.md) | 04 | `internal/events` + 迁移 0002 |
+| 21 | [dashd 主程序装配](P1-21-dashd主程序装配.md) | 10,11,13,14,20 | `cmd/dashd` serve 模式 ★拆分遗漏，补 |
 
 ## 并行执行
 

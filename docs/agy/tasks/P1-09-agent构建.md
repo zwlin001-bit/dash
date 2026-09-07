@@ -47,3 +47,26 @@ CGO_ENABLED=0 GOOS=linux GOARCH=<arch> go build -trimpath \
 ## 边界
 
 只做构建和验证，不做安装脚本。
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-07 · ✅ 通过
+
+分支 `agy/p1-09-build-matrix`，提交 `62e0ab0`。已合并到 main。
+
+| 验收项 | 实测 |
+|---|---|
+| 三架构构建 | ✅ amd64 **5.23 MB** / arm64 **5.00 MB** / armv7 **5.06 MB**，均 ≤6 MB |
+| `CGO_ENABLED=0` 静态 | ✅ `ldd` 输出「不是动态可执行文件」 |
+| `sha256sums.txt` | ✅ 三份校验和已生成 |
+| 额外交付 | ✅ `scripts/verify-agent-matrix.sh`、`scripts/mock-server.go`（超出任务书要求，有价值） |
+| 构建优化 | ✅ 加了 `-tags nethttpomithttp2` 进一步瘦身 |
+
+### 待环境补验
+
+Alpine / Debian / Ubuntu 三容器实跑 `--version` —— **本机无 docker**。
+`verify-agent-matrix.sh` 已交付，有 docker 的机器上跑一次即可。
+
+**任务 09 关闭。**
