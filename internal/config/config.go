@@ -11,6 +11,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"dash/internal/db"
 	"dash/internal/logx"
 )
 
@@ -19,13 +20,13 @@ const DefaultConfigPath = "/etc/dash/config.toml"
 
 // DBConfig 数据库自举配置
 type DBConfig struct {
-	Driver           string `toml:"driver" json:"driver"`                       // "oracle" | "mysql"
-	User             string `toml:"user" json:"user"`                           // 数据库用户名
-	Password         string `toml:"password" json:"password" redact:"true"`     // 支持 ${DASH_DB_PASSWORD} 占位
-	DSN              string `toml:"dsn" json:"dsn"`                             // 连接串
-	WalletPath       string `toml:"wallet_path" json:"wallet_path"`             // ADB wallet 目录
-	MaxOpenConns     int    `toml:"max_open_conns" json:"max_open_conns"`       // 默认 20
-	MaxIdleConns     int    `toml:"max_idle_conns" json:"max_idle_conns"`       // 默认 10
+	Driver           string `toml:"driver" json:"driver"`                           // "oracle" | "mysql"
+	User             string `toml:"user" json:"user"`                               // 数据库用户名
+	Password         string `toml:"password" json:"password" redact:"true"`         // 支持 ${DASH_DB_PASSWORD} 占位
+	DSN              string `toml:"dsn" json:"dsn"`                                 // 连接串
+	WalletPath       string `toml:"wallet_path" json:"wallet_path"`                 // ADB wallet 目录
+	MaxOpenConns     int    `toml:"max_open_conns" json:"max_open_conns"`           // 默认 20
+	MaxIdleConns     int    `toml:"max_idle_conns" json:"max_idle_conns"`           // 默认 10
 	ConnMaxLifetimeS int    `toml:"conn_max_lifetime_s" json:"conn_max_lifetime_s"` // 默认 1800
 }
 
@@ -358,4 +359,19 @@ func LoadWithOptions(opts Options) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// DBOptions 把自举配置转换成 internal/db 的连接参数。
+// 两者字段同构但分属不同层：config 面向配置文件，db.Config 面向连接层。
+func (c *DBConfig) DBOptions() db.Config {
+	return db.Config{
+		Driver:           c.Driver,
+		User:             c.User,
+		Password:         c.Password,
+		DSN:              c.DSN,
+		WalletPath:       c.WalletPath,
+		MaxOpenConns:     c.MaxOpenConns,
+		MaxIdleConns:     c.MaxIdleConns,
+		ConnMaxLifetimeS: c.ConnMaxLifetimeS,
+	}
 }

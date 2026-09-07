@@ -1,13 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"dash/internal/api"
 	"dash/internal/app"
+	"dash/internal/config"
+	"dash/internal/db"
+	"dash/internal/logx"
+	"dash/internal/migrate"
 )
 
 var (
@@ -29,7 +35,6 @@ var modules = []Module{
 	api.NewModule(),
 }
 
-
 // RegisterModules 按序执行各模块的注册逻辑。
 func RegisterModules(app *App, mods []Module) error {
 	for _, m := range mods {
@@ -40,7 +45,62 @@ func RegisterModules(app *App, mods []Module) error {
 	return nil
 }
 
+func runMigrate(args []string) {
+	fs := flag.NewFlagSet("migrate", flag.ExitOnError)
+	configPath := fs.String("config", "/etc/dash/config.toml", "path to config.toml")
+	migDir := fs.String("dir", "migrations", "path to migrations directory")
+	driverFlag := fs.String("driver", "", "override db driver (oracle | mysql)")
+	dsnFlag := fs.String("dsn", "", "override db dsn")
+	userFlag := fs.String("user", "", "override db user")
+	passFlag := fs.String("password", "", "override db password")
+
+	_ = fs.Parse(args)
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *driverFlag != "" {
+		cfg.DB.Driver = *driverFlag
+	}
+	if *dsnFlag != "" {
+		cfg.DB.DSN = *dsnFlag
+	}
+	if *userFlag != "" {
+		cfg.DB.User = *userFlag
+	}
+	if *passFlag != "" {
+		cfg.DB.Password = *passFlag
+	}
+
+	dbCfg := cfg.DB.DBOptions()
+	database, err := db.Open(&dbCfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect to database: %s\n", logx.Redact(err.Error()))
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	migrator := migrate.New(database, *migDir)
+	if err := migrator.Up(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Database schema migration completed successfully.")
+}
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		runMigrate(os.Args[2:])
+		return
+	}
+
 	var showVersion bool
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.BoolVar(&showVersion, "v", false, "print version and exit")

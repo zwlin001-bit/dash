@@ -6,12 +6,14 @@
 
 - 服务端主二进制入口程序。
 - 负责整体运行环境初始化、命令行参数解析（支持 `-v`, `--version`）。
+- 提供 `dashd migrate` 数据库迁移子命令。
 - 集中装配各个子业务模块（基于 `Module` 契约列表与 `App` 容器）。
 - 作为单个静态二进制产物编译输出至 `bin/dashd`。
 
 ## 对外接口
 
-- `App`：服务端核心组件容器结构体。
+- `dashd migrate [-config path] [-dir migrations]`: 执行数据库 Schema 迁移。
+- `App`：服务端核心组件容器结构体（包含 `DB` 与 `Config` 实例）。
 - `Module`：模块注册契约接口（`Name() string`, `Register(*App) error`）。
 - `modules`：全局模块装配切片（后续任务按需追加一行）。
 - `RegisterModules(app *App, mods []Module) error`：装配执行逻辑。
@@ -20,3 +22,6 @@
 
 - 标准库。
 - 装配列表中的各服务端内部模块（`internal/*`）。
+- `dash/internal/config`
+- `dash/internal/db`
+- `dash/internal/migrate`
