@@ -82,18 +82,31 @@ export interface NodeTag {
   id: string;
   name: string;
   color?: string;
+  created_at_ms?: number;
+  node_count?: number;
 }
 
 // 节点分组
 export interface NodeGroup {
   id: string;
   name: string;
+  display_order?: number;
+  created_at_ms?: number;
+  node_count?: number;
 }
 
 // 节点计费信息
 export interface NodeBilling {
+  node_id?: string;
+  currency?: string;
+  price?: number;
+  cycle_days?: number;
+  is_auto_renew?: boolean;
   expires_at_ms?: number;
   traffic_limit?: number;
+  traffic_limit_kind?: string;
+  traffic_reset_day?: number;
+  updated_at_ms?: number;
 }
 
 // 节点硬件事实（node_facts，08-field-map.md §3）
@@ -118,18 +131,121 @@ export interface NodeFacts {
 export interface NodeItem {
   id: string;
   name: string;
+  node_group_id?: string;
+  display_order?: number;
+  is_hidden?: boolean;
+  agent_version?: string;
   conn_state: 'online' | 'offline' | 'never';
-  last_seen_at_ms: number;
+  last_seen_at_ms?: number;
+  clock_skew_ms?: number;
+  note?: string;
+  created_at_ms?: number;
+  updated_at_ms?: number;
   group?: NodeGroup;
   tags?: NodeTag[];
   latest?: NodeLatest;
   billing?: NodeBilling;
-  clock_skew_ms?: number;
+  facts?: NodeFacts;
 }
 
 // 节点详情
 export interface NodeDetail extends NodeItem {
   facts?: NodeFacts;
+}
+
+// 分页通用结构
+export interface PageResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// 节点 CRUD 请求参数
+export interface CreateNodeParams {
+  name: string;
+  node_group_id?: string;
+  display_order?: number;
+  is_hidden?: boolean;
+  note?: string;
+}
+
+export interface UpdateNodeParams {
+  name?: string;
+  node_group_id?: string | null;
+  display_order?: number;
+  is_hidden?: boolean;
+  note?: string;
+}
+
+// 分组 CRUD 请求参数
+export interface CreateGroupParams {
+  name: string;
+  display_order?: number;
+}
+
+export interface UpdateGroupParams {
+  name?: string;
+  display_order?: number;
+}
+
+// 标签 CRUD 请求参数
+export interface CreateTagParams {
+  name: string;
+  color?: string;
+}
+
+export interface UpdateTagParams {
+  name?: string;
+  color?: string;
+}
+
+// 批量打标签参数
+export interface BatchTagParams {
+  node_ids: string[];
+  tag_ids: string[];
+  op: 'add' | 'remove';
+}
+
+// 注册令牌
+export interface EnrollToken {
+  id: string;
+  preset_name?: string;
+  preset_group_id?: string;
+  expires_at_ms: number;
+  used_at_ms?: number;
+  used_node_id?: string;
+  created_by?: string;
+  created_at_ms: number;
+  is_expired?: boolean;
+  is_used?: boolean;
+  install_cmd?: string;
+  token?: string;
+}
+
+export interface CreateEnrollTokenParams {
+  preset_name?: string;
+  preset_group_id?: string;
+  ttl_hours?: number;
+}
+
+export interface CreateEnrollTokenResponse {
+  id: string;
+  token: string;
+  expires_at_ms: number;
+  install_cmd: string;
+}
+
+// 计费更新参数
+export interface UpdateBillingParams {
+  currency?: string;
+  price?: number;
+  cycle_days?: number;
+  is_auto_renew?: boolean;
+  expires_at_ms?: number;
+  traffic_limit?: number;
+  traffic_limit_kind?: string;
+  traffic_reset_day?: number;
 }
 
 // 系统设置

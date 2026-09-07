@@ -12,7 +12,8 @@ import (
 type App struct {
 	Mux    *http.ServeMux
 	DB     *db.DB
-	Config *config.Config
+	Config   *config.Config
+	Registry any // 供 control / settings 等模块共享的长连接注册表
 	// 后续任务按需扩充字段
 }
 

@@ -13,11 +13,13 @@ import (
 	"dash/internal/app"
 	"dash/internal/auth"
 	"dash/internal/config"
+	"dash/internal/control"
 	"dash/internal/db"
 	"dash/internal/events"
 	"dash/internal/inventory"
 	"dash/internal/logx"
 	"dash/internal/migrate"
+	"dash/internal/settings"
 )
 
 var (
@@ -37,9 +39,11 @@ type Module = app.Module
 // 约束：后续任务只允许向此列表追加模块，不改动装配与启动逻辑。
 var modules = []Module{
 	auth.NewModule(),
+	control.NewModule(),
 	inventory.NewModule(),
 	metrics.NewModule(),
 	events.NewModule(),
+	settings.NewModule(),
 	api.NewModule(), // ★ 必须最后：它挂 "/" 作为 SPA 兜底路由
 }
 

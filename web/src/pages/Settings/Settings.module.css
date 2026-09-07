@@ -1,71 +1,76 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--sp-4);
   max-width: 900px;
+  margin: 0 auto;
 }
 
 .header {
-  margin-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
 }
 
 .title {
   font-size: 20px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-main);
+  margin: 0;
 }
 
 .subtitle {
   font-size: 13px;
-  color: var(--text-muted);
-  margin-top: 4px;
+  color: var(--text-dim);
+  margin: 0;
 }
 
 .section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--sp-4);
 }
 
 .sectionTitle {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-default);
-  padding-bottom: 8px;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: var(--sp-2);
+  margin-bottom: var(--sp-3);
 }
 
 .formGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  gap: var(--sp-3);
 }
 
 .formGroup {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-1);
 }
 
 .label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-dim);
 }
 
 .input {
   padding: 8px 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
+  background: var(--bg-app);
+  border: 1px solid var(--border-main);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--text-main);
   font-size: 13px;
   outline: none;
-  transition: border-color var(--transition-fast);
+  transition: border-color 0.15s ease;
 }
 
 .input:focus {
-  border-color: var(--border-focus);
+  border-color: var(--accent);
 }
 
 .input:disabled {
@@ -76,12 +81,41 @@
 
 .hint {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-mute);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+  margin-top: 4px;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 12px;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  align-items: center;
+}
+
+.notice {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background-color: var(--ok-bg);
+  color: var(--ok);
+  border: 1px solid var(--ok-border);
+}
+
+.errorBanner {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background-color: var(--err-bg);
+  color: var(--err);
+  border: 1px solid var(--err-border);
 }
