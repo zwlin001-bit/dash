@@ -17,6 +17,8 @@ internal/api/metrics/
   README.md
 ```
 
+★ **开工前先读 [`../../08-field-map.md`](../../08-field-map.md)**，字段名、单位、聚合方式全部以它为准。
+
 ## 约束
 
 - **按时间跨度自动选表**：
