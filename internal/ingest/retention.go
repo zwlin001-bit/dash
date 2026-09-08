@@ -32,6 +32,7 @@ var DefaultRetentionTargets = []TableRetentionTarget{
 	{TableName: "sample_dim_1d", TimeCol: "bucket_ms", SettingKey: "retention.1d_days", DefaultDays: 0},
 	{TableName: "events", TimeCol: "occurred_at_ms", SettingKey: "retention.events_days", DefaultDays: 90},
 	{TableName: "audit_log", TimeCol: "created_at_ms", SettingKey: "retention.audit_days", DefaultDays: 365},
+	{TableName: "cloud_samples", TimeCol: "ts_ms", SettingKey: "retention.cloud_metrics_days", DefaultDays: 90},
 }
 
 // RetentionService manages data retention cleanup.

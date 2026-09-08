@@ -11,13 +11,19 @@ export interface MetricSeriesConfig {
 }
 
 export interface TimeSeriesChartProps {
-  data?: MetricsQueryResponse;
+  data?: MetricsQueryResponse | any;
   span?: TimeSeriesSpan;
   onSpanChange?: (span: TimeSeriesSpan) => void;
   title?: string;
   metrics?: (string | MetricSeriesConfig)[]; // 要展示的指标字段列表（支持多指标叠加）
   height?: number | string;
   loading?: boolean;
+  threshold?: {
+    value: number;
+    label?: string;
+    color?: string;
+  };
+  sourceBadge?: string;
 }
 
 // 默认系列色变量名称顺序（docs/13-ui-spec.md §7）
@@ -49,6 +55,7 @@ const METRIC_META: Record<string, { name: string; unit: string }> = {
   tcp_count: { name: 'TCP 连接数', unit: '' },
   udp_count: { name: 'UDP 连接数', unit: '' },
   uptime_s: { name: '运行时间', unit: 's' },
+  traffic_month_up: { name: '月度 CDT 出网流量', unit: 'bytes' },
 };
 
 function formatValueWithUnit(val: number | null | undefined, unit: string): string {
@@ -87,6 +94,8 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   metrics,
   height = 320,
   loading = false,
+  threshold,
+  sourceBadge,
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<echarts.ECharts | null>(null);
@@ -151,6 +160,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
         textMute: '#55657a',
         bgCard: '#161d27',
         bgCardSub: '#1c2431',
+        colorErr: '#f85149',
       };
     }
     const stylesObj = getComputedStyle(document.documentElement);
@@ -163,6 +173,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       textMute: stylesObj.getPropertyValue('--text-mute').trim() || '#55657a',
       bgCard: stylesObj.getPropertyValue('--bg-card').trim() || '#161d27',
       bgCardSub: stylesObj.getPropertyValue('--bg-card-sub').trim() || '#1c2431',
+      colorErr: stylesObj.getPropertyValue('--err').trim() || '#f85149',
     };
   }, [themeVersion]);
 
@@ -202,9 +213,9 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       const seriesValues = (dataSeries && dataSeries[cfg.key]) || [];
 
       // 时间戳 (ms) 与值一一对应配对
-      const points: [number, number | null][] = ts_ms.map((t, i) => [t, seriesValues[i] ?? null]);
+      const points: [number, number | null][] = ts_ms.map((t: number, i: number) => [t, seriesValues[i] ?? null]);
 
-      return {
+      const seriesOpt: echarts.SeriesOption = {
         name: cfg.name,
         type: 'line',
         showSymbol: false,
@@ -229,6 +240,34 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
             : undefined,
         data: points,
       };
+
+      if (idx === 0 && threshold) {
+        const threshColor = threshold.color || themeColors.colorErr;
+        (seriesOpt as any).markLine = {
+          symbol: 'none',
+          silent: false,
+          data: [
+            {
+              yAxis: threshold.value,
+              lineStyle: {
+                color: threshColor,
+                type: 'dashed',
+                width: 1.5,
+              },
+              label: {
+                show: true,
+                position: 'insideEndTop',
+                formatter: threshold.label || `阈值: ${formatValueWithUnit(threshold.value, cfg.unit || '')}`,
+                color: threshColor,
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+              },
+            },
+          ],
+        };
+      }
+
+      return seriesOpt;
     });
 
     const option: echarts.EChartsOption = {
@@ -348,14 +387,15 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
     };
 
     chart.setOption(option, { notMerge: true });
-  }, [data, seriesConfigs, themeColors, span]);
+  }, [data, seriesConfigs, themeColors, span, threshold]);
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.titleArea}>
           {title && <span className={styles.title}>{title}</span>}
-          {data?.source && (
+          {sourceBadge && <span className={styles.sourceBadge}>{sourceBadge}</span>}
+          {!sourceBadge && data?.source && (
             <span className={styles.sourceBadge}>
               表: {data.source}
               {data.ts_ms ? ` (${data.ts_ms.length} 采样点)` : ''}

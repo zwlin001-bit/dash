@@ -187,6 +187,19 @@ func handleRequest(ctx context.Context, conn net.Conn, req provider.Request, p *
 		}
 		sendResult(conn, req.ID, res)
 
+	case "metric.list":
+		var params provider.MetricListParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			sendError(conn, req.ID, -32602, "Invalid params: "+err.Error())
+			return
+		}
+		res, err := p.ListMetrics(ctx, params)
+		if err != nil {
+			sendError(conn, req.ID, -32000, err.Error())
+			return
+		}
+		sendResult(conn, req.ID, res)
+
 	default:
 		sendError(conn, req.ID, -32601, fmt.Sprintf("Method %s not found", req.Method))
 	}

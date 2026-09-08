@@ -81,6 +81,9 @@ func (m *mockProviderClient) Action(ctx context.Context, req provider.ActionPara
 func (m *mockProviderClient) PollJob(ctx context.Context, jobHandle string) (*provider.PollJobResponse, error) {
 	return &provider.PollJobResponse{JobHandle: jobHandle, Status: "succeeded"}, nil
 }
+func (m *mockProviderClient) ListMetrics(ctx context.Context, params provider.MetricListParams) (*provider.MetricListResult, error) {
+	return &provider.MetricListResult{}, nil
+}
 func (m *mockProviderClient) Close() error { return nil }
 
 func TestGuardHTTPAPI(t *testing.T) {

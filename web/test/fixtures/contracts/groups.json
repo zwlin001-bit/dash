@@ -1,16 +1,15 @@
 {
   "items": [
     {
-      "id": "01M1ZPX768H805GD1DXPM21MMA",
-      "name": "grp-01M1ZPX77QTFHYDA2SF9HMHW49",
+      "created_at_ms": 1757222400000,
       "display_order": 10,
-      "created_at_ms": 1788844350664,
-      "updated_at_ms": 1788844350664,
-      "node_count": 1
+      "id": "01M1ZA80A53NBT8REFQXVA3H8F",
+      "name": "grp-01M1ZA",
+      "node_count": 2,
+      "updated_at_ms": 1757222400000
     }
   ],
-  "total": 1,
   "page": 1,
-  "page_size": 50
+  "page_size": 50,
+  "total": 1
 }
-

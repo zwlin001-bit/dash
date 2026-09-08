@@ -107,6 +107,10 @@ func (m *mockProviderClient) PollJob(ctx context.Context, jobHandle string) (*pr
 	return &provider.PollJobResponse{JobHandle: jobHandle, Status: "succeeded"}, nil
 }
 
+func (m *mockProviderClient) ListMetrics(ctx context.Context, params provider.MetricListParams) (*provider.MetricListResult, error) {
+	return &provider.MetricListResult{}, nil
+}
+
 func (m *mockProviderClient) Close() error {
 	return nil
 }

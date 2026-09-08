@@ -11,11 +11,208 @@ import {
   fetchCloudResources,
   actionCloudResource,
   discoverCloudResources,
+  fetchCloudResourceMetrics,
+  triggerCloudMetricSync,
   CloudAccount,
   CloudResource,
   DiscoveredResource,
 } from '../../api/cloud';
+import { TimeSeriesChart } from '../../components/TimeSeriesChart/TimeSeriesChart';
+import { getMetrics } from '../../api/metrics';
+import { TimeSeriesSpan } from '../../api/types';
 import styles from './Cloud.module.css';
+
+interface ResourceMetricsModalProps {
+  resource: CloudResource;
+  onClose: () => void;
+}
+
+const getSpanDuration = (s: TimeSeriesSpan) => {
+  switch (s) {
+    case '6h':
+      return 6 * 3600 * 1000;
+    case '3d':
+      return 3 * 86400 * 1000;
+    case '60d':
+      return 60 * 86400 * 1000;
+    case '1y':
+      return 365 * 86400 * 1000;
+  }
+};
+
+export const ResourceMetricsModal: React.FC<ResourceMetricsModalProps> = ({ resource, onClose }) => {
+  const [span, setSpan] = useState<TimeSeriesSpan>('6h');
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // 云侧指标查询（5 分钟粒度，停机后仍保留历史数据）
+  const {
+    data: cloudData,
+    isLoading: isCloudLoading,
+    refetch: refetchCloud,
+  } = useQuery({
+    queryKey: ['cloud-resource-metrics', resource.id, span],
+    queryFn: () => fetchCloudResourceMetrics(resource.id, { span }),
+    refetchInterval: 30000,
+  });
+
+  // Agent 侧指标查询（5 秒粒度，需关联 Agent 节点）
+  const now = Date.now();
+  const {
+    data: agentData,
+    isLoading: isAgentLoading,
+  } = useQuery({
+    queryKey: ['node-metrics', resource.node_id, span],
+    queryFn: ({ signal }) => {
+      if (!resource.node_id) return null;
+      return getMetrics(
+        resource.node_id,
+        {
+          from_ms: now - getSpanDuration(span),
+          to_ms: now,
+          span,
+        },
+        signal
+      );
+    },
+    enabled: !!resource.node_id,
+    refetchInterval: 10000,
+  });
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      await triggerCloudMetricSync();
+      setTimeout(() => {
+        refetchCloud();
+        setIsSyncing(false);
+      }, 1500);
+    } catch (err: any) {
+      setIsSyncing(false);
+      alert('触发拉取失败: ' + (err?.message || '未知错误'));
+    }
+  };
+
+  const hasAgent = !!resource.node_id;
+
+  return (
+    <div className={styles.metricsModalBackdrop} onClick={onClose}>
+      <div className={styles.metricsModal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.metricsModalHeader}>
+          <div>
+            <div className={styles.metricsModalTitle}>
+              📊 {resource.name || resource.res_ref} 监控数据
+            </div>
+            <div className={styles.metricsModalSubtitle}>
+              {resource.res_ref} · 地域: {resource.region} · 状态: {resource.status}
+              {hasAgent ? ` · 关联节点: ${resource.node_id}` : ' · 未关联 Agent 节点'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              className="btn mini secondary"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+            >
+              {isSyncing ? '同步中...' : '🔄 触发云侧拉取'}
+            </button>
+            <button className="btn mini secondary" onClick={onClose}>
+              ✕ 关闭
+            </button>
+          </div>
+        </div>
+
+        {hasAgent ? (
+          <div className={styles.metricsSideBySide}>
+            {/* 云侧指标 */}
+            <div className={styles.metricsColumn}>
+              <div className={styles.metricsColumnHeader}>
+                <span>☁️ 云监控指标</span>
+                <span className={styles.sourceBadgeCloud}>云监控 · 5 分钟粒度</span>
+              </div>
+              <TimeSeriesChart
+                data={cloudData}
+                span={span}
+                onSpanChange={setSpan}
+                title="CPU 使用率"
+                sourceBadge="云监控 · 5 分钟粒度"
+                metrics={['cpu_pct']}
+                height={220}
+                loading={isCloudLoading}
+              />
+              <TimeSeriesChart
+                data={cloudData}
+                span={span}
+                onSpanChange={setSpan}
+                title="网络速率"
+                sourceBadge="云监控 · 5 分钟粒度"
+                metrics={['net_up_bps', 'net_down_bps']}
+                height={220}
+                loading={isCloudLoading}
+              />
+            </div>
+
+            {/* Agent 侧指标 */}
+            <div className={styles.metricsColumn}>
+              <div className={styles.metricsColumnHeader}>
+                <span>🖥️ Agent 实时监控</span>
+                <span className={styles.sourceBadgeAgent}>Agent · 5 秒粒度</span>
+              </div>
+              <TimeSeriesChart
+                data={agentData}
+                span={span}
+                onSpanChange={setSpan}
+                title="CPU 使用率"
+                sourceBadge="Agent · 5 秒粒度"
+                metrics={['cpu_pct']}
+                height={220}
+                loading={isAgentLoading}
+              />
+              <TimeSeriesChart
+                data={agentData}
+                span={span}
+                onSpanChange={setSpan}
+                title="网络速率"
+                sourceBadge="Agent · 5 秒粒度"
+                metrics={['net_up_bps', 'net_down_bps']}
+                height={220}
+                loading={isAgentLoading}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className={styles.metricsColumn}>
+            <div className={styles.metricsColumnHeader}>
+              <span>☁️ 云侧监控（当前实例未关联 Agent，停机后仍保留云监控采样历史）</span>
+              <span className={styles.sourceBadgeCloud}>云监控 · 5 分钟粒度</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <TimeSeriesChart
+                data={cloudData}
+                span={span}
+                onSpanChange={setSpan}
+                title="CPU 使用率"
+                sourceBadge="云监控 · 5 分钟粒度"
+                metrics={['cpu_pct']}
+                height={240}
+                loading={isCloudLoading}
+              />
+              <TimeSeriesChart
+                data={cloudData}
+                span={span}
+                onSpanChange={setSpan}
+                title="网络速率"
+                sourceBadge="云监控 · 5 分钟粒度"
+                metrics={['net_up_bps', 'net_down_bps']}
+                height={240}
+                loading={isCloudLoading}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const Cloud: React.FC = () => {
   const queryClient = useQueryClient();
@@ -30,6 +227,7 @@ export const Cloud: React.FC = () => {
   const [showAddCredModal, setShowAddCredModal] = useState<boolean>(false);
   const [showAddAccModal, setShowAddAccModal] = useState<boolean>(false);
   const [showDiscoverModal, setShowDiscoverModal] = useState<boolean>(false);
+  const [selectedResourceForMetrics, setSelectedResourceForMetrics] = useState<CloudResource | null>(null);
 
   // Forms
   const [newCredName, setNewCredName] = useState<string>('');
@@ -271,7 +469,13 @@ export const Cloud: React.FC = () => {
                   return (
                     <tr key={r.id}>
                       <td>
-                        <div style={{ fontWeight: 600 }}>{r.name || r.res_ref}</div>
+                        <div
+                          style={{ fontWeight: 600, cursor: 'pointer', color: 'var(--accent)' }}
+                          onClick={() => setSelectedResourceForMetrics(r)}
+                          title="点击查看监控数据"
+                        >
+                          {r.name || r.res_ref}
+                        </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{r.res_ref}</div>
                       </td>
                       <td>
@@ -308,21 +512,30 @@ export const Cloud: React.FC = () => {
                         )}
                       </td>
                       <td>
-                        {r.status === 'running' ? (
+                        <div style={{ display: 'flex', gap: '6px' }}>
                           <button
-                            className="btn mini danger"
-                            onClick={() => handleAction(r, 'stop')}
+                            className="btn mini secondary"
+                            onClick={() => setSelectedResourceForMetrics(r)}
+                            title="查看云侧与 Agent 监控图表"
                           >
-                            停止
+                            监控
                           </button>
-                        ) : (
-                          <button
-                            className="btn mini primary"
-                            onClick={() => handleAction(r, 'start')}
-                          >
-                            启动
-                          </button>
-                        )}
+                          {r.status === 'running' ? (
+                            <button
+                              className="btn mini danger"
+                              onClick={() => handleAction(r, 'stop')}
+                            >
+                              停止
+                            </button>
+                          ) : (
+                            <button
+                              className="btn mini primary"
+                              onClick={() => handleAction(r, 'start')}
+                            >
+                              启动
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -704,6 +917,14 @@ export const Cloud: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 资源监控详情模态窗（云侧与 Agent 侧并排但明确区分来源） */}
+      {selectedResourceForMetrics && (
+        <ResourceMetricsModal
+          resource={selectedResourceForMetrics}
+          onClose={() => setSelectedResourceForMetrics(null)}
+        />
       )}
     </div>
   );

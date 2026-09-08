@@ -1,20 +1,19 @@
 {
   "items": [
     {
-      "id": "01M1ZPX768WGBR7BS8CRXCM43N",
-      "event_type": "node.online",
-      "severity": "info",
-      "source_module": "inventory",
-      "target_kind": "node",
-      "target_id": "01M1ZPX7688RE3NW9PWJXBPA68",
-      "title": "Node Online",
+      "created_at_ms": 1757222400000,
+      "event_type": "node.offline",
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
       "is_read": false,
-      "occurred_at_ms": 1788844350664,
-      "created_at_ms": 1788844350664
+      "occurred_at_ms": 1757222400000,
+      "severity": "warning",
+      "source_module": "inventory",
+      "target_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "target_kind": "node",
+      "title": "Node Offline"
     }
   ],
   "limit": 50,
   "offset": 0,
   "total": 1
 }
-

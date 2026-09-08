@@ -14,7 +14,59 @@ import {
   EvaluateResult,
   RuleUpdateRequest,
 } from '../../api';
+import { TimeSeriesChart } from '../../components/TimeSeriesChart/TimeSeriesChart';
+import { Sparkline } from '../../components/Sparkline/Sparkline';
+import { fetchCloudAccountMetrics, fetchCloudResourceMetrics } from '../../api/cloud';
+import { TimeSeriesSpan } from '../../api/types';
 import styles from './CloudGuard.module.css';
+
+function formatBytes(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined || isNaN(bytes)) return '--';
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${Math.round(bytes)} B`;
+}
+
+function formatRate(bps: number | null | undefined): string {
+  if (bps === null || bps === undefined || isNaN(bps)) return '--';
+  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(2)} MB/s`;
+  if (bps >= 1024) return `${(bps / 1024).toFixed(1)} KB/s`;
+  return `${Math.round(bps)} B/s`;
+}
+
+const AccountCDTChart: React.FC<{ accountId: string; limitGB?: number }> = ({ accountId, limitGB }) => {
+  const [span, setSpan] = useState<TimeSeriesSpan>('60d');
+  const { data, isLoading } = useQuery({
+    queryKey: ['cloud-account-metrics', accountId, span],
+    queryFn: () => fetchCloudAccountMetrics(accountId, { span, metric: 'traffic_month_up' }),
+    refetchInterval: 60000,
+  });
+
+  const threshold =
+    limitGB && limitGB > 0
+      ? {
+          value: limitGB * 1024 * 1024 * 1024,
+          label: `关机阈值: ${limitGB} GB`,
+        }
+      : undefined;
+
+  return (
+    <div className={styles.cdtChartWrapper}>
+      <TimeSeriesChart
+        data={data}
+        span={span}
+        onSpanChange={setSpan}
+        title="CDT 流量月度曲线"
+        sourceBadge="云监控 · 5 分钟粒度"
+        metrics={['traffic_month_up']}
+        height={220}
+        loading={isLoading}
+        threshold={threshold}
+      />
+    </div>
+  );
+};
 
 const TIMEZONES = [
   { label: 'Asia/Shanghai (UTC+8)', value: 'Asia/Shanghai' },
@@ -24,6 +76,321 @@ const TIMEZONES = [
   { label: 'America/Los_Angeles (UTC-8/-7)', value: 'America/Los_Angeles' },
   { label: 'Europe/London (UTC+0/+1)', value: 'Europe/London' },
 ];
+
+interface InstanceCardProps {
+  inst: InstanceOverview;
+  account: AccountOverview;
+  form: RuleUpdateRequest;
+  onFormChange: (patch: Partial<RuleUpdateRequest>) => void;
+  onSaveRule: () => void;
+  hasDirty: boolean;
+  isSaving: boolean;
+  onForceStart: () => void;
+  formatScheduleNext: (inst: InstanceOverview) => string;
+}
+
+const InstanceCard: React.FC<InstanceCardProps> = ({
+  inst,
+  account,
+  form,
+  onFormChange,
+  onSaveRule,
+  hasDirty,
+  isSaving,
+  onForceStart,
+  formatScheduleNext,
+}) => {
+  const [showRuleEdit, setShowRuleEdit] = useState(false);
+  const { data: cloudMetrics } = useQuery({
+    queryKey: ['cloud-resource-metrics', inst.resource_id],
+    queryFn: () => fetchCloudResourceMetrics(inst.resource_id, { span: '6h' }),
+    refetchInterval: 30000,
+  });
+
+  const rule = inst.rule;
+  let statusBadgeClass = styles.statusStopped;
+  if (inst.status === 'Running') {
+    statusBadgeClass = styles.statusRunning;
+  } else if (inst.status === 'Starting' || inst.status === 'Stopping') {
+    statusBadgeClass = styles.statusTransitional;
+  }
+
+  // 提取最新指标值 (5 列指标格)
+  const getLatest = (series?: (number | null)[]) => {
+    if (!series || series.length === 0) return null;
+    for (let i = series.length - 1; i >= 0; i--) {
+      if (series[i] !== null && series[i] !== undefined && !isNaN(series[i]!)) {
+        return series[i];
+      }
+    }
+    return null;
+  };
+
+  const latestCpu = getLatest(cloudMetrics?.series?.cpu_pct);
+  const latestMem = getLatest(cloudMetrics?.series?.mem_used);
+  const latestUp = getLatest(cloudMetrics?.series?.net_up_bps);
+  const latestDown = getLatest(cloudMetrics?.series?.net_down_bps);
+
+  // 流量进度条
+  const limitGB = rule?.traffic_limit_gb ?? account.traffic_limit_gb ?? 50;
+  const cdtUsedGB = account.cdt_used_gb ?? 0;
+  const usagePercent = limitGB > 0 ? (cdtUsedGB / limitGB) * 100 : 0;
+
+  let progressClass = styles.progressOk;
+  if (usagePercent >= 100) {
+    progressClass = styles.progressErr;
+  } else if (usagePercent >= 80) {
+    progressClass = styles.progressWarn;
+  }
+
+  // Sparkline 数据
+  const sparkPoints = cloudMetrics?.series?.net_up_bps || [];
+  const sparkTs = cloudMetrics?.ts_ms || [];
+
+  return (
+    <div className={styles.instanceCard}>
+      {/* 1. card-head */}
+      <div className={styles.cardHead}>
+        <div className={styles.cardHeadLeft}>
+          <div className={styles.instanceName}>{inst.resource_name || inst.resource_ref}</div>
+          <div className={styles.instanceSub}>
+            {inst.region} · {inst.public_ips?.[0] || inst.private_ips?.[0] || '无公网IP'}
+          </div>
+        </div>
+        <div className={styles.cardHeadRight}>
+          <span className={`${styles.statusBadge} ${statusBadgeClass}`}>
+            ● {inst.status || '--'}
+          </span>
+          {inst.status === 'Stopped' && (
+            <button
+              type="button"
+              className="btn mini warning"
+              onClick={onForceStart}
+              title="解除保全锁定，强制开机"
+            >
+              强制开机
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.ruleToggleBtn}
+            onClick={() => setShowRuleEdit((v) => !v)}
+            title="展开/收起守卫规则配置"
+          >
+            {showRuleEdit ? '收起配置 ▲' : '⚙️ 规则配置 ▼'}
+          </button>
+        </div>
+      </div>
+
+      {/* 2. metric-grid (5 列小指标格) */}
+      <div className={styles.metricGrid}>
+        <div className={styles.metricCell}>
+          <span className={styles.metricLabel}>CPU</span>
+          <span className={styles.metricValue}>
+            {latestCpu !== null ? `${latestCpu.toFixed(1)}%` : '--'}
+          </span>
+        </div>
+        <div className={styles.metricCell}>
+          <span className={styles.metricLabel}>内存</span>
+          <span className={styles.metricValue}>
+            {latestMem !== null ? formatBytes(latestMem) : '--'}
+          </span>
+        </div>
+        <div className={styles.metricCell}>
+          <span className={styles.metricLabel}>磁盘</span>
+          <span className={styles.metricValue}>--</span>
+        </div>
+        <div className={styles.metricCell}>
+          <span className={styles.metricLabel}>上行</span>
+          <span className={styles.metricValue}>
+            {latestUp !== null ? formatRate(latestUp) : '--'}
+          </span>
+        </div>
+        <div className={styles.metricCell}>
+          <span className={styles.metricLabel}>下行</span>
+          <span className={styles.metricValue}>
+            {latestDown !== null ? formatRate(latestDown) : '--'}
+          </span>
+        </div>
+      </div>
+
+      {/* 3. traffic-row + progress */}
+      <div className={styles.trafficRow}>
+        <span>出网流量 / 阈值</span>
+        <span className={styles.trafficRowValue}>
+          {cdtUsedGB.toFixed(2)} GB / {limitGB.toFixed(0)} GB ({usagePercent.toFixed(1)}%)
+        </span>
+      </div>
+      <div className={styles.progress}>
+        <div
+          className={`${styles.progressBar} ${progressClass}`}
+          style={{ width: `${Math.min(Math.max(usagePercent, 0), 100)}%` }}
+        />
+      </div>
+
+      {/* 4. sparkline (内嵌 SVG 曲线，5 项细节齐全) */}
+      <Sparkline
+        points={sparkPoints}
+        timestamps={sparkTs}
+        unit="bytes/s"
+        metricLabel="上行出网速率"
+        emptyText="暂无云监控采样数据（停机或尚未产生采样）"
+      />
+
+      {/* 5. next-line */}
+      <div className={styles.nextLine}>
+        <span>⏱️ 下一次日程:</span>
+        <span style={{ fontFamily: 'var(--font-mono)' }}>{formatScheduleNext(inst)}</span>
+      </div>
+
+      {/* 6. result-line */}
+      <div className={styles.resultLine}>
+        <span>📋 上轮评估:</span>
+        <span>{rule?.last_action ? `${rule.last_action} (最近执行)` : '正常监控中，未触发动作'}</span>
+      </div>
+
+      {/* 可展开守卫配置区域 */}
+      {showRuleEdit && (
+        <div className={styles.ruleForm} style={{ marginTop: 'var(--sp-2)' }}>
+          {/* 启用守卫总开关 */}
+          <div className={styles.switchRow}>
+            <div className={styles.switchLabelArea}>
+              <strong>启用流量与保活守卫</strong>
+              <span className={styles.switchDesc}>按限额监控并参与守护调度</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={form.is_enabled}
+              onChange={(e) => onFormChange({ is_enabled: e.target.checked })}
+            />
+          </div>
+
+          {/* 执行动作开关 (安全关键) */}
+          <div className={styles.switchRow}>
+            <div className={styles.switchLabelArea}>
+              <strong style={{ color: form.actions_enabled ? 'var(--warn)' : 'var(--text-main)' }}>
+                允许执行云上动作 (Actions Enabled)
+              </strong>
+              <span className={styles.switchDesc}>
+                {form.actions_enabled
+                  ? '已授权自动开停机！到达条件将实际操作云服务器'
+                  : '新建默认关闭；关闭时仅发送通知事件，不动真实机器'}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={form.actions_enabled}
+              onChange={(e) => onFormChange({ actions_enabled: e.target.checked })}
+            />
+          </div>
+
+          {/* 流量阈值 */}
+          <div className={styles.fieldRow}>
+            <span>流量限额阈值 (GB):</span>
+            <input
+              type="number"
+              className={styles.input}
+              style={{ width: '90px' }}
+              min="1"
+              max="200"
+              value={form.traffic_limit_gb ?? 50}
+              onChange={(e) =>
+                onFormChange({
+                  traffic_limit_gb: parseFloat(e.target.value) || 50,
+                })
+              }
+            />
+          </div>
+
+          {/* 每日开关机日程 */}
+          <div className={styles.scheduleBox}>
+            <div className={styles.switchRow}>
+              <div className={styles.switchLabelArea}>
+                <strong>每日开关机日程</strong>
+                <span className={styles.switchDesc}>按预定时间窗口自动开机与关机</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={form.schedule_enabled}
+                onChange={(e) =>
+                  onFormChange({
+                    schedule_enabled: e.target.checked,
+                  })
+                }
+              />
+            </div>
+
+            {form.schedule_enabled && (
+              <>
+                <div className={styles.scheduleInputs}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+                    <span className={styles.propLabel}>开机时间</span>
+                    <input
+                      type="time"
+                      className={styles.input}
+                      value={form.schedule_start || '08:30'}
+                      onChange={(e) =>
+                        onFormChange({
+                          schedule_start: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+                    <span className={styles.propLabel}>关机时间</span>
+                    <input
+                      type="time"
+                      className={styles.input}
+                      value={form.schedule_stop || '20:00'}
+                      onChange={(e) =>
+                        onFormChange({
+                          schedule_stop: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span className={styles.propLabel}>时区</span>
+                  <select
+                    className={styles.select}
+                    value={form.schedule_tz || 'Asia/Shanghai'}
+                    onChange={(e) =>
+                      onFormChange({
+                        schedule_tz: e.target.value,
+                      })
+                    }
+                  >
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <span className={styles.switchDesc} style={{ fontStyle: 'italic', marginTop: '2px' }}>
+                  💡 提示：关闭日程开关不会立刻改变当前运行状态，只是不再受时间约束。
+                </span>
+              </>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--sp-2)' }}>
+            <button
+              type="button"
+              className="btn mini primary"
+              disabled={!hasDirty || isSaving}
+              onClick={onSaveRule}
+            >
+              {isSaving ? '保存中...' : '保存配置'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const CloudGuard: React.FC = () => {
   const queryClient = useQueryClient();
@@ -43,6 +410,12 @@ export const CloudGuard: React.FC = () => {
 
   // Editing Rule Local State: Map<resource_id, Partial<RuleUpdateRequest>>
   const [editForms, setEditForms] = useState<Record<string, RuleUpdateRequest>>({});
+
+  // CDT Chart collapse state
+  const [collapsedCharts, setCollapsedCharts] = useState<Record<string, boolean>>({});
+  const toggleChart = (accId: string) => {
+    setCollapsedCharts((prev) => ({ ...prev, [accId]: !prev[accId] }));
+  };
 
   // Queries
   const { data: overview, isLoading, refetch: refetchOverview } = useQuery<OverviewResponse>({
@@ -145,6 +518,17 @@ export const CloudGuard: React.FC = () => {
     return `${actionLabel}: ${timeStr}`;
   };
 
+  // 顶部指标带统计
+  const totalCdtGB = overview?.accounts.reduce((sum, a) => sum + (a.cdt_used_gb || 0), 0) ?? 0;
+  const totalLimitGB = overview?.accounts.reduce((sum, a) => sum + (a.traffic_limit_gb || 0), 0) ?? 0;
+  const remainingGB = Math.max(0, totalLimitGB - totalCdtGB);
+  let runningCount = 0;
+  let totalInstances = 0;
+  overview?.accounts.forEach((a) => {
+    totalInstances += a.instances.length;
+    runningCount += a.instances.filter((inst) => inst.status === 'Running').length;
+  });
+
   return (
     <div className={styles.container}>
       {/* 顶部标题与操作栏 */}
@@ -202,14 +586,61 @@ export const CloudGuard: React.FC = () => {
         </div>
       </div>
 
+      {/* ① 顶部 4 列指标带 (aliyun-guard 风格，等宽大号数值) */}
+      <div className={styles.statBand}>
+        <div className={styles.statCard}>
+          <div className={styles.statCardHeader}>
+            <span className={styles.statIcon}>🌐</span>
+            <span className={styles.statLabel}>账号本月 CDT 用量</span>
+          </div>
+          <div className={styles.statValue}>{totalCdtGB.toFixed(2)} GB</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statCardHeader}>
+            <span className={styles.statIcon}>🎯</span>
+            <span className={styles.statLabel}>阈值余量</span>
+          </div>
+          <div className={styles.statValue}>{totalLimitGB > 0 ? `${remainingGB.toFixed(2)} GB` : '--'}</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statCardHeader}>
+            <span className={styles.statIcon}>⚡</span>
+            <span className={styles.statLabel}>在线实例数</span>
+          </div>
+          <div className={styles.statValue}>{runningCount} / {totalInstances} 台</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statCardHeader}>
+            <span className={styles.statIcon}>💰</span>
+            <span className={styles.statLabel}>本月账单状态</span>
+          </div>
+          <div className={styles.statValue}>正常</div>
+        </div>
+      </div>
+
+      {/* ④ 骨架屏: 加载中显示占位卡片 */}
       {isLoading && (
-        <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-dim)' }}>
-          正在加载守卫规则与云资产数据...
+        <div className={styles.instances}>
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className={styles.skCard}>
+              <div className={styles.skHead}>
+                <div className={styles.skTitle} />
+                <div className={styles.skBadge} />
+              </div>
+              <div className={styles.skGrid}>
+                {[1, 2, 3, 4, 5].map((j) => (
+                  <div key={j} className={styles.skMetric} />
+                ))}
+              </div>
+              <div className={styles.skProgress} />
+              <div className={styles.skChart} />
+            </div>
+          ))}
         </div>
       )}
 
       {/* 账号列表与实例网格 */}
-      {overview?.accounts.map((account) => {
+      {!isLoading && overview?.accounts.map((account) => {
         const cdtGB = account.cdt_used_gb;
         const limitGB = account.traffic_limit_gb;
         const percent = account.usage_percent;
@@ -251,8 +682,17 @@ export const CloudGuard: React.FC = () => {
                   {' / '}
                   <span>{limitGB !== undefined && limitGB !== null ? `${limitGB.toFixed(0)} GB (阈值)` : '--'}</span>
                 </span>
-                <span style={{ fontWeight: 600 }}>
-                  {percent !== undefined && percent !== null ? `${percent.toFixed(1)}%` : '--'}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+                  <span style={{ fontWeight: 600 }}>
+                    {percent !== undefined && percent !== null ? `${percent.toFixed(1)}%` : '--'}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.cdtToggleBtn}
+                    onClick={() => toggleChart(account.account_id)}
+                  >
+                    {collapsedCharts[account.account_id] ? '展开趋势图 ▼' : '收起趋势图 ▲'}
+                  </button>
                 </span>
               </div>
 
@@ -262,223 +702,33 @@ export const CloudGuard: React.FC = () => {
                   style={{ width: `${Math.min(Math.max(percent || 0, 0), 100)}%` }}
                 />
               </div>
+
+              {/* 账号级 CDT 流量月度曲线 + 阈值横线 */}
+              {!collapsedCharts[account.account_id] && (
+                <AccountCDTChart accountId={account.account_id} limitGB={limitGB} />
+              )}
             </div>
 
-            {/* 该账号下的 ECS 实例卡片 */}
-            <div className={styles.instancesGrid}>
+            {/* ② 实例卡片网格 (aliyun-guard 风格两列网格，窄屏单列) */}
+            <div className={styles.instances}>
               {account.instances.map((inst) => {
                 const rule = inst.rule;
                 const form = getFormValue(inst.resource_id, rule);
                 const hasDirty = !!editForms[inst.resource_id];
 
-                let statusBadgeClass = styles.statusStopped;
-                if (inst.status === 'Running') {
-                  statusBadgeClass = styles.statusRunning;
-                } else if (inst.status === 'Starting' || inst.status === 'Stopping') {
-                  statusBadgeClass = styles.statusTransitional;
-                }
-
                 return (
-                  <div key={inst.resource_id} className={styles.instanceCard}>
-                    {/* 实例头部 */}
-                    <div className={styles.instanceHeader}>
-                      <div className={styles.instanceTitleArea}>
-                        <div className={styles.instanceName}>{inst.resource_name || inst.resource_ref}</div>
-                        <div className={styles.instanceRef}>{inst.resource_ref}</div>
-                      </div>
-                      <span className={`${styles.statusBadge} ${statusBadgeClass}`}>
-                        ● {inst.status || '--'}
-                      </span>
-                    </div>
-
-                    {/* 网络与元属性 */}
-                    <div className={styles.propsGrid}>
-                      <div className={styles.propItem}>
-                        <span className={styles.propLabel}>地域</span>
-                        <span className={styles.propValue}>{inst.region || '--'}</span>
-                      </div>
-                      <div className={styles.propItem}>
-                        <span className={styles.propLabel}>本月账单</span>
-                        <span className={styles.propValue}>{inst.billing_info || '--'}</span>
-                      </div>
-                      <div className={styles.propItem}>
-                        <span className={styles.propLabel}>公网 IP</span>
-                        <span className={styles.propValue}>
-                          {inst.public_ips?.length > 0 ? inst.public_ips.join(', ') : '--'}
-                        </span>
-                      </div>
-                      <div className={styles.propItem}>
-                        <span className={styles.propLabel}>内网 IP</span>
-                        <span className={styles.propValue}>
-                          {inst.private_ips?.length > 0 ? inst.private_ips.join(', ') : '--'}
-                        </span>
-                      </div>
-                      <div className={styles.propItem}>
-                        <span className={styles.propLabel}>下一次日程事件</span>
-                        <span className={styles.propValue}>{formatScheduleNext(inst)}</span>
-                      </div>
-                      <div className={styles.propItem}>
-                        <span className={styles.propLabel}>最近执行动作</span>
-                        <span className={styles.propValue}>{rule?.last_action || '--'}</span>
-                      </div>
-                    </div>
-
-                    {/* 守卫规则表单 */}
-                    <div className={styles.ruleForm}>
-                      {/* 启用守卫总开关 */}
-                      <div className={styles.switchRow}>
-                        <div className={styles.switchLabelArea}>
-                          <strong>启用流量与保活守卫</strong>
-                          <span className={styles.switchDesc}>按限额监控并参与守护调度</span>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={form.is_enabled}
-                          onChange={(e) =>
-                            handleFormChange(inst.resource_id, { is_enabled: e.target.checked })
-                          }
-                        />
-                      </div>
-
-                      {/* 执行动作开关 (安全关键) */}
-                      <div className={styles.switchRow}>
-                        <div className={styles.switchLabelArea}>
-                          <strong style={{ color: form.actions_enabled ? 'var(--warn)' : 'var(--text-main)' }}>
-                            允许执行云上动作 (Actions Enabled)
-                          </strong>
-                          <span className={styles.switchDesc}>
-                            {form.actions_enabled
-                              ? '已授权自动开停机！到达条件将实际操作云服务器'
-                              : '新建默认关闭；关闭时仅发送通知事件，不动真实机器'}
-                          </span>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={form.actions_enabled}
-                          onChange={(e) =>
-                            handleFormChange(inst.resource_id, { actions_enabled: e.target.checked })
-                          }
-                        />
-                      </div>
-
-                      {/* 流量阈值 */}
-                      <div className={styles.fieldRow}>
-                        <span>流量限额阈值 (GB):</span>
-                        <input
-                          type="number"
-                          className={styles.input}
-                          style={{ width: '90px' }}
-                          min="1"
-                          max="200"
-                          value={form.traffic_limit_gb ?? 50}
-                          onChange={(e) =>
-                            handleFormChange(inst.resource_id, {
-                              traffic_limit_gb: parseFloat(e.target.value) || 50,
-                            })
-                          }
-                        />
-                      </div>
-
-                      {/* 每日开关机日程 */}
-                      <div className={styles.scheduleBox}>
-                        <div className={styles.switchRow}>
-                          <div className={styles.switchLabelArea}>
-                            <strong>每日开关机日程</strong>
-                            <span className={styles.switchDesc}>按预定时间窗口自动开机与关机</span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={form.schedule_enabled}
-                            onChange={(e) =>
-                              handleFormChange(inst.resource_id, {
-                                schedule_enabled: e.target.checked,
-                              })
-                            }
-                          />
-                        </div>
-
-                        {form.schedule_enabled && (
-                          <>
-                            <div className={styles.scheduleInputs}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
-                                <span className={styles.propLabel}>开机时间</span>
-                                <input
-                                  type="time"
-                                  className={styles.input}
-                                  value={form.schedule_start || '08:30'}
-                                  onChange={(e) =>
-                                    handleFormChange(inst.resource_id, {
-                                      schedule_start: e.target.value,
-                                    })
-                                  }
-                                />
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
-                                <span className={styles.propLabel}>关机时间</span>
-                                <input
-                                  type="time"
-                                  className={styles.input}
-                                  value={form.schedule_stop || '20:00'}
-                                  onChange={(e) =>
-                                    handleFormChange(inst.resource_id, {
-                                      schedule_stop: e.target.value,
-                                    })
-                                  }
-                                />
-                              </div>
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                              <span className={styles.propLabel}>时区</span>
-                              <select
-                                className={styles.select}
-                                value={form.schedule_tz || 'Asia/Shanghai'}
-                                onChange={(e) =>
-                                  handleFormChange(inst.resource_id, {
-                                    schedule_tz: e.target.value,
-                                  })
-                                }
-                              >
-                                {TIMEZONES.map((tz) => (
-                                  <option key={tz.value} value={tz.value}>
-                                    {tz.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <span className={styles.switchDesc} style={{ fontStyle: 'italic', marginTop: '2px' }}>
-                              💡 提示：关闭日程开关不会立刻改变当前运行状态，只是不再受时间约束。
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 卡片底栏操作 */}
-                    <div className={styles.cardFooter}>
-                      {inst.status === 'Stopped' ? (
-                        <button
-                          type="button"
-                          className="btn mini"
-                          style={{ borderColor: 'var(--warn-border)', color: 'var(--warn)' }}
-                          onClick={() => setForceStartTarget({ instance: inst, account })}
-                        >
-                          ⚡ 强制启动
-                        </button>
-                      ) : (
-                        <span />
-                      )}
-
-                      <button
-                        type="button"
-                        className="btn mini primary"
-                        disabled={!hasDirty || updateRuleMutation.isPending}
-                        onClick={() => handleSaveRule(inst.resource_id, rule)}
-                      >
-                        {updateRuleMutation.isPending ? '保存中...' : '保存配置'}
-                      </button>
-                    </div>
-                  </div>
+                  <InstanceCard
+                    key={inst.resource_id}
+                    inst={inst}
+                    account={account}
+                    form={form}
+                    onFormChange={(patch) => handleFormChange(inst.resource_id, patch)}
+                    onSaveRule={() => handleSaveRule(inst.resource_id, rule)}
+                    hasDirty={hasDirty}
+                    isSaving={updateRuleMutation.isPending}
+                    onForceStart={() => setForceStartTarget({ instance: inst, account })}
+                    formatScheduleNext={formatScheduleNext}
+                  />
                 );
               })}
             </div>
@@ -502,40 +752,32 @@ export const CloudGuard: React.FC = () => {
                 <th>周期 ID</th>
                 <th>开始时间</th>
                 <th>耗时</th>
-                <th>评估实例数</th>
+                <th>CDT 流量</th>
+                <th>评估实例</th>
                 <th>执行动作</th>
                 <th>失败数</th>
-                <th>CDT 读数</th>
               </tr>
             </thead>
             <tbody>
               {cyclesData?.cycles?.length ? (
                 cyclesData.cycles.map((c) => (
                   <tr key={c.id}>
-                    <td className="cell-mono">{c.id.slice(0, 10)}...</td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{c.id.slice(0, 8)}...</td>
                     <td>{new Date(c.started_at_ms).toLocaleTimeString()}</td>
-                    <td className="cell-mono">{c.duration_ms} ms</td>
-                    <td className="cell-mono">{c.evaluated}</td>
-                    <td className="cell-mono" style={{ color: c.acted > 0 ? 'var(--ok)' : undefined }}>
+                    <td>{c.duration_ms} ms</td>
+                    <td>{c.cdt_used_gb !== undefined ? `${c.cdt_used_gb.toFixed(2)} GB` : '--'}</td>
+                    <td>{c.evaluated}</td>
+                    <td style={{ color: c.acted > 0 ? 'var(--warn)' : 'var(--text-main)', fontWeight: c.acted > 0 ? 600 : 400 }}>
                       {c.acted}
                     </td>
-                    <td className="cell-mono" style={{ color: c.failed > 0 ? 'var(--err)' : undefined }}>
+                    <td style={{ color: c.failed > 0 ? 'var(--err)' : 'var(--text-main)' }}>
                       {c.failed}
-                    </td>
-                    <td>
-                      {c.cdt_error ? (
-                        <span style={{ color: 'var(--err)' }}>失败: {c.cdt_error}</span>
-                      ) : c.cdt_used_gb !== undefined && c.cdt_used_gb !== null ? (
-                        `${c.cdt_used_gb.toFixed(2)} GB`
-                      ) : (
-                        '--'
-                      )}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '16px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '24px 0' }}>
                     暂无评估记录
                   </td>
                 </tr>
@@ -545,18 +787,17 @@ export const CloudGuard: React.FC = () => {
         </div>
       </div>
 
-      {/* 演练模式 Modal */}
+      {/* Dry Run 结果模态弹窗 */}
       {dryRunResult && (
-        <div className={styles.modalOverlay} onClick={() => setDryRunResult(null)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalBackdrop} onClick={() => setDryRunResult(null)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <div className={styles.modalTitle}>
-                <span>🔍 守卫演练 (Dry Run) 结果</span>
-                <span className="badge" style={{ background: 'var(--ok-bg)', color: 'var(--ok)' }}>
-                  云上状态零变化
-                </span>
-              </div>
-              <button type="button" className="btn mini ghost" onClick={() => setDryRunResult(null)}>
+              <div className={styles.modalTitle}>🔍 守卫评估演练结果 (Dry Run)</div>
+              <button
+                type="button"
+                className="btn mini ghost"
+                onClick={() => setDryRunResult(null)}
+              >
                 ✕
               </button>
             </div>
@@ -632,8 +873,58 @@ export const CloudGuard: React.FC = () => {
               </div>
             </div>
 
-            <div className={styles.modalFooter}>
-              <button type="button" className="btn" onClick={() => setDryRunResult(null)}>
+            <div className={styles.tableWrapper} style={{ marginTop: 'var(--sp-3)' }}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>实例</th>
+                    <th>地域</th>
+                    <th>当前状态</th>
+                    <th>拟执行动作</th>
+                    <th>判定原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dryRunResult.items.map((item) => (
+                    <tr key={item.resource_id}>
+                      <td>
+                        <strong>{item.resource_name || item.resource_ref}</strong>
+                        <div className="text-dim" style={{ fontSize: '11px' }}>
+                          {item.account_name}
+                        </div>
+                      </td>
+                      <td>{item.region}</td>
+                      <td>{item.current_status}</td>
+                      <td>
+                        <span
+                          className={
+                            item.proposed_action === 'stop'
+                              ? styles.actionTagStop
+                              : item.proposed_action === 'start'
+                              ? styles.actionTagStart
+                              : styles.actionTagNoop
+                          }
+                        >
+                          {item.proposed_action === 'stop'
+                            ? '🛑 关机'
+                            : item.proposed_action === 'start'
+                            ? '🚀 开机'
+                            : '保持'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '12px' }}>{item.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--sp-4)' }}>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => setDryRunResult(null)}
+              >
                 关闭
               </button>
             </div>
@@ -641,78 +932,71 @@ export const CloudGuard: React.FC = () => {
         </div>
       )}
 
-      {/* 手动强制开机二次确认 Modal */}
+      {/* 强制启动模态弹窗 */}
       {forceStartTarget && (
-        <div className={styles.modalOverlay} onClick={() => setForceStartTarget(null)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+        <div className={styles.modalBackdrop} onClick={() => setForceStartTarget(null)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <div className={styles.modalTitle} style={{ color: 'var(--warn)' }}>
-                <span>⚠️ 二次确认：手动强制启动 ECS</span>
-              </div>
-              <button type="button" className="btn mini ghost" onClick={() => setForceStartTarget(null)}>
+              <div className={styles.modalTitle}>⚡ 强制开机确认 (解除保护)</div>
+              <button
+                type="button"
+                className="btn mini ghost"
+                onClick={() => setForceStartTarget(null)}
+              >
                 ✕
               </button>
             </div>
 
-            <div className={styles.modalBody}>
-              <div className={styles.confirmBox}>
-                <div>
-                  即将强制启动实例: <strong>{forceStartTarget.instance.resource_name}</strong> (
-                  {forceStartTarget.instance.resource_ref})
-                </div>
-                <div>
-                  当前账号 CDT 出网已用:
-                  <strong> {forceStartTarget.account.cdt_used_gb?.toFixed(2) ?? '--'} GB</strong>
-                  {' / '}
-                  限额阈值:
-                  <strong> {forceStartTarget.instance.rule?.traffic_limit_gb ?? '--'} GB</strong>
-                </div>
-                <div style={{ color: 'var(--err)', marginTop: '4px', fontWeight: 500 }}>
-                  注意：该账号流量可能已达到或超过阈值。强制拉起后实例将继续消耗出网流量，可能产生按量计费账单！此操作将完整记录至系统审计日志
-                  (audit_log)。
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 500 }}>
-                  启动原因 / 运维备注 <span style={{ color: 'var(--err)' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  className={styles.input}
-                  placeholder="例如: 紧急排查业务问题，已知晓超额风险"
-                  value={forceReason}
-                  onChange={(e) => setForceReason(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.confirmRow}>
-                <input
-                  type="checkbox"
-                  id="confirmForce"
-                  checked={forceConfirmed}
-                  onChange={(e) => setForceConfirmed(e.target.checked)}
-                />
-                <label htmlFor="confirmForce" style={{ fontSize: '13px', cursor: 'pointer' }}>
-                  我已知晓超额与计费风险，确认强制启动该实例
-                </label>
-              </div>
-
-              {forceError && (
-                <div style={{ color: 'var(--err)', fontSize: '12px' }}>
-                  {forceError}
-                </div>
-              )}
+            <div className={styles.errorBanner} style={{ marginTop: 'var(--sp-2)' }}>
+              ⚠️ 注意：该操作将解除保全关机状态并对云服务器下发真实开机指令。
+              如果当前流量仍处于超标状态，本周期将暂时忽略超标保护，直到下一次决策。
             </div>
 
-            <div className={styles.modalFooter}>
-              <button type="button" className="btn ghost" onClick={() => setForceStartTarget(null)}>
+            <div style={{ margin: 'var(--sp-3) 0', fontSize: '13px' }}>
+              <div><strong>实例:</strong> {forceStartTarget.instance.resource_name || forceStartTarget.instance.resource_ref}</div>
+              <div><strong>所属账号:</strong> {forceStartTarget.account.account_name}</div>
+            </div>
+
+            <div className={styles.formField}>
+              <label>请输入强制开机的原因 / 申请单号:</label>
+              <input
+                type="text"
+                className={styles.input}
+                placeholder="如：紧急处理线上故障、已额外充值..."
+                value={forceReason}
+                onChange={(e) => setForceReason(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-3)' }}>
+              <input
+                type="checkbox"
+                id="confirmForceStart"
+                checked={forceConfirmed}
+                onChange={(e) => setForceConfirmed(e.target.checked)}
+              />
+              <label htmlFor="confirmForceStart" style={{ fontSize: '13px', cursor: 'pointer' }}>
+                我已明确知晓超额流量可能会产生额外按量账单，并确认强制启动此机器。
+              </label>
+            </div>
+
+            {forceError && (
+              <div className={styles.errorBanner} style={{ marginTop: 'var(--sp-2)' }}>
+                {forceError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-2)', marginTop: 'var(--sp-4)' }}>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setForceStartTarget(null)}
+              >
                 取消
               </button>
               <button
                 type="button"
-                className="btn primary"
-                style={{ background: 'var(--err)', borderColor: 'var(--err)', color: 'var(--on-accent)' }}
+                className="btn warning"
                 disabled={!forceConfirmed || !forceReason.trim() || forceStartMutation.isPending}
                 onClick={() =>
                   forceStartMutation.mutate({
@@ -721,7 +1005,7 @@ export const CloudGuard: React.FC = () => {
                   })
                 }
               >
-                {forceStartMutation.isPending ? '提交中...' : '确认强制启动'}
+                {forceStartMutation.isPending ? '开机中...' : '确认强制开机'}
               </button>
             </div>
           </div>
@@ -730,3 +1014,5 @@ export const CloudGuard: React.FC = () => {
     </div>
   );
 };
+
+export default CloudGuard;

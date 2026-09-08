@@ -142,3 +142,29 @@ type PollJobResponse struct {
 	Status    string `json:"status"` // "pending" | "running" | "succeeded" | "failed"
 	Message   string `json:"message,omitempty"`
 }
+
+// MetricPoint represents a single metric data point
+type MetricPoint struct {
+	TsMs  int64   `json:"ts_ms"`
+	Value float64 `json:"value"`
+}
+
+// MetricListParams parameters for metric.list
+type MetricListParams struct {
+	Credential  map[string]string `json:"credential"`
+	Region      string            `json:"region,omitempty"`
+	Kind        string            `json:"kind,omitempty"`
+	ResRef      string            `json:"res_ref"`
+	MetricCode  string            `json:"metric_code"`
+	StartTimeMs int64             `json:"start_time_ms"`
+	EndTimeMs   int64             `json:"end_time_ms"`
+	PeriodSec   int               `json:"period_sec,omitempty"`
+}
+
+// MetricListResult holds metric series returned from provider
+type MetricListResult struct {
+	ResRef     string        `json:"res_ref"`
+	MetricCode string        `json:"metric_code"`
+	Points     []MetricPoint `json:"points"`
+}
+

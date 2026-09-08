@@ -1,57 +1,46 @@
 {
   "items": [
     {
-      "id": "01M1ZPX7688RE3NW9PWJXBPA68",
-      "name": "node-01M1ZPX782E3HRZ72WT700SV57",
-      "node_group_id": "01M1ZPX768H805GD1DXPM21MMA",
+      "conn_state": "offline",
+      "created_at_ms": 1757222400000,
       "display_order": 0,
-      "is_hidden": false,
-      "conn_state": "online",
-      "last_seen_at_ms": 1788844350664,
-      "created_at_ms": 1788844350664,
-      "updated_at_ms": 1788844350664,
       "group": {
-        "id": "01M1ZPX768H805GD1DXPM21MMA",
-        "name": "grp-01M1ZPX77QTFHYDA2SF9HMHW49"
+        "id": "01M1ZA80A53NBT8REFQXVA3H8F",
+        "name": "grp-01M1ZA"
       },
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "is_hidden": false,
+      "last_seen_at_ms": 1757222400000,
+      "name": "node-01M1ZA",
+      "node_group_id": "01M1ZA80A53NBT8REFQXVA3H8F",
+      "tags": [],
+      "updated_at_ms": 1757222400000
+    },
+    {
+      "conn_state": "offline",
+      "created_at_ms": 1757222400000,
+      "display_order": 0,
+      "group": {
+        "id": "01M1ZA80A53NBT8REFQXVA3H8F",
+        "name": "grp-01M1ZA"
+      },
+      "id": "01M1ZA90PEHNMDXKC1ZCST7J8H",
+      "is_hidden": false,
+      "last_seen_at_ms": 1757222400000,
+      "name": "node-01M1ZA90Q0Z67TX15FNWXGHQXG",
+      "node_group_id": "01M1ZA80A53NBT8REFQXVA3H8F",
       "tags": [
         {
-          "id": "01M1ZPX768MQPWB5NSP7JWP0CK",
-          "name": "tag-01M1ZPX77X5547H7VGQQ6VHBB4",
-          "color": "#3b82f6",
-          "created_at_ms": 1788844350664,
-          "updated_at_ms": 1788844350664
+          "created_at_ms": 1757222400000,
+          "id": "01M1ZA90PE9W90K26TVG96Q1AA",
+          "name": "tag-01M1ZA",
+          "updated_at_ms": 1757222400000
         }
-      ]
-    },
-    {
-      "id": "01M1ZNJJCGAST2J1G9CTFBFF00",
-      "name": "test-node-config",
-      "display_order": 0,
-      "is_hidden": false,
-      "agent_version": "",
-      "conn_state": "offline",
-      "last_seen_at_ms": 1788842953147,
-      "created_at_ms": 1788842953101,
-      "updated_at_ms": 1788843050572,
-      "tags": []
-    },
-    {
-      "id": "01M1ZNHFGE1YQ8YQF2P8JDH4S8",
-      "name": "test-vps-1",
-      "display_order": 0,
-      "is_hidden": false,
-      "agent_version": "0.1.0",
-      "conn_state": "offline",
-      "last_seen_at_ms": 1788842917439,
-      "clock_skew_ms": -600000,
-      "created_at_ms": 1788842917387,
-      "updated_at_ms": 1788843020575,
-      "tags": []
+      ],
+      "updated_at_ms": 1757222400000
     }
   ],
-  "total": 3,
   "page": 1,
-  "page_size": 50
+  "page_size": 50,
+  "total": 2
 }
-
