@@ -36,6 +36,7 @@ type ServerConfig struct {
 	ListenACME string `toml:"listen_acme" json:"listen_acme"` // 默认 ":80"
 	DataDir    string `toml:"data_dir" json:"data_dir"`       // 默认 "/var/lib/dash"
 	MasterKey  string `toml:"master_key" json:"master_key"`   // 默认 "/etc/dash/master.key"
+	DevNoAuth  bool   `toml:"dev_no_auth" json:"dev_no_auth"` // 默认 false，★ 仅供开发调试
 }
 
 // Config 服务端启动自举配置根结构
@@ -129,6 +130,7 @@ type Options struct {
 	ServerListenACME   string
 	ServerDataDir      string
 	ServerMasterKey    string
+	ServerDevNoAuth    *bool
 
 	// EnvLookup 允许测试注入自定义环境变量查找函数，默认为 os.LookupEnv
 	EnvLookup func(key string) (string, bool)
@@ -313,6 +315,13 @@ func LoadWithOptions(opts Options) (*Config, error) {
 	if val, ok := lookup("DASH_SERVER_MASTER_KEY"); ok && strings.TrimSpace(val) != "" {
 		cfg.Server.MasterKey = strings.TrimSpace(val)
 	}
+	if val, ok := lookup("DASH_SERVER_DEV_NO_AUTH"); ok && strings.TrimSpace(val) != "" {
+		v := strings.ToLower(strings.TrimSpace(val))
+		cfg.Server.DevNoAuth = (v == "true" || v == "1" || v == "yes" || v == "on")
+	} else if val, ok := lookup("DEV_NO_AUTH"); ok && strings.TrimSpace(val) != "" {
+		v := strings.ToLower(strings.TrimSpace(val))
+		cfg.Server.DevNoAuth = (v == "true" || v == "1" || v == "yes" || v == "on")
+	}
 
 	// 6. 命令行覆盖（最高优先级）
 	if opts.DBDriver != "" {
@@ -350,6 +359,9 @@ func LoadWithOptions(opts Options) (*Config, error) {
 	}
 	if opts.ServerMasterKey != "" {
 		cfg.Server.MasterKey = opts.ServerMasterKey
+	}
+	if opts.ServerDevNoAuth != nil {
+		cfg.Server.DevNoAuth = *opts.ServerDevNoAuth
 	}
 
 	// 7. 规范化并校验配置

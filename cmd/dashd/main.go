@@ -302,6 +302,11 @@ func runServe(args []string) {
 	}
 	logx.Init(logLevel, logFormat)
 
+	if cfg.Server.DevNoAuth {
+		logx.Warn("⚠️⚠️⚠️  DEV_NO_AUTH 已开启：所有 API 无需登录即可访问", "dev_no_auth", true)
+		logx.Warn("⚠️⚠️⚠️  这是开发模式，绝不可用于生产环境", "dev_no_auth", true)
+	}
+
 	// 3. 连数据库（失败即退出并给可读错误）
 	dbCfg := cfg.DB.DBOptions()
 	database, err := db.Open(&dbCfg)

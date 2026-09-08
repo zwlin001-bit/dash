@@ -36,6 +36,13 @@ func (s *LatestStore) GetLatest(nodeID string) (NodeLatest, bool) {
 	return val, ok
 }
 
+// DeleteLatest 从内存中移除节点最新采样值。
+func (s *LatestStore) DeleteLatest(nodeID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.latest, nodeID)
+}
+
 // BroadcastMetrics 更新最新值缓存并向所有活跃 SSE 订阅者广播 metrics 事件。
 func (s *LatestStore) BroadcastMetrics(nodeID string, latest NodeLatest) {
 	s.SetLatest(nodeID, latest)

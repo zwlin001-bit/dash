@@ -220,3 +220,40 @@ func TestApp_HandlePublic(t *testing.T) {
 		t.Fatalf("unexpected route info: %+v", routes[0])
 	}
 }
+
+func TestApp_HealthzHandler_DevNoAuth(t *testing.T) {
+	// 1. 常规模式：dev_no_auth 未开启
+	cfgNormal := config.DefaultConfig()
+	cfgNormal.Server.DevNoAuth = false
+	aNormal := app.NewApp(nil, cfgNormal, "test-ver")
+
+	req1 := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec1 := httptest.NewRecorder()
+	aNormal.HealthzHandler()(rec1, req1)
+
+	var respNormal map[string]any
+	if err := json.NewDecoder(rec1.Body).Decode(&respNormal); err != nil {
+		t.Fatalf("decode healthz failed: %v", err)
+	}
+	if _, exists := respNormal["dev_no_auth"]; exists {
+		t.Fatalf("expected dev_no_auth to be omitted when false, got %v", respNormal["dev_no_auth"])
+	}
+
+	// 2. 开启模式：dev_no_auth = true
+	cfgDev := config.DefaultConfig()
+	cfgDev.Server.DevNoAuth = true
+	aDev := app.NewApp(nil, cfgDev, "test-ver")
+
+	req2 := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec2 := httptest.NewRecorder()
+	aDev.HealthzHandler()(rec2, req2)
+
+	var respDev map[string]any
+	if err := json.NewDecoder(rec2.Body).Decode(&respDev); err != nil {
+		t.Fatalf("decode healthz failed: %v", err)
+	}
+	if val, ok := respDev["dev_no_auth"].(bool); !ok || !val {
+		t.Fatalf("expected dev_no_auth: true in healthz response, got %v", respDev["dev_no_auth"])
+	}
+}
+

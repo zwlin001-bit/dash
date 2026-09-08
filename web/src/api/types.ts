@@ -287,4 +287,5 @@ export interface HealthResponse {
   version?: string;
   db?: string;
   agents_online?: number;
+  dev_no_auth?: boolean;
 }

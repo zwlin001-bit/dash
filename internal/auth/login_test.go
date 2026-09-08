@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -361,32 +362,99 @@ func TestLoginFailedEvent(t *testing.T) {
 	}
 
 	// Verify auth.login_failed event was emitted
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(3 * time.Second)
 	var records []events.EventRecord
+	found := false
 	for time.Now().Before(deadline) {
 		records, _, err = store.ListEvents(ctx, events.Filter{EventType: "auth.login_failed"})
-		if err == nil && len(records) > 0 {
-			break
+		if err == nil {
+			for _, r := range records {
+				if r.Payload["username"] == username {
+					found = true
+					if r.Type != "auth.login_failed" || r.SourceModule != "auth" {
+						t.Fatalf("unexpected event: %+v", r)
+					}
+					if r.Payload["ip"] != "192.168.1.50" {
+						t.Fatalf("unexpected payload: %+v", r.Payload)
+					}
+					break
+				}
+			}
+			if found {
+				break
+			}
 		}
 		time.Sleep(50 * time.Millisecond)
-	}
-
-	found := false
-	for _, r := range records {
-		if r.Payload["username"] == username {
-			found = true
-			if r.Type != "auth.login_failed" || r.SourceModule != "auth" {
-				t.Fatalf("unexpected event: %+v", r)
-			}
-			if r.Payload["ip"] != "192.168.1.50" {
-				t.Fatalf("unexpected payload: %+v", r.Payload)
-			}
-			break
-		}
 	}
 	if !found {
 		t.Fatalf("auth.login_failed event for user %s not found in %v", username, records)
 	}
 }
+
+func TestDevNoAuth_RequireAuthAndMe(t *testing.T) {
+	// 1. 常规模式 (DevNoAuth = false)
+	svcNormal := &Service{DevNoAuth: false}
+	handlerCalled := false
+	protectedHandler := RequireAuth(svcNormal)(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/api/v1/nodes", nil)
+	rec := httptest.NewRecorder()
+	protectedHandler(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized without DevNoAuth, got %d", rec.Code)
+	}
+	if handlerCalled {
+		t.Fatalf("protected handler should NOT be called when unauthorized")
+	}
+
+	// 2. 开启 DevNoAuth = true
+	svcDev := &Service{DevNoAuth: true}
+	var capturedUser *User
+	protectedHandlerDev := RequireAuth(svcDev)(func(w http.ResponseWriter, r *http.Request) {
+		capturedUser = UserFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	reqDev := httptest.NewRequest("GET", "/api/v1/nodes", nil)
+	recDev := httptest.NewRecorder()
+	protectedHandlerDev(recDev, reqDev)
+
+	if recDev.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK with DevNoAuth=true, got %d", recDev.Code)
+	}
+	if capturedUser == nil {
+		t.Fatalf("expected user in context when DevNoAuth=true, got nil")
+	}
+	if !capturedUser.IsAdmin {
+		t.Fatalf("expected DevNoAuth user to be admin, got false")
+	}
+
+	// 3. HandleMe 在 DevNoAuth 下返回 200 与管理员信息
+	authMod := &AuthModule{service: svcDev}
+	reqMe := httptest.NewRequest("GET", "/api/v1/me", nil)
+	recMe := httptest.NewRecorder()
+	authMod.HandleMe(recMe, reqMe)
+
+	if recMe.Code != http.StatusOK {
+		t.Fatalf("expected HandleMe to return 200 under DevNoAuth, got %d", recMe.Code)
+	}
+	var meResp struct {
+		User struct {
+			Username string `json:"username"`
+			IsAdmin  bool   `json:"is_admin"`
+		} `json:"user"`
+	}
+	if err := json.NewDecoder(recMe.Body).Decode(&meResp); err != nil {
+		t.Fatalf("failed to decode HandleMe response: %v", err)
+	}
+	if !meResp.User.IsAdmin {
+		t.Fatalf("expected is_admin=true in HandleMe response, got false")
+	}
+}
+
 
 

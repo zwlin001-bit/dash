@@ -45,7 +45,7 @@ func NewWSHandler(database *db.DB, registry *Registry, cfg *config.Config) *WSHa
 	return &WSHandler{
 		database:     database,
 		registry:     registry,
-		helloHandler: NewHelloHandler(database, cfg),
+		helloHandler: NewHelloHandler(database, registry, cfg),
 		config:       cfg,
 	}
 }
