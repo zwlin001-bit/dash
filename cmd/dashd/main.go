@@ -280,7 +280,7 @@ func runServe(args []string) {
 	}
 
 	if showVersion {
-		fmt.Printf("dashd %s (commit: %s, built: %s)\n", version, gitCommit, buildTime)
+		fmt.Printf("dashd %s (commit: %s, built: %s, dist: %s)\n", version, gitCommit, buildTime, api.DistFingerprint())
 		os.Exit(0)
 	}
 
@@ -317,6 +317,7 @@ func runServe(args []string) {
 
 	// 4. 构造 App{Mux, DB, Config, Version}
 	a := app.NewApp(database, cfg, version)
+	a.DistFingerprint = api.DistFingerprint()
 
 	// 5. RegisterModules 按序注册子模块
 	if err := RegisterModules(a, modules); err != nil {

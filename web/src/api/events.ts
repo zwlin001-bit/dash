@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { toItems } from './envelope';
 
 export interface EventRecord {
   id: string;
@@ -39,14 +40,14 @@ export interface EventsFilter {
   offset?: number;
 }
 
-export interface EventsListResponse {
-  items: EventRecord[];
+export interface EventsListResult {
+  events: EventRecord[];
   total: number;
   limit: number;
   offset: number;
 }
 
-export async function fetchEvents(filter: EventsFilter = {}): Promise<EventsListResponse> {
+export async function fetchEvents(filter: EventsFilter = {}): Promise<EventsListResult> {
   const params = new URLSearchParams();
   if (filter.event_type) params.set('event_type', filter.event_type);
   if (filter.severity) params.set('severity', filter.severity);
@@ -59,7 +60,13 @@ export async function fetchEvents(filter: EventsFilter = {}): Promise<EventsList
 
   const qs = params.toString();
   const url = qs ? `/api/v1/events?${qs}` : '/api/v1/events';
-  return apiFetch<EventsListResponse>(url);
+  const raw = await apiFetch<any>(url);
+  return {
+    events: toItems<EventRecord>(raw),
+    total: typeof raw?.total === 'number' ? raw.total : 0,
+    limit: typeof raw?.limit === 'number' ? raw.limit : (filter.limit || 50),
+    offset: typeof raw?.offset === 'number' ? raw.offset : (filter.offset || 0),
+  };
 }
 
 export async function fetchUnreadCount(): Promise<{ unread_count: number }> {
@@ -77,8 +84,9 @@ export async function markEventsRead(req: {
   });
 }
 
-export async function fetchEventTypes(): Promise<{ items: EventType[] }> {
-  return apiFetch<{ items: EventType[] }>('/api/v1/event-types');
+export async function fetchEventTypes(): Promise<EventType[]> {
+  const raw = await apiFetch<unknown>('/api/v1/event-types');
+  return toItems<EventType>(raw);
 }
 
 export async function updateEventType(

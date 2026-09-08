@@ -1,0 +1,71 @@
+{
+  "items": [
+    {
+      "event_type": "auth.login_failed",
+      "display_name": "登录失败",
+      "default_severity": "warning",
+      "severity": "warning",
+      "default_disposition": "store",
+      "disposition": "store",
+      "description": "控制台用户凭据错误或认证失败",
+      "is_builtin": true,
+      "updated_at_ms": 1788831960751
+    },
+    {
+      "event_type": "node.enrolled",
+      "display_name": "新节点接入",
+      "default_severity": "info",
+      "severity": "info",
+      "default_disposition": "store",
+      "disposition": "store",
+      "description": "新节点使用 enrollment token 完成初始认证接入",
+      "is_builtin": true,
+      "updated_at_ms": 1788831960751
+    },
+    {
+      "event_type": "node.offline",
+      "display_name": "节点离线",
+      "default_severity": "warning",
+      "severity": "warning",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "节点心跳超时或非正常断开连接",
+      "is_builtin": true,
+      "updated_at_ms": 1788831960751
+    },
+    {
+      "event_type": "node.online",
+      "display_name": "节点上线",
+      "default_severity": "info",
+      "severity": "info",
+      "default_disposition": "store",
+      "disposition": "store",
+      "description": "节点建立连接并恢复心跳通信",
+      "is_builtin": true,
+      "updated_at_ms": 1788831960751
+    },
+    {
+      "event_type": "node.removed",
+      "display_name": "节点删除",
+      "default_severity": "warning",
+      "severity": "warning",
+      "default_disposition": "store",
+      "disposition": "store",
+      "description": "节点从平台中被管理员主动移除",
+      "is_builtin": true,
+      "updated_at_ms": 1788831960751
+    },
+    {
+      "event_type": "system.db_unreachable",
+      "display_name": "数据库不可达",
+      "default_severity": "critical",
+      "severity": "critical",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "服务端数据库连接中断或数据批量落库失败",
+      "is_builtin": true,
+      "updated_at_ms": 1788831960751
+    }
+  ]
+}
+

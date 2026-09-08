@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -104,3 +105,39 @@ func TestWebModule_Register(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 }
+
+func TestDistFingerprint(t *testing.T) {
+	fp := api.DistFingerprint()
+	if fp == "" {
+		t.Fatal("expected non-empty dist fingerprint")
+	}
+	if fp != "none" {
+		if len(fp) != 16 {
+			t.Errorf("expected 16-character fingerprint, got %s (len=%d)", fp, len(fp))
+		}
+	}
+}
+
+func TestLintDistScript_LocaleInvariance(t *testing.T) {
+	locales := []string{"C", "POSIX", "C.UTF-8", "en_US.UTF-8"}
+	var baseline string
+
+	for _, loc := range locales {
+		cmd := exec.Command("../../scripts/lint-dist.sh", "--print")
+		cmd.Env = append(cmd.Environ(), "LC_ALL="+loc, "LANG="+loc, "LC_COLLATE="+loc)
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("failed to run lint-dist.sh with LC_ALL=%s: %v", loc, err)
+		}
+		fp := strings.TrimSpace(string(out))
+		if len(fp) != 16 {
+			t.Fatalf("invalid fingerprint format: %s", fp)
+		}
+		if baseline == "" {
+			baseline = fp
+		} else if fp != baseline {
+			t.Fatalf("fingerprint mismatch for locale %s: got %s, expected %s", loc, fp, baseline)
+		}
+	}
+}
+

@@ -1,0 +1,12 @@
+{
+  "site.domain": "custom.domain.org",
+  "site.console_domain": "dash.us.workbench.work",
+  "retention.raw_days": 3,
+  "retention.1m_days": 30,
+  "retention.1h_days": 365,
+  "retention.1d_days": 0,
+  "collect.interval_fast_s": 2,
+  "collect.interval_slow_s": 30,
+  "collect.enable_conns": true
+}
+

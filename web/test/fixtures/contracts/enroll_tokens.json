@@ -1,0 +1,71 @@
+{
+  "items": [
+    {
+      "id": "01M1ZB3411ST3K5EG0CPCEWSMH",
+      "preset_name": "token-preset",
+      "preset_group_id": "01M1ZB34115KJ1775HK5PD7WPY",
+      "expires_at_ms": 1788835561121,
+      "created_by": "admin",
+      "created_at_ms": 1788831961121,
+      "is_used": false,
+      "is_expired": false
+    },
+    {
+      "id": "01M1ZB2TJ5AYSJS6ENQ9GSCQ8F",
+      "preset_name": "token-preset",
+      "preset_group_id": "01M1ZB2TJ5RG62N875M7WRRDAS",
+      "expires_at_ms": 1788835551429,
+      "created_by": "admin",
+      "created_at_ms": 1788831951429,
+      "is_used": false,
+      "is_expired": false
+    },
+    {
+      "id": "01M1ZB22YT5T2DSZV3453BDCF6",
+      "preset_name": "test-node-config",
+      "expires_at_ms": 1788832527258,
+      "used_at_ms": 1788831927268,
+      "used_node_id": "01M1ZB22Z53T0PGV8K025EF7PW",
+      "created_by": "admin",
+      "created_at_ms": 1788831927258,
+      "is_used": true,
+      "is_expired": false
+    },
+    {
+      "id": "01M1ZA90PEQ6P5PP7383SCXRDE",
+      "preset_name": "token-preset",
+      "preset_group_id": "01M1ZA90PEFKJW1BAMR9NHJQ1M",
+      "expires_at_ms": 1788834705742,
+      "created_by": "admin",
+      "created_at_ms": 1788831105742,
+      "is_used": false,
+      "is_expired": false
+    },
+    {
+      "id": "01M1Z9ZGBFC001X8SB1D6RK9GD",
+      "preset_name": "test-node-config",
+      "expires_at_ms": 1788831394095,
+      "used_at_ms": 1788830794098,
+      "used_node_id": "01M1Z9ZGBN55D76VTRH3F0AJS9",
+      "created_by": "admin",
+      "created_at_ms": 1788830794095,
+      "is_used": true,
+      "is_expired": true
+    },
+    {
+      "id": "01M1Z9Z8P6DCECTHZ9DR7DDXA0",
+      "preset_name": "test-vps-1",
+      "expires_at_ms": 1788831686246,
+      "used_at_ms": 1788830786249,
+      "used_node_id": "01M1Z9Z8PCW7CEHZD1PBQ60YR8",
+      "created_by": "admin",
+      "created_at_ms": 1788830786246,
+      "is_used": true,
+      "is_expired": true
+    }
+  ],
+  "total": 6,
+  "page": 1,
+  "page_size": 50
+}
+

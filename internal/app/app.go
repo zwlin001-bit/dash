@@ -27,9 +27,10 @@ type App struct {
 	Mux      *http.ServeMux
 	DB       *db.DB
 	Config   *config.Config
-	Registry any    // 供 control / settings 等模块共享的长连接注册表
-	Ingester any    // 供 control / ingest 共享的指标落库器
-	Version  string // 服务端当前运行版本
+	Registry        any    // 供 control / settings 等模块共享的长连接注册表
+	Ingester        any    // 供 control / ingest 共享的指标落库器
+	Version         string // 服务端当前运行版本
+	DistFingerprint string // 前端内嵌静态产物内容指纹 (P1-27)
 
 	mu             sync.RWMutex
 	routes         []RouteInfo
@@ -198,12 +199,13 @@ func (a *App) HealthzHandler() http.HandlerFunc {
 		}
 
 		resp := map[string]any{
-			"status":          status,
-			"version":         a.Version,
-			"db":              dbStatus,
-			"agents_online":   agentsOnline,
-			"dropped_batches": droppedBatches,
-			"dropped_rows":    droppedRows,
+			"status":           status,
+			"version":          a.Version,
+			"dist_fingerprint": a.DistFingerprint,
+			"db":               dbStatus,
+			"agents_online":    agentsOnline,
+			"dropped_batches":  droppedBatches,
+			"dropped_rows":     droppedRows,
 		}
 		if a.Config != nil && a.Config.Server.DevNoAuth {
 			resp["dev_no_auth"] = true

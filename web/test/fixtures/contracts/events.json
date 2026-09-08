@@ -1,0 +1,62 @@
+{
+  "items": [
+    {
+      "id": "01M1ZB34111T2C033DKRRACKY7",
+      "event_type": "node.online",
+      "severity": "info",
+      "source_module": "inventory",
+      "target_kind": "node",
+      "target_id": "01M1ZB3411JN0WW1TRPYGFDM9Z",
+      "title": "Node Online",
+      "is_read": false,
+      "occurred_at_ms": 1788831961121,
+      "created_at_ms": 1788831961121
+    },
+    {
+      "id": "01M1ZB2TJ5SDV6M0WFKRFZ4E1P",
+      "event_type": "node.online",
+      "severity": "info",
+      "source_module": "inventory",
+      "target_kind": "node",
+      "target_id": "01M1ZB2TJ5EHMDS45G48T0DDZZ",
+      "title": "Node Online",
+      "is_read": false,
+      "occurred_at_ms": 1788831951429,
+      "created_at_ms": 1788831951429
+    },
+    {
+      "id": "01M1ZB1WVPA008FFQHTQE786XP",
+      "event_type": "node.online",
+      "severity": "info",
+      "source_module": "control",
+      "title": "event-2",
+      "is_read": true,
+      "occurred_at_ms": 1788831920005,
+      "created_at_ms": 1788831921014
+    },
+    {
+      "id": "01M1ZB1WVMJ4RBPCB04EKPE447",
+      "event_type": "node.online",
+      "severity": "info",
+      "source_module": "control",
+      "title": "event-1",
+      "is_read": true,
+      "occurred_at_ms": 1788831919005,
+      "created_at_ms": 1788831921012
+    },
+    {
+      "id": "01M1ZB1WVEM6KG2NP51H9S15QC",
+      "event_type": "node.online",
+      "severity": "info",
+      "source_module": "control",
+      "title": "event-0",
+      "is_read": true,
+      "occurred_at_ms": 1788831918005,
+      "created_at_ms": 1788831921006
+    }
+  ],
+  "limit": 50,
+  "offset": 0,
+  "total": 5
+}
+

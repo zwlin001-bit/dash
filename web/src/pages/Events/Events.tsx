@@ -198,7 +198,7 @@ export const Events: React.FC = () => {
                 }}
               >
                 <option value="">全部类型</option>
-                {typesData?.items?.map((t) => (
+                {typesData?.map((t) => (
                   <option key={t.event_type} value={t.event_type}>
                     {t.display_name} ({t.event_type})
                   </option>
@@ -277,11 +277,11 @@ export const Events: React.FC = () => {
 
           {eventsLoading ? (
             <div className={styles.emptyState}>加载中...</div>
-          ) : !eventsData?.items || eventsData.items.length === 0 ? (
+          ) : !eventsData?.events || eventsData.events.length === 0 ? (
             <div className={styles.emptyState}>暂无符合过滤条件的事件</div>
           ) : (
             <div className={styles.timelineList}>
-              {eventsData.items.map((event: EventRecord) => {
+              {eventsData.events.map((event: EventRecord) => {
                 const isExpanded = !!expandedIds[event.id];
                 return (
                   <div
@@ -393,7 +393,7 @@ export const Events: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {typesData?.items?.map((t: EventType) => {
+              {typesData?.map((t: EventType) => {
                 const currentEdit = policyEdits[t.event_type] || {
                   severity: t.severity,
                   disposition: t.disposition,
