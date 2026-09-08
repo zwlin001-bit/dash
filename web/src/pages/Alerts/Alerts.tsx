@@ -51,7 +51,7 @@ export const Alerts: React.FC = () => {
     queryKey: ['notify-channels'],
     queryFn: fetchNotifyChannels,
   });
-  const channels = channelsData || [];
+  const channels: NotifyChannel[] = channelsData || [];
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
