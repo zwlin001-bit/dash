@@ -1,6 +1,6 @@
 .PHONY: all build build-dashd build-agent build-provider-aliyun build-agent-all test lint lint-dist lint-css-tokens migrate clean verify-agent-matrix
 
-VERSION ?= dev
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || cat VERSION 2>/dev/null || echo dev)
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_TIME ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildTime=$(BUILD_TIME)
@@ -58,6 +58,9 @@ build-web:
 	@if command -v npm >/dev/null 2>&1 && [ -f web/package.json ]; then \
 		echo "Building web assets..."; \
 		./scripts/lint-css-tokens.sh && \
+		if [ ! -d web/node_modules ] || [ web/package-lock.json -nt web/node_modules ]; then \
+			(cd web && npm ci); \
+		fi && \
 		(cd web && npm run build) && \
 		rm -rf internal/api/dist && \
 		mkdir -p internal/api/dist && \

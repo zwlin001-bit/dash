@@ -154,6 +154,14 @@ func (a *App) Close() error {
 		reg.Stop()
 	}
 
+	if ge, ok := a.GuardEngine.(interface{ Stop() }); ok && ge != nil {
+		ge.Stop()
+	}
+
+	if je, ok := a.JobEngine.(interface{ Stop() }); ok && je != nil {
+		je.Stop()
+	}
+
 	if a.DB != nil {
 		return a.DB.Close()
 	}

@@ -182,3 +182,62 @@ func TestCloudService(t *testing.T) {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
 }
+
+func TestEnsureBuiltinProviders_SelfHealing(t *testing.T) {
+	d := getTestDB(t)
+	defer d.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	masterKey := make([]byte, 32)
+	credStore := credentials.NewStore(d, masterKey)
+	pm := provider.NewManager(t.TempDir())
+	svc := cloud.NewService(d, credStore, pm)
+
+	// Clean existing aliyun provider
+	_, _ = d.Exec(ctx, "DELETE FROM providers WHERE provider_code = ?", "aliyun")
+
+	// 1. Fresh seeding -> should be absolute path
+	if err := svc.EnsureBuiltinProviders(ctx); err != nil {
+		t.Fatalf("EnsureBuiltinProviders failed: %v", err)
+	}
+
+	var execPath string
+	if err := d.QueryRow(ctx, "SELECT exec_path FROM providers WHERE provider_code = ?", "aliyun").Scan(&execPath); err != nil {
+		t.Fatalf("query exec_path failed: %v", err)
+	}
+	if execPath != "/usr/local/bin/dash-provider-aliyun" {
+		t.Errorf("expected /usr/local/bin/dash-provider-aliyun, got %s", execPath)
+	}
+
+	// 2. Simulate old machine with relative path
+	_, err := d.Exec(ctx, "UPDATE providers SET exec_path = ? WHERE provider_code = ?", "bin/dash-provider-aliyun", "aliyun")
+	if err != nil {
+		t.Fatalf("simulate old relative exec_path failed: %v", err)
+	}
+
+	// 3. EnsureBuiltinProviders during startup/upgrade should self-heal to absolute path
+	if err := svc.EnsureBuiltinProviders(ctx); err != nil {
+		t.Fatalf("EnsureBuiltinProviders self-healing failed: %v", err)
+	}
+
+	if err := d.QueryRow(ctx, "SELECT exec_path FROM providers WHERE provider_code = ?", "aliyun").Scan(&execPath); err != nil {
+		t.Fatalf("query exec_path after self-heal failed: %v", err)
+	}
+	if execPath != "/usr/local/bin/dash-provider-aliyun" {
+		t.Errorf("expected self-healed /usr/local/bin/dash-provider-aliyun, got %s", execPath)
+	}
+
+	// 4. Idempotency: run again, should remain unchanged
+	if err := svc.EnsureBuiltinProviders(ctx); err != nil {
+		t.Fatalf("idempotent EnsureBuiltinProviders failed: %v", err)
+	}
+	if err := d.QueryRow(ctx, "SELECT exec_path FROM providers WHERE provider_code = ?", "aliyun").Scan(&execPath); err != nil {
+		t.Fatalf("query exec_path after second run failed: %v", err)
+	}
+	if execPath != "/usr/local/bin/dash-provider-aliyun" {
+		t.Errorf("expected /usr/local/bin/dash-provider-aliyun, got %s", execPath)
+	}
+}
+
