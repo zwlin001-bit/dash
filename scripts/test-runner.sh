@@ -10,7 +10,7 @@ OUTPUT_FILE="$(mktemp)"
 trap 'rm -f "$OUTPUT_FILE"' EXIT
 
 set +e
-go test -v ./... 2>&1 | tee "$OUTPUT_FILE"
+go test -p=1 -v ./... 2>&1 | tee "$OUTPUT_FILE"
 TEST_EXIT_CODE=$?
 set -e
 

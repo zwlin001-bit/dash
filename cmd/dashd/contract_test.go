@@ -420,16 +420,18 @@ func TestAPIContractFixturesAndValidation(t *testing.T) {
 			rawBytes := rec.Body.Bytes()
 			tc.validate(t, rawBytes)
 
-			// 格式化写入 Fixture 文件，供前端契约测试使用
-			var pretty bytes.Buffer
-			if err := json.Indent(&pretty, rawBytes, "", "  "); err != nil {
-				t.Fatalf("json indent error: %v", err)
-			}
-			pretty.WriteString("\n")
+			// 仅在显式指定 DASH_UPDATE_FIXTURES=1 时覆写 Fixture 文件（P2-07 机制已移交给 cmd/gen-fixtures）
+			if os.Getenv("DASH_UPDATE_FIXTURES") == "1" {
+				var pretty bytes.Buffer
+				if err := json.Indent(&pretty, rawBytes, "", "  "); err != nil {
+					t.Fatalf("json indent error: %v", err)
+				}
+				pretty.WriteString("\n")
 
-			fixturePath := filepath.Join(fixturesDir, tc.fixtureFile)
-			if err := os.WriteFile(fixturePath, pretty.Bytes(), 0644); err != nil {
-				t.Fatalf("failed to write fixture %s: %v", fixturePath, err)
+				fixturePath := filepath.Join(fixturesDir, tc.fixtureFile)
+				if err := os.WriteFile(fixturePath, pretty.Bytes(), 0644); err != nil {
+					t.Fatalf("failed to write fixture %s: %v", fixturePath, err)
+				}
 			}
 		})
 	}
