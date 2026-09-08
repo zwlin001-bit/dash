@@ -885,7 +885,7 @@ export const CloudGuard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {dryRunResult.items.map((item) => (
+                  {dryRunResult.actions.map((item) => (
                     <tr key={item.resource_id}>
                       <td>
                         <strong>{item.resource_name || item.resource_ref}</strong>
