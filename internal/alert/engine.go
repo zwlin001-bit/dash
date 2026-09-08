@@ -121,7 +121,7 @@ func (e *Engine) Start() error {
 	e.wg.Add(3)
 	go e.runLoop(e.cfg.MetricInterval, []string{RuleKindMetric})
 	go e.runLoop(e.cfg.OfflineInterval, []string{RuleKindOffline})
-	go e.runLoop(e.cfg.HourlyInterval, []string{RuleKindExpiry, RuleKindTraffic})
+	go e.runLoop(e.cfg.HourlyInterval, []string{RuleKindExpiry, RuleKindTraffic, RuleKindBudget})
 
 	logx.Info("alert: alert engine started")
 	return nil
@@ -186,7 +186,7 @@ func (e *Engine) EvaluateKind(ctx context.Context, ruleKind string) error {
 
 // EvaluateAll triggers immediate evaluation across all rule kinds.
 func (e *Engine) EvaluateAll(ctx context.Context) error {
-	kinds := []string{RuleKindMetric, RuleKindOffline, RuleKindExpiry, RuleKindTraffic}
+	kinds := []string{RuleKindMetric, RuleKindOffline, RuleKindExpiry, RuleKindTraffic, RuleKindBudget}
 	for _, k := range kinds {
 		if err := e.EvaluateKind(ctx, k); err != nil {
 			return err

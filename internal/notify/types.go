@@ -18,8 +18,8 @@ type Rule struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
 	IsEnabled       bool   `json:"is_enabled"`
-	EventPattern    string `json:"event_pattern"`  // e.g. "*", "node.*", "node.offline"
-	MinSeverity     string `json:"min_severity"`   // "info" / "warning" / "critical"
+	EventPattern    string `json:"event_pattern"` // e.g. "*", "node.*", "node.offline"
+	MinSeverity     string `json:"min_severity"`  // "info" / "warning" / "critical"
 	NotifyChannelID string `json:"notify_channel_id"`
 	TemplateName    string `json:"template_name,omitempty"`
 	ThrottleS       int    `json:"throttle_s"`

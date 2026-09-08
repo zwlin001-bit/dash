@@ -461,4 +461,142 @@ func TestListMetrics(t *testing.T) {
 	}
 }
 
+func TestListBills(t *testing.T) {
+	var overviewCalls, billCalls int32
 
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = r.ParseForm()
+		action := r.Form.Get("Action")
+
+		switch action {
+		case "QueryBillOverview":
+			atomic.AddInt32(&overviewCalls, 1)
+			_, _ = w.Write([]byte(`{
+				"Data": {
+					"BillingCycle": "2026-09",
+					"AccountCurrency": "CNY",
+					"Items": {
+						"Item": [
+							{
+								"PretaxGrossAmount": 1250.00,
+								"InvoiceDiscount": 15.44,
+								"PretaxAmount": 1234.56,
+								"PaymentAmount": 1234.56,
+								"Currency": "CNY"
+							}
+						]
+					}
+				}
+			}`))
+		case "QueryInstanceBill":
+			atomic.AddInt32(&billCalls, 1)
+			pageNum := r.Form.Get("PageNum")
+			if pageNum == "1" {
+				_, _ = w.Write([]byte(`{
+					"Data": {
+						"TotalCount": 3,
+						"PageNum": 1,
+						"PageSize": 2,
+						"Items": {
+							"Item": [
+								{
+									"InstanceID": "i-test1",
+									"NickName": "web-ecs-01",
+									"ProductCode": "ecs",
+									"PaymentAmount": 85.00,
+									"Usage": "720",
+									"UsageUnit": "小时"
+								},
+								{
+									"InstanceID": "d-disk1",
+									"NickName": "data-disk-01",
+									"ProductCode": "disk",
+									"PaymentAmount": 30.00,
+									"Usage": "40",
+									"UsageUnit": "GB"
+								}
+							]
+						}
+					}
+				}`))
+			} else {
+				_, _ = w.Write([]byte(`{
+					"Data": {
+						"TotalCount": 3,
+						"PageNum": 2,
+						"PageSize": 2,
+						"Items": {
+							"Item": [
+								{
+									"InstanceID": "",
+									"NickName": "共享公网带宽包",
+									"ProductCode": "cbwp",
+									"PaymentAmount": 50.00,
+									"Usage": "100",
+									"UsageUnit": "GB"
+								}
+							]
+						}
+					}
+				}`))
+			}
+		default:
+			http.Error(w, "unknown action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	p := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return createMockSDKClient(ts.URL)
+		}),
+		aliyun.WithCustomDomain("QueryBillOverview", u.Host),
+		aliyun.WithCustomDomain("QueryInstanceBill", u.Host),
+	)
+
+	ctx := context.Background()
+	cred := map[string]string{"access_key_id": "test_ak", "access_key_secret": "test_sk"}
+
+	res, err := p.ListBills(ctx, cred, "2026-09", "china")
+	if err != nil {
+		t.Fatalf("ListBills failed: %v", err)
+	}
+
+	if res.Period != "2026-09" {
+		t.Errorf("expected period 2026-09, got %s", res.Period)
+	}
+	if res.Currency != "CNY" {
+		t.Errorf("expected currency CNY, got %s", res.Currency)
+	}
+	if res.TotalAmount != 1234.56 {
+		t.Errorf("expected total amount 1234.56, got %f", res.TotalAmount)
+	}
+	if res.DiscountAmount != 15.44 {
+		t.Errorf("expected discount 15.44, got %f", res.DiscountAmount)
+	}
+	if len(res.Items) != 3 {
+		t.Fatalf("expected 3 items across 2 pages, got %d", len(res.Items))
+	}
+
+	// Verify item 1: instance
+	if res.Items[0].ResKind != "instance" || res.Items[0].ResRef != "i-test1" || res.Items[0].Amount != 85.00 || res.Items[0].UsageText != "720 小时" {
+		t.Errorf("unexpected item 0: %+v", res.Items[0])
+	}
+	// Verify item 2: disk
+	if res.Items[1].ResKind != "disk" || res.Items[1].ResRef != "d-disk1" || res.Items[1].Amount != 30.00 {
+		t.Errorf("unexpected item 1: %+v", res.Items[1])
+	}
+	// Verify item 3: unassociated bandwidth package
+	if res.Items[2].ResKind != "bandwidth" || res.Items[2].ResRef != "" || res.Items[2].Amount != 50.00 {
+		t.Errorf("unexpected item 2: %+v", res.Items[2])
+	}
+
+	if atomic.LoadInt32(&overviewCalls) != 1 {
+		t.Errorf("expected 1 overview call, got %d", atomic.LoadInt32(&overviewCalls))
+	}
+	if atomic.LoadInt32(&billCalls) != 2 {
+		t.Errorf("expected 2 instance bill calls for pagination, got %d", atomic.LoadInt32(&billCalls))
+	}
+}

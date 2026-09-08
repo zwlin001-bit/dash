@@ -168,3 +168,29 @@ type MetricListResult struct {
 	Points     []MetricPoint `json:"points"`
 }
 
+// BillListParams parameters for bill.list
+type BillListParams struct {
+	Credential  map[string]string `json:"credential"`
+	Period      string            `json:"period"` // "2026-09"
+	AccountSite string            `json:"account_site,omitempty"`
+}
+
+// BillItem normalized line item for cloud bill
+type BillItem struct {
+	ResKind     string  `json:"res_kind"`
+	ResRef      string  `json:"res_ref,omitempty"`
+	ItemName    string  `json:"item_name,omitempty"`
+	ProductCode string  `json:"product_code,omitempty"`
+	Amount      float64 `json:"amount"`
+	UsageText   string  `json:"usage_text,omitempty"`
+}
+
+// BillListResult returns normalized bill details for period
+type BillListResult struct {
+	Period         string     `json:"period"`
+	Currency       string     `json:"currency"`
+	TotalAmount    float64    `json:"total_amount"`
+	PretaxAmount   float64    `json:"pretax_amount,omitempty"`
+	DiscountAmount float64    `json:"discount_amount,omitempty"`
+	Items          []BillItem `json:"items"`
+}

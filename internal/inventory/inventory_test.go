@@ -729,4 +729,3 @@ func TestNodeLatest_OnlineAndOffline(t *testing.T) {
 		t.Fatalf("expected serialized JSON to omit latest when offline (omitempty), got: %s", string(bOffline))
 	}
 }
-

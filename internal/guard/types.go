@@ -1,6 +1,5 @@
 package guard
 
-
 // GuardRule 对应 guard_rules 表 (P2-04 §1)。
 type GuardRule struct {
 	ID              string   `json:"id"`

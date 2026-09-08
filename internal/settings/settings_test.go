@@ -254,4 +254,3 @@ func TestLiveAgentConfigBroadcastNoReconnect(t *testing.T) {
 		t.Fatalf("node should remain online without reconnecting")
 	}
 }
-

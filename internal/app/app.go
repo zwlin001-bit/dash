@@ -27,14 +27,14 @@ type App struct {
 	Mux             *http.ServeMux
 	DB              *db.DB
 	Config          *config.Config
-	Registry        any    // 供 control / settings 等模块共享的长连接注册表
-	Ingester        any    // 供 control / ingest 共享的指标落库器
-	JobEngine       any    // 供各业务模块调用的通用 Job 引擎 (P2-03)
-	CloudService    any    // 供各业务模块调用的云资产服务 (P2-02)
-	GuardEngine     any    // 供各业务模块调用的 ECS 保活与流量守卫引擎 (P2-04)
-	AlertEngine     any    // 供各业务模块调用的告警引擎 (P2-08)
-	Version         string // 服务端当前运行版本
-	DistFingerprint string // 前端内嵌静态产物内容指纹 (P1-27)
+	Registry        any                             // 供 control / settings 等模块共享的长连接注册表
+	Ingester        any                             // 供 control / ingest 共享的指标落库器
+	JobEngine       any                             // 供各业务模块调用的通用 Job 引擎 (P2-03)
+	CloudService    any                             // 供各业务模块调用的云资产服务 (P2-02)
+	GuardEngine     any                             // 供各业务模块调用的 ECS 保活与流量守卫引擎 (P2-04)
+	AlertEngine     any                             // 供各业务模块调用的告警引擎 (P2-08)
+	Version         string                          // 服务端当前运行版本
+	DistFingerprint string                          // 前端内嵌静态产物内容指纹 (P1-27)
 	HealthCheckPing func(ctx context.Context) error // 可选探活重载 (测试与 Fixture 生成时跳过真库 Ping)
 
 	mu             sync.RWMutex

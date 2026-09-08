@@ -84,6 +84,10 @@ func (m *mockProviderClient) PollJob(ctx context.Context, jobHandle string) (*pr
 func (m *mockProviderClient) ListMetrics(ctx context.Context, params provider.MetricListParams) (*provider.MetricListResult, error) {
 	return &provider.MetricListResult{}, nil
 }
+
+func (m *mockProviderClient) ListBills(ctx context.Context, cred map[string]string, period, accountSite string) (*provider.BillListResult, error) {
+	return &provider.BillListResult{Period: period, Currency: "CNY"}, nil
+}
 func (m *mockProviderClient) Close() error { return nil }
 
 func TestGuardHTTPAPI(t *testing.T) {

@@ -849,6 +849,18 @@ func (s *Store) SyncBuiltinRules(ctx context.Context) error {
 			SilenceS:         86400,
 			IncludeAutoRenew: false,
 		},
+		{
+			Name:             "云账单月度预算告警",
+			IsEnabled:        true,
+			RuleKind:         RuleKindBudget,
+			ScopeKind:        ScopeKindAll,
+			CompareOp:        CompareOpGTE,
+			Threshold:        0.8,
+			DurationS:        0,
+			Severity:         SeverityWarning,
+			SilenceS:         86400,
+			IncludeAutoRenew: false,
+		},
 	}
 
 	for _, d := range defaults {

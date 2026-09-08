@@ -140,4 +140,3 @@ func TestLintDistScript_LocaleInvariance(t *testing.T) {
 		}
 	}
 }
-

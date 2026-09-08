@@ -455,6 +455,3 @@ func TestDevNoAuth_RequireAuthAndMe(t *testing.T) {
 		t.Fatalf("expected is_admin=true in HandleMe response, got false")
 	}
 }
-
-
-

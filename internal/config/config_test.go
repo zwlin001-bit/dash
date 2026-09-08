@@ -527,4 +527,3 @@ dev_no_auth = true
 		t.Fatalf("expected DevNoAuth to be true from DEV_NO_AUTH, got false")
 	}
 }
-

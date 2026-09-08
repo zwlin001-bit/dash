@@ -292,24 +292,39 @@ func (sm *StateMachine) sendAlertNotification(ctx context.Context, rule *AlertRu
 	if state == EventStateResolved {
 		eventType = "alert.resolved"
 		title = fmt.Sprintf("【告警恢复】%s - %s", rule.Name, res.NodeName)
+	} else if rule.RuleKind == RuleKindBudget {
+		if res.CurrentVal >= 1.0 {
+			eventType = "billing.budget_exceeded"
+			title = fmt.Sprintf("【云账单超出预算】%s 当月支出已超额", res.NodeName)
+		} else {
+			eventType = "billing.budget_warning"
+			title = fmt.Sprintf("【云账单预算预警】%s 当月支出达到预警线", res.NodeName)
+		}
 	}
 
 	payload := map[string]any{
-		"NodeName":    res.NodeName,
-		"RuleName":    rule.Name,
-		"Severity":    rule.Severity,
-		"Value":       fmt.Sprintf("%.2f", res.CurrentVal),
-		"Threshold":   fmt.Sprintf("%.2f", rule.Threshold),
-		"FiredAt":     time.UnixMilli(nowMs).UTC().Format("2006-01-02 15:04:05 UTC"),
-		"EventState":  state,
-		"Detail":      res.Detail,
+		"NodeName":     res.NodeName,
+		"BudgetName":   res.NodeName,
+		"RuleName":     rule.Name,
+		"Severity":     rule.Severity,
+		"Value":        fmt.Sprintf("%.2f", res.CurrentVal),
+		"Threshold":    fmt.Sprintf("%.2f", rule.Threshold),
+		"ProgressPct":  fmt.Sprintf("%.1f", res.CurrentVal*100),
+		"FiredAt":      time.UnixMilli(nowMs).UTC().Format("2006-01-02 15:04:05 UTC"),
+		"EventState":   state,
+		"Detail":       res.Detail,
 		"OccurredAtMs": nowMs,
+	}
+
+	targetKind := "node"
+	if rule.RuleKind == RuleKindBudget {
+		targetKind = "budget"
 	}
 
 	ev := events.Event{
 		Type:       eventType,
 		Source:     "alert",
-		TargetKind: "node",
+		TargetKind: targetKind,
 		TargetID:   res.NodeID,
 		Title:      title,
 		Payload:    payload,

@@ -24,12 +24,12 @@ type ProcessInstance struct {
 
 // Manager supervises provider plugin processes and manages RPC clients.
 type Manager struct {
-	mu           sync.RWMutex
-	runtimeDir   string
-	searchDirs   []string
-	instances    map[string]*ProcessInstance
-	mockClients  map[string]ProviderClient
-	closed       bool
+	mu          sync.RWMutex
+	runtimeDir  string
+	searchDirs  []string
+	instances   map[string]*ProcessInstance
+	mockClients map[string]ProviderClient
+	closed      bool
 }
 
 // NewManager creates a provider process manager.

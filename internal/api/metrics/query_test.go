@@ -282,7 +282,7 @@ func TestFourSpansAndPerformance(t *testing.T) {
 	m1Start := baseTime - 3*86400*1000
 	for i := 0; i < 4320; i++ {
 		ts := m1Start + int64(i*60000)
-		m1Rows[i] = []any{nodeID, ts, 12, float64(i%80), float64(i%80) + 10, float64(i % 80), float64(200000000), int64(i * 600)}
+		m1Rows[i] = []any{nodeID, ts, 12, float64(i % 80), float64(i%80) + 10, float64(i % 80), float64(200000000), int64(i * 600)}
 	}
 	if err := d.BatchInsert(ctx, "sample_host_1m", m1Cols, m1Rows); err != nil {
 		t.Fatalf("failed to seed sample_host_1m: %v", err)
@@ -295,7 +295,7 @@ func TestFourSpansAndPerformance(t *testing.T) {
 	h1Start := baseTime - 60*86400*1000
 	for i := 0; i < 1440; i++ {
 		ts := h1Start + int64(i*3600000)
-		h1Rows[i] = []any{nodeID, ts, 720, float64(i%70), float64(i%70) + 15, float64(i % 70), float64(300000000), int64(i * 36000)}
+		h1Rows[i] = []any{nodeID, ts, 720, float64(i % 70), float64(i%70) + 15, float64(i % 70), float64(300000000), int64(i * 36000)}
 	}
 	if err := d.BatchInsert(ctx, "sample_host_1h", h1Cols, h1Rows); err != nil {
 		t.Fatalf("failed to seed sample_host_1h: %v", err)
@@ -308,7 +308,7 @@ func TestFourSpansAndPerformance(t *testing.T) {
 	d1Start := baseTime - 365*86400*1000
 	for i := 0; i < 365; i++ {
 		ts := d1Start + int64(i*86400000)
-		d1Rows[i] = []any{nodeID, ts, 17280, float64(i%60), float64(i%60) + 20, float64(i % 60), float64(400000000), int64(i * 864000)}
+		d1Rows[i] = []any{nodeID, ts, 17280, float64(i % 60), float64(i%60) + 20, float64(i % 60), float64(400000000), int64(i * 864000)}
 	}
 	if err := d.BatchInsert(ctx, "sample_host_1d", d1Cols, d1Rows); err != nil {
 		t.Fatalf("failed to seed sample_host_1d: %v", err)

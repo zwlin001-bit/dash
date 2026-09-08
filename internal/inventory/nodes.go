@@ -24,28 +24,28 @@ type GroupInfo struct {
 
 // BillingSummary 概览列表中的简要计费信息。
 type BillingSummary struct {
-	ExpiresAtMs      *int64  `json:"expires_at_ms,omitempty"`
-	TrafficLimit     *int64  `json:"traffic_limit,omitempty"`
-	TrafficLimitKind *string `json:"traffic_limit_kind,omitempty"`
-	Currency         *string `json:"currency,omitempty"`
+	ExpiresAtMs      *int64   `json:"expires_at_ms,omitempty"`
+	TrafficLimit     *int64   `json:"traffic_limit,omitempty"`
+	TrafficLimitKind *string  `json:"traffic_limit_kind,omitempty"`
+	Currency         *string  `json:"currency,omitempty"`
 	Price            *float64 `json:"price,omitempty"`
 }
 
 // Node 表示完整的节点信息。
 type Node struct {
-	ID             string          `json:"id"`
-	Name           string          `json:"name"`
-	NodeGroupID    *string         `json:"node_group_id,omitempty"`
-	DisplayOrder   int             `json:"display_order"`
-	IsHidden       bool            `json:"is_hidden"`
-	AgentTokenHash *string         `json:"-"`
-	AgentVersion   *string         `json:"agent_version,omitempty"`
-	ConnState      string          `json:"conn_state"`
-	LastSeenAtMs   *int64          `json:"last_seen_at_ms,omitempty"`
-	ClockSkewMs    *int64          `json:"clock_skew_ms,omitempty"`
-	Note           *string         `json:"note,omitempty"`
-	CreatedAtMs    int64           `json:"created_at_ms"`
-	UpdatedAtMs    int64           `json:"updated_at_ms"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	NodeGroupID    *string `json:"node_group_id,omitempty"`
+	DisplayOrder   int     `json:"display_order"`
+	IsHidden       bool    `json:"is_hidden"`
+	AgentTokenHash *string `json:"-"`
+	AgentVersion   *string `json:"agent_version,omitempty"`
+	ConnState      string  `json:"conn_state"`
+	LastSeenAtMs   *int64  `json:"last_seen_at_ms,omitempty"`
+	ClockSkewMs    *int64  `json:"clock_skew_ms,omitempty"`
+	Note           *string `json:"note,omitempty"`
+	CreatedAtMs    int64   `json:"created_at_ms"`
+	UpdatedAtMs    int64   `json:"updated_at_ms"`
 
 	// 扩展聚合信息（批量填充，防止前端 N+1 查询）
 	Group   *GroupInfo      `json:"group,omitempty"`

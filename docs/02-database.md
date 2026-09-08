@@ -305,6 +305,43 @@ notify_channels(id, name str(64), channel_kind str(32),
                 config_json text, is_enabled bool, created_at_ms, updated_at_ms)
 ```
 
+### 4.6 云账单
+
+> **第二期内容 ([15-cloud-billing.md](15-cloud-billing.md))。** 云厂商 API 账单拉取、按维度汇总与预算告警。
+
+```
+bill_periods(id, cloud_account_id, period str(7),        -- "2026-09"
+             currency str(8),
+             total_amount f64,                            -- 应付
+             pretax_amount f64 NULL, discount_amount f64 NULL,
+             sync_state str(16),                          -- pending/syncing/ok/failed
+             synced_at_ms ts NULL, error_text text NULL,
+             created_at_ms, updated_at_ms)
+  ux_bill_periods (cloud_account_id, period)
+  ix_bill_periods_period (period)
+
+bill_items(id, cloud_account_id, period str(7),
+           res_kind str(32),                              -- instance / disk / ip / bandwidth / other
+           res_ref str(191) NULL,                         -- 云厂商侧资源 id
+           cloud_resource_id NULL,                        -- 关联到本地资源，可空
+           item_name str(128) NULL,
+           product_code str(64) NULL,
+           currency str(8), amount f64,
+           usage_text str(64) NULL,                       -- "720 小时"，展示用
+           created_at_ms, updated_at_ms)
+  ix_bill_items_period (cloud_account_id, period)
+  ix_bill_items_res (cloud_resource_id)
+  ix_bill_items_ref (res_ref)
+
+bill_budgets(id, scope_kind str(16), scope_ref str(26) NULL,   -- all / account / tag
+             period_kind str(8),                               -- month
+             currency str(8), amount f64,
+             warn_ratio f64,                                    -- 0.8 = 用到 80% 预警
+             is_enabled bool,
+             created_at_ms, updated_at_ms)
+  ix_bill_budgets_scope (scope_kind, is_enabled)
+```
+
 ---
 
 ## 5. 时序数据设计

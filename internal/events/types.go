@@ -6,13 +6,13 @@ import (
 
 // Event 定义跨模块发布的标准事件结构 (P1-20 / 09-events-notify.md §2)
 type Event struct {
-	Type       string         `json:"event_type"`        // 如 "node.offline"
-	Source     string         `json:"source_module"`     // 模块名，如 "control"
+	Type       string         `json:"event_type"`            // 如 "node.offline"
+	Source     string         `json:"source_module"`         // 模块名，如 "control"
 	TargetKind string         `json:"target_kind,omitempty"` // "node" / "user" / ""
 	TargetID   string         `json:"target_id,omitempty"`
 	Title      string         `json:"title"`
-	Payload    map[string]any `json:"payload,omitempty"` // 模板变量，见 09-events-notify.md §5.2
-	DedupKey   string         `json:"dedup_key,omitempty"` // 如 "node.offline:<node_id>"，可空
+	Payload    map[string]any `json:"payload,omitempty"`        // 模板变量，见 09-events-notify.md §5.2
+	DedupKey   string         `json:"dedup_key,omitempty"`      // 如 "node.offline:<node_id>"，可空
 	OccurredAt int64          `json:"occurred_at_ms,omitempty"` // 0 表示用当前时间
 }
 

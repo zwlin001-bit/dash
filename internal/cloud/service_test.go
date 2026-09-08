@@ -240,4 +240,3 @@ func TestEnsureBuiltinProviders_SelfHealing(t *testing.T) {
 		t.Errorf("expected /usr/local/bin/dash-provider-aliyun, got %s", execPath)
 	}
 }
-

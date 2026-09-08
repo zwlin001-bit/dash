@@ -168,9 +168,9 @@ func TestJobsHTTPAPI(t *testing.T) {
 
 	// 6. Conflict 409 when target is busy
 	conflictBody := map[string]any{
-		"kind":         "test.three_steps",
-		"target_kind":  "node",
-		"target_id":    "node-conflict-01",
+		"kind":           "test.three_steps",
+		"target_kind":    "node",
+		"target_id":      "node-conflict-01",
 		"reject_if_busy": true,
 	}
 	cbBytes, _ := json.Marshal(conflictBody)

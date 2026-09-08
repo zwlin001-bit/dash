@@ -103,9 +103,9 @@ func (s *Store) QuerySeries(ctx context.Context, accountID, resRef string, metri
 	defer rows.Close()
 
 	type sampleItem struct {
-		ts     int64
-		code   string
-		val    float64
+		ts   int64
+		code string
+		val  float64
 	}
 
 	var items []sampleItem

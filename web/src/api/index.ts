@@ -16,3 +16,4 @@ export * from './cloud';
 export * from './jobs';
 export * from './guard';
 export * from './alerts';
+export * from './cloudBilling';

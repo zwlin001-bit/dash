@@ -43,15 +43,15 @@ type AlertRule struct {
 	ID               string   `json:"id"`
 	Name             string   `json:"name"`
 	IsEnabled        bool     `json:"is_enabled"`
-	RuleKind         string   `json:"rule_kind"` // metric / offline / expiry / traffic / budget
+	RuleKind         string   `json:"rule_kind"`  // metric / offline / expiry / traffic / budget
 	ScopeKind        string   `json:"scope_kind"` // all / group / tag / node
 	ScopeRef         string   `json:"scope_ref,omitempty"`
 	MetricCode       string   `json:"metric_code,omitempty"`
 	CompareOp        string   `json:"compare_op"` // gt / lt / gte / lte
 	Threshold        float64  `json:"threshold"`
-	DurationS        int      `json:"duration_s"` // 去抖持续时间
-	Severity         string   `json:"severity"` // info / warning / critical
-	SilenceS         int      `json:"silence_s"` // 静默期（秒）
+	DurationS        int      `json:"duration_s"`         // 去抖持续时间
+	Severity         string   `json:"severity"`           // info / warning / critical
+	SilenceS         int      `json:"silence_s"`          // 静默期（秒）
 	IncludeAutoRenew bool     `json:"include_auto_renew"` // 到期提醒是否包含自动续费节点
 	ExtraJSON        string   `json:"extra_json,omitempty"`
 	ChannelIDs       []string `json:"channel_ids,omitempty"` // 绑定的通知渠道 ID 列表
@@ -82,11 +82,11 @@ type AlertEvent struct {
 
 // EventFilter defines query filters for listing alert events.
 type EventFilter struct {
-	RuleID    string
-	NodeID    string
-	State     string
-	FromMs    int64
-	ToMs      int64
-	Limit     int
-	Offset    int
+	RuleID string
+	NodeID string
+	State  string
+	FromMs int64
+	ToMs   int64
+	Limit  int
+	Offset int
 }

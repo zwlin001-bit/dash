@@ -9,9 +9,9 @@ import (
 	"path"
 	"strings"
 
-	"dash/internal/app"
 	eventsapi "dash/internal/api/events"
 	notifyapi "dash/internal/api/notify"
+	"dash/internal/app"
 )
 
 //go:embed all:dist

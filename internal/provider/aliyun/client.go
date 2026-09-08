@@ -93,7 +93,6 @@ func (p *Provider) Describe() *provider.ProviderDescription {
 			"action_stop",
 			"cdt_traffic",
 			"billing",
-			"metric_list",
 		},
 	}
 }
@@ -418,13 +417,13 @@ func parseDescribeInstances(body []byte, defaultRegion string) ([]provider.Norma
 		}
 
 		attrs := map[string]any{
-			"instance_charge_type":        inst.InstanceChargeType,
+			"instance_charge_type":       inst.InstanceChargeType,
 			"internet_max_bandwidth_out": inst.InternetMaxBandwidthOut,
 			"internet_max_bandwidth_in":  inst.InternetMaxBandwidthIn,
-			"instance_type":               inst.InstanceType,
-			"os_type":                     inst.OSType,
-			"os_name":                     inst.OSName,
-			"creation_time":               inst.CreationTime,
+			"instance_type":              inst.InstanceType,
+			"os_type":                    inst.OSType,
+			"os_name":                    inst.OSName,
+			"creation_time":              inst.CreationTime,
 		}
 
 		res = append(res, provider.NormalizedResource{
@@ -485,7 +484,7 @@ func (p *Provider) DescribeInstanceBill(ctx context.Context, ak, sk, accountSite
 		Data struct {
 			Items struct {
 				Item []struct {
-					InstanceID string  `json:"InstanceID"`
+					InstanceID   string  `json:"InstanceID"`
 					PretaxAmount float64 `json:"PretaxAmount"`
 				} `json:"Item"`
 			} `json:"Items"`
@@ -798,4 +797,218 @@ func (p *Provider) ListMetrics(ctx context.Context, params provider.MetricListPa
 		MetricCode: params.MetricCode,
 		Points:     points,
 	}, nil
+}
+
+// ListBills queries monthly bill overview and detailed items from Aliyun BSS API.
+func (p *Provider) ListBills(ctx context.Context, cred map[string]string, period, accountSite string) (*provider.BillListResult, error) {
+	ak := cred["access_key_id"]
+	sk := cred["access_key_secret"]
+	if ak == "" || sk == "" {
+		return nil, errors.New("aliyun: missing credentials")
+	}
+	if period == "" {
+		return nil, errors.New("aliyun: period is required")
+	}
+
+	client, err := p.getSDKClient("cn-hangzhou", ak, sk)
+	if err != nil {
+		return nil, err
+	}
+
+	domain := "business.aliyuncs.com"
+	if accountSite == "international" {
+		domain = "business.ap-southeast-1.aliyuncs.com"
+	}
+
+	// 1. QueryBillOverview
+	ovReq := requests.NewCommonRequest()
+	ovReq.Method = "POST"
+	if d, ok := p.customDomain["QueryBillOverview"]; ok {
+		ovReq.Domain = d
+	} else {
+		ovReq.Domain = domain
+	}
+	ovReq.Version = "2017-12-14"
+	ovReq.ApiName = "QueryBillOverview"
+	ovReq.Product = "BssOpenApi"
+	ovReq.QueryParams["BillingCycle"] = period
+
+	ovResp, err := p.doWithRetry(ctx, client, ovReq)
+	if err != nil {
+		return nil, fmt.Errorf("aliyun QueryBillOverview failed: %w", err)
+	}
+
+	var ovRaw struct {
+		Data struct {
+			BillingCycle    string `json:"BillingCycle"`
+			AccountCurrency string `json:"AccountCurrency"`
+			Items           struct {
+				Item []struct {
+					PretaxGrossAmount float64 `json:"PretaxGrossAmount"`
+					InvoiceDiscount   float64 `json:"InvoiceDiscount"`
+					DeductedByCoupons float64 `json:"DeductedByCoupons"`
+					PretaxAmount      float64 `json:"PretaxAmount"`
+					PaymentAmount     float64 `json:"PaymentAmount"`
+					Currency          string  `json:"Currency"`
+				} `json:"Item"`
+			} `json:"Items"`
+		} `json:"Data"`
+	}
+
+	if err := json.Unmarshal(ovResp.GetHttpContentBytes(), &ovRaw); err != nil {
+		return nil, fmt.Errorf("aliyun: parse QueryBillOverview response: %w", err)
+	}
+
+	currency := ovRaw.Data.AccountCurrency
+	if currency == "" && len(ovRaw.Data.Items.Item) > 0 {
+		currency = ovRaw.Data.Items.Item[0].Currency
+	}
+	if currency == "" {
+		currency = "CNY"
+	}
+
+	var totalAmount, pretaxAmount, discountAmount float64
+	for _, it := range ovRaw.Data.Items.Item {
+		if it.PaymentAmount > 0 {
+			totalAmount += it.PaymentAmount
+		} else if it.PretaxAmount > 0 {
+			totalAmount += it.PretaxAmount
+		}
+		pretaxAmount += it.PretaxAmount
+		discountAmount += it.InvoiceDiscount
+	}
+
+	// 2. QueryInstanceBill with pagination
+	var items []provider.BillItem
+	pageNum := 1
+	pageSize := 100
+
+	for {
+		instReq := requests.NewCommonRequest()
+		instReq.Method = "POST"
+		if d, ok := p.customDomain["QueryInstanceBill"]; ok {
+			instReq.Domain = d
+		} else {
+			instReq.Domain = domain
+		}
+		instReq.Version = "2017-12-14"
+		instReq.ApiName = "QueryInstanceBill"
+		instReq.Product = "BssOpenApi"
+		instReq.QueryParams["BillingCycle"] = period
+		instReq.QueryParams["PageNum"] = strconv.Itoa(pageNum)
+		instReq.QueryParams["PageSize"] = strconv.Itoa(pageSize)
+
+		instResp, err := p.doWithRetry(ctx, client, instReq)
+		if err != nil {
+			logx.Warn(fmt.Sprintf("aliyun QueryInstanceBill page %d failed: %v", pageNum, err))
+			break
+		}
+
+		var instRaw struct {
+			Data struct {
+				TotalCount int `json:"TotalCount"`
+				PageNum    int `json:"PageNum"`
+				PageSize   int `json:"PageSize"`
+				Items      struct {
+					Item []struct {
+						InstanceID    string  `json:"InstanceID"`
+						NickName      string  `json:"NickName"`
+						InstanceName  string  `json:"InstanceName"`
+						ProductCode   string  `json:"ProductCode"`
+						ProductName   string  `json:"ProductName"`
+						ProductType   string  `json:"ProductType"`
+						BillingItem   string  `json:"BillingItem"`
+						PretaxAmount  float64 `json:"PretaxAmount"`
+						PaymentAmount float64 `json:"PaymentAmount"`
+						Currency      string  `json:"Currency"`
+						Usage         string  `json:"Usage"`
+						UsageUnit     string  `json:"UsageUnit"`
+					} `json:"Item"`
+				} `json:"Items"`
+			} `json:"Data"`
+		}
+
+		if err := json.Unmarshal(instResp.GetHttpContentBytes(), &instRaw); err != nil {
+			logx.Warn(fmt.Sprintf("aliyun: parse QueryInstanceBill page %d failed: %v", pageNum, err))
+			break
+		}
+
+		pageItems := instRaw.Data.Items.Item
+		for _, rawItem := range pageItems {
+			pCode := strings.ToLower(strings.TrimSpace(rawItem.ProductCode))
+			pName := strings.TrimSpace(rawItem.ProductName)
+			name := strings.TrimSpace(rawItem.NickName)
+			if name == "" {
+				name = strings.TrimSpace(rawItem.InstanceName)
+			}
+			if name == "" {
+				name = strings.TrimSpace(rawItem.BillingItem)
+			}
+			if name == "" {
+				name = pName
+			}
+			if name == "" {
+				name = rawItem.ProductCode
+			}
+
+			resKind := mapProductToResKind(pCode, strings.ToLower(rawItem.ProductType), strings.ToLower(name))
+
+			amt := rawItem.PaymentAmount
+			if amt == 0 && rawItem.PretaxAmount > 0 {
+				amt = rawItem.PretaxAmount
+			}
+
+			usageText := ""
+			if rawItem.Usage != "" {
+				usageText = strings.TrimSpace(rawItem.Usage + " " + rawItem.UsageUnit)
+			}
+
+			items = append(items, provider.BillItem{
+				ResKind:     resKind,
+				ResRef:      rawItem.InstanceID,
+				ItemName:    name,
+				ProductCode: rawItem.ProductCode,
+				Amount:      amt,
+				UsageText:   usageText,
+			})
+		}
+
+		effPageSize := pageSize
+		if instRaw.Data.PageSize > 0 {
+			effPageSize = instRaw.Data.PageSize
+		}
+		if len(pageItems) == 0 || len(pageItems) < effPageSize || (instRaw.Data.TotalCount > 0 && len(items) >= instRaw.Data.TotalCount) {
+			break
+		}
+		pageNum++
+		if pageNum > 20 {
+			break
+		}
+	}
+
+	return &provider.BillListResult{
+		Period:         period,
+		Currency:       currency,
+		TotalAmount:    totalAmount,
+		PretaxAmount:   pretaxAmount,
+		DiscountAmount: discountAmount,
+		Items:          items,
+	}, nil
+}
+
+func mapProductToResKind(pCode, pType, name string) string {
+	combined := pCode + " " + pType + " " + name
+	if strings.Contains(combined, "disk") || strings.Contains(combined, "snapshot") {
+		return "disk"
+	}
+	if strings.Contains(combined, "eip") || strings.Contains(combined, "elasticip") || (strings.Contains(combined, "ip") && !strings.Contains(combined, "cbwp")) {
+		return "ip"
+	}
+	if strings.Contains(combined, "bandwidth") || strings.Contains(combined, "cbwp") || strings.Contains(combined, "cdt") || strings.Contains(combined, "traffic") {
+		return "bandwidth"
+	}
+	if pCode == "ecs" || strings.Contains(combined, "instance") || strings.Contains(combined, "vm") {
+		return "instance"
+	}
+	return "other"
 }

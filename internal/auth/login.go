@@ -833,4 +833,3 @@ func (m *AuthModule) HandleChangePassword(w http.ResponseWriter, r *http.Request
 
 	JSONSuccess(w, http.StatusOK, map[string]any{"ok": true})
 }
-

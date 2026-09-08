@@ -110,11 +110,11 @@ func TestRollupAcc1_AccuracyAndAcc2_Idempotency(t *testing.T) {
 	// Insert samples in 3 different 1-minute buckets (Day 0, Day 1, Day 2)
 	// Each bucket contains 12 samples (simulating 5s intervals).
 	type sample struct {
-		tsMs         int64
-		cpuPct       float64
-		memUsed      int64
-		netTotalUp   int64
-		trafficUp    int64
+		tsMs       int64
+		cpuPct     float64
+		memUsed    int64
+		netTotalUp int64
+		trafficUp  int64
 	}
 
 	var allSamples []sample

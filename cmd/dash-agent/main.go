@@ -55,24 +55,24 @@ func main() {
 	fs := flag.NewFlagSet("dash-agent", flag.ExitOnError)
 
 	var (
-		showVersion       bool
-		configFile        string
-		endpoint          string
-		token             string
-		stateFile         string
-		intervalFast      int
-		intervalSlow      int
-		factsMaxInterval  int
-		collectConns      bool
-		includeMountsStr  string
-		excludeMountsStr  string
-		includeNICsStr    string
-		excludeNICsStr    string
-		memIncludeCache   bool
-		execMode          string
-		enableTerminal    bool
+		showVersion        bool
+		configFile         string
+		endpoint           string
+		token              string
+		stateFile          string
+		intervalFast       int
+		intervalSlow       int
+		factsMaxInterval   int
+		collectConns       bool
+		includeMountsStr   string
+		excludeMountsStr   string
+		includeNICsStr     string
+		excludeNICsStr     string
+		memIncludeCache    bool
+		execMode           string
+		enableTerminal     bool
 		insecureSkipVerify bool
-		preferIPVersion   string
+		preferIPVersion    string
 	)
 
 	fs.BoolVar(&showVersion, "version", false, "print version and exit")

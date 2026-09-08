@@ -118,7 +118,7 @@ func (r *Registry) registerBuiltins() {
 					}
 					ctx.Log("步骤 3/3：所有步骤顺利完成")
 					ctx.SetResult(map[string]any{
-						"status": "ok",
+						"status":       "ok",
 						"completed_at": time.Now().Format(time.RFC3339),
 					})
 					return nil

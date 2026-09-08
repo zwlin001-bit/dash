@@ -435,15 +435,15 @@ func TestAcceptance5_OfflineRuleEvaluation(t *testing.T) {
 
 	// offline 规则：离线阈值 30 秒
 	rule := &alert.AlertRule{
-		ID:         ulid.New(),
-		Name:       "机器离线告警",
-		IsEnabled:  true,
-		RuleKind:   alert.RuleKindOffline,
-		ScopeKind:  alert.ScopeKindNode,
-		ScopeRef:   nodeID,
-		CompareOp:  alert.CompareOpGT,
-		Threshold:  30, // 30s threshold
-		Severity:   alert.SeverityWarning,
+		ID:        ulid.New(),
+		Name:      "机器离线告警",
+		IsEnabled: true,
+		RuleKind:  alert.RuleKindOffline,
+		ScopeKind: alert.ScopeKindNode,
+		ScopeRef:  nodeID,
+		CompareOp: alert.CompareOpGT,
+		Threshold: 30, // 30s threshold
+		Severity:  alert.SeverityWarning,
 	}
 
 	res, err := evaluator.EvaluateNode(ctx, rule, nodeID)
@@ -582,15 +582,15 @@ func TestAcceptance7_TrafficCounterResetNoFalsePositive(t *testing.T) {
 	}
 
 	rule := &alert.AlertRule{
-		ID:         ulid.New(),
-		Name:       "月度流量80%预警",
-		IsEnabled:  true,
-		RuleKind:   alert.RuleKindTraffic,
-		ScopeKind:  alert.ScopeKindNode,
-		ScopeRef:   nodeID,
-		CompareOp:  alert.CompareOpGTE,
-		Threshold:  0.8, // 80%
-		Severity:   alert.SeverityWarning,
+		ID:        ulid.New(),
+		Name:      "月度流量80%预警",
+		IsEnabled: true,
+		RuleKind:  alert.RuleKindTraffic,
+		ScopeKind: alert.ScopeKindNode,
+		ScopeRef:  nodeID,
+		CompareOp: alert.CompareOpGTE,
+		Threshold: 0.8, // 80%
+		Severity:  alert.SeverityWarning,
 	}
 
 	// 模拟正常采样：产生了 10GB 流量
@@ -649,14 +649,14 @@ func TestAcceptance8_TagScopeFiltering(t *testing.T) {
 
 	// 规则：作用域 scope_kind = tag, scope_ref = "proxy"
 	rule := &alert.AlertRule{
-		ID:         ulid.New(),
-		Name:       "Proxy节点离线告警",
-		IsEnabled:  true,
-		RuleKind:   alert.RuleKindOffline,
-		ScopeKind:  alert.ScopeKindTag,
-		ScopeRef:   "proxy",
-		CompareOp:  alert.CompareOpGT,
-		Threshold:  30,
+		ID:        ulid.New(),
+		Name:      "Proxy节点离线告警",
+		IsEnabled: true,
+		RuleKind:  alert.RuleKindOffline,
+		ScopeKind: alert.ScopeKindTag,
+		ScopeRef:  "proxy",
+		CompareOp: alert.CompareOpGT,
+		Threshold: 30,
 	}
 
 	results, err := evaluator.EvaluateRule(ctx, rule)

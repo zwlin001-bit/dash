@@ -89,6 +89,10 @@ func NewEvaluator(s *Store) *Evaluator {
 
 // EvaluateRule evaluates an alert rule across all applicable nodes.
 func (e *Evaluator) EvaluateRule(ctx context.Context, rule *AlertRule) ([]EvalResult, error) {
+	if rule.RuleKind == RuleKindBudget {
+		return e.evalBudget(ctx, rule)
+	}
+
 	nodeIDs, err := e.store.GetRuleNodeIDs(ctx, rule)
 	if err != nil {
 		return nil, fmt.Errorf("alert: resolve nodes for rule %s failed: %w", rule.ID, err)
@@ -487,4 +491,92 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+func (e *Evaluator) evalBudget(ctx context.Context, rule *AlertRule) ([]EvalResult, error) {
+	database := e.store.DB()
+	if database == nil {
+		return nil, errors.New("alert: db is nil")
+	}
+
+	nowMs := time.Now().UnixMilli()
+	currentPeriod := time.Now().UTC().Format("2006-01")
+
+	q := "SELECT id, scope_kind, scope_ref, currency, amount, warn_ratio FROM bill_budgets WHERE is_enabled = 1"
+	rows, err := database.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []EvalResult
+	for rows.Next() {
+		var bID, scopeKind, currency string
+		var scopeRef sql.NullString
+		var amount, warnRatio float64
+		if err := rows.Scan(&bID, &scopeKind, &scopeRef, &currency, &amount, &warnRatio); err != nil {
+			return nil, err
+		}
+
+		if amount <= 0 {
+			continue
+		}
+
+		var spent float64
+		switch scopeKind {
+		case "account":
+			if scopeRef.Valid && scopeRef.String != "" {
+				_ = database.QueryRow(ctx, "SELECT COALESCE(SUM(total_amount), 0) FROM bill_periods WHERE period = ? AND cloud_account_id = ? AND currency = ?", currentPeriod, scopeRef.String, currency).Scan(&spent)
+			}
+		case "tag":
+			if scopeRef.Valid && scopeRef.String != "" {
+				tagVal := scopeRef.String
+				tagQ := `SELECT COALESCE(SUM(bi.amount), 0) FROM bill_items bi
+WHERE bi.period = ? AND bi.currency = ? AND bi.cloud_resource_id IN (
+	SELECT cr.id FROM cloud_resources cr WHERE cr.node_id IN (
+		SELECT nt.node_id FROM node_tags nt JOIN tags t ON nt.tag_id = t.id WHERE t.id = ? OR t.name = ?
+	)
+)`
+				_ = database.QueryRow(ctx, tagQ, currentPeriod, currency, tagVal, tagVal).Scan(&spent)
+			}
+		default: // "all"
+			_ = database.QueryRow(ctx, "SELECT COALESCE(SUM(total_amount), 0) FROM bill_periods WHERE period = ? AND currency = ?", currentPeriod, currency).Scan(&spent)
+		}
+
+		ratio := spent / amount
+		threshold := rule.Threshold
+		if threshold <= 0 {
+			threshold = warnRatio
+		}
+		if threshold <= 0 {
+			threshold = 0.8
+		}
+
+		op := rule.CompareOp
+		if op == "" {
+			op = CompareOpGTE
+		}
+		breached := CompareValues(ratio, op, threshold)
+
+		detail := ""
+		if breached {
+			if ratio >= 1.0 {
+				detail = fmt.Sprintf("超出预算：当月支出 %.2f %s 已超过预算 %.2f %s (%.1f%%)", spent, currency, amount, currency, ratio*100)
+			} else {
+				detail = fmt.Sprintf("预算预警：当月支出 %.2f %s 达到预算 %.2f %s 的 %.1f%% (预警线 %.1f%%)", spent, currency, amount, currency, ratio*100, threshold*100)
+			}
+		}
+
+		results = append(results, EvalResult{
+			NodeID:      bID,
+			NodeName:    fmt.Sprintf("预算[%s/%s]", scopeKind, currency),
+			Breached:    breached,
+			CurrentVal:  ratio,
+			Threshold:   threshold,
+			Detail:      detail,
+			EvaluatedAt: nowMs,
+		})
+	}
+
+	return results, nil
 }

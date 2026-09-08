@@ -105,7 +105,7 @@ type StepDef struct {
 type JobDefinition struct {
 	Kind        string        `json:"kind"`
 	Description string        `json:"description"`
-	Timeout     time.Duration `json:"timeout"` // 总超时时间，默认 10 分钟
+	Timeout     time.Duration `json:"timeout"`     // 总超时时间，默认 10 分钟
 	MaxAttempt  int           `json:"max_attempt"` // 默认 1
 	Steps       []StepDef     `json:"steps"`
 }
