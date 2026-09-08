@@ -64,6 +64,7 @@ func (m *Module) Register(a *app.App) error {
 		}
 	}
 
+	a.CloudService = m.svc
 	m.registerRoutes(a)
 	return nil
 }

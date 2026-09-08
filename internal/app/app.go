@@ -27,10 +27,12 @@ type App struct {
 	Mux      *http.ServeMux
 	DB       *db.DB
 	Config   *config.Config
-	Registry  any    // 供 control / settings 等模块共享的长连接注册表
-	Ingester  any    // 供 control / ingest 共享的指标落库器
-	JobEngine any    // 供各业务模块调用的通用 Job 引擎 (P2-03)
-	Version   string // 服务端当前运行版本
+	Registry     any    // 供 control / settings 等模块共享的长连接注册表
+	Ingester     any    // 供 control / ingest 共享的指标落库器
+	JobEngine    any    // 供各业务模块调用的通用 Job 引擎 (P2-03)
+	CloudService any    // 供各业务模块调用的云资产服务 (P2-02)
+	GuardEngine  any    // 供各业务模块调用的 ECS 保活与流量守卫引擎 (P2-04)
+	Version      string // 服务端当前运行版本
 
 	mu             sync.RWMutex
 	routes         []RouteInfo

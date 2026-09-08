@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"dash/internal/api"
+	guardApi "dash/internal/api/guard"
 	jobsApi "dash/internal/api/jobs"
 	"dash/internal/api/metrics"
 	"dash/internal/app"
@@ -71,6 +72,7 @@ var modules = []Module{
 	notify.NewModule(),
 	settings.NewModule(),
 	cloud.NewModule(),
+	guardApi.NewModule(),
 	api.NewModule(), // ★ 必须最后：它挂 "/" 作为 SPA 兜底路由
 }
 

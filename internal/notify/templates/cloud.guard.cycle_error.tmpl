@@ -1,0 +1,5 @@
+❌ [守卫周期异常] 账号: {{.account_name}}
+错误类型: {{if .error_type}}{{.error_type}}{{else}}CDT查询失败{{end}}
+错误信息: {{.error}}
+说明: 流量读数不可靠，本轮已暂停实例拉起以确保安全
+{{if .SiteDomain}}控制台: https://{{.SiteDomain}}/guard{{end}}
