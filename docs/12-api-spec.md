@@ -44,6 +44,22 @@
 {"items":[…],"total":123,"page":1,"page_size":50}
 ```
 
+★ **所有 `GET` 列表端点一律返回这个信封，没有例外，也没有「小列表直接返回裸数组」的特例。**
+适用范围点名如下，前端不许凭猜测决定要不要拆 `items`：
+
+| 端点 | 响应 |
+|---|---|
+| `GET /api/v1/nodes` | `{items:[Node…],total,page,page_size}` |
+| `GET /api/v1/node-groups` | `{items:[Group…],total,page,page_size}` |
+| `GET /api/v1/tags` | `{items:[Tag…],total,page,page_size}` |
+| `GET /api/v1/enroll-tokens` | `{items:[EnrollToken…],total,page,page_size}` |
+| `GET /api/v1/events` | `{items:[Event…],total,limit,offset}` —— ⚠️ 历史遗留，用 `limit/offset` 而非 `page/page_size`，见 P1-27 |
+
+★ **`items` 在空列表时必须是 `[]`，不许是 `null`。**
+Go 的 `var items []*T` 零值会被 `encoding/json` 编码成 `null`，
+返回前必须做一次 `if items == nil { items = []*T{} }` 归一。
+`null` 传到前端就是 `null.map`，整页崩。
+
 **列表排序**：`?sort=name&order=asc`，允许排序的字段每个接口单独列出，**不接受任意字段**（防注入）。
 
 ---
@@ -117,7 +133,7 @@ WS 不可用时用它。**请求体是一批 JSON-RPC notification 的数组**�
 | DELETE | `/api/v1/nodes/{id}` | 见 §4.1 |
 | GET | `/api/v1/nodes/{id}/facts` | |
 | GET/PUT | `/api/v1/nodes/{id}/billing` | |
-| POST | `/api/v1/nodes/{id}/tags` | `{"tag_ids":[…]}` 全量替换该节点的标签 |
+| POST | `/api/v1/nodes/{id}/tags` | `{"tag_ids":[…]}` 全量替换该节点的标签，响应 `{"ok":true}`（**不返回标签列表**） |
 | POST | `/api/v1/nodes/tags:batch` | `{"node_ids":[…],"tag_ids":[…],"op":"add"\|"remove"}` **批量打标签** |
 | POST | `/api/v1/nodes/{id}/token:revoke` | 吊销 agent token |
 
