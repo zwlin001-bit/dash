@@ -1,0 +1,5 @@
+🟢 节点上线: {{if .NodeName}}{{.NodeName}}{{else}}{{.Title}}{{end}}
+{{if .GroupName}}分组: {{.GroupName}}
+{{end}}{{if .PublicIP}}IP: {{.PublicIP}}
+{{end}}{{if .OfflineSeconds}}离线时长: {{fmtDur .OfflineSeconds}}
+{{end}}

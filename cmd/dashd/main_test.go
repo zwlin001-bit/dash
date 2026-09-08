@@ -78,7 +78,11 @@ func TestRegisterModules_Order(t *testing.T) {
 		"control",
 		"metrics",
 		"events",
+		"jobs",
+		"notify",
 		"settings",
+		"cloud",
+		"guard",
 		"web",
 	}
 
@@ -106,6 +110,9 @@ func TestRegisterModules_Execution(t *testing.T) {
 	}
 	if a.Registry == nil {
 		t.Error("expected a.Registry to be set after registering modules")
+	}
+	if a.JobEngine == nil {
+		t.Error("expected a.JobEngine to be set after registering modules")
 	}
 }
 

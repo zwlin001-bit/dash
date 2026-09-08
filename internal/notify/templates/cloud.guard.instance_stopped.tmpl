@@ -1,0 +1,6 @@
+⚠️ [ECS守卫停机] 实例: {{if .instance_name}}{{.instance_name}}{{else}}{{.TargetId}}{{end}}
+地域: {{.region}}
+状态变化: {{.status_before}} → {{.status_after}}
+触发原因: {{.reason}}
+{{if .cdt_used_gb}}本月CDT已用: {{printf "%.2f" .cdt_used_gb}} GB (阈值: {{printf "%.2f" .traffic_limit_gb}} GB){{end}}
+{{if .SiteDomain}}控制台: https://{{.SiteDomain}}/guard{{end}}

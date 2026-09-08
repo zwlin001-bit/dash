@@ -1,0 +1,5 @@
+ℹ️ [CDT流量重置] 账号: {{.account_name}}
+月份: {{.month_key}}
+当前用量: {{printf "%.2f" .cdt_used_gb}} GB
+状态: 月初流量已清零，受控实例补充检测完毕
+{{if .SiteDomain}}控制台: https://{{.SiteDomain}}/guard{{end}}

@@ -1,4 +1,4 @@
-.PHONY: all build build-dashd build-agent build-agent-all test lint lint-dist migrate clean verify-agent-matrix
+.PHONY: all build build-dashd build-agent build-provider-aliyun build-agent-all test lint lint-dist migrate clean verify-agent-matrix
 
 VERSION ?= dev
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -7,7 +7,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X m
 
 all: lint test build
 
-build: lint-dist build-dashd build-agent
+build: lint-dist build-dashd build-agent build-provider-aliyun
 
 build-dashd: lint-dist
 	@mkdir -p bin
@@ -16,6 +16,10 @@ build-dashd: lint-dist
 build-agent:
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -trimpath -tags nethttpomithttp2 -ldflags "$(LDFLAGS)" -o bin/dash-agent ./cmd/dash-agent
+
+build-provider-aliyun:
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dash-provider-aliyun ./cmd/dash-provider-aliyun
 
 build-agent-all:
 	@mkdir -p bin

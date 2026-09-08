@@ -289,3 +289,49 @@ export interface HealthResponse {
   agents_online?: number;
   dev_no_auth?: boolean;
 }
+
+// 通知渠道（P2-01 / 09-events-notify.md §3）
+export interface NotifyChannel {
+  id: string;
+  name: string;
+  channel_kind: 'telegram' | 'webhook';
+  credential_id?: string;
+  config_json: string;
+  is_enabled: boolean;
+  created_at_ms: number;
+  updated_at_ms: number;
+  masked_secret?: string;
+}
+
+// 路由规则（P2-01 / 09-events-notify.md §4）
+export interface NotifyRule {
+  id: string;
+  name: string;
+  is_enabled: boolean;
+  event_pattern: string;
+  min_severity: 'info' | 'warning' | 'critical';
+  notify_channel_id: string;
+  template_name?: string;
+  throttle_s: number;
+  quiet_start_min?: number | null;
+  quiet_end_min?: number | null;
+  display_order: number;
+  created_at_ms: number;
+  updated_at_ms: number;
+}
+
+// 投递记录（P2-01 / 09-events-notify.md §4）
+export interface NotifyDelivery {
+  id: string;
+  event_id: string;
+  channel_id: string;
+  rule_id?: string;
+  state: 'pending' | 'sent' | 'failed' | 'throttled' | 'quiet_held';
+  attempt: number;
+  last_error?: string;
+  rendered_text?: string;
+  sent_at_ms?: number | null;
+  created_at_ms: number;
+  updated_at_ms: number;
+}
+

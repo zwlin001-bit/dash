@@ -40,7 +40,10 @@ export function handleUnauthorized(endpoint: string) {
   clearAuthCache();
 
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('dash:unauthorized'));
+    const event = typeof CustomEvent !== 'undefined'
+      ? new CustomEvent('dash:unauthorized')
+      : { type: 'dash:unauthorized' };
+    window.dispatchEvent(event as any);
   }
 
   if (typeof window === 'undefined') {

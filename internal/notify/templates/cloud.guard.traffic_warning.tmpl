@@ -1,0 +1,6 @@
+⚠️ [CDT流量预警] 实例: {{if .instance_name}}{{.instance_name}}{{else}}{{.TargetId}}{{end}}
+地域: {{.region}}
+账号: {{.account_name}}
+本月CDT已用: {{printf "%.2f" .cdt_used_gb}} GB (阈值: {{printf "%.2f" .traffic_limit_gb}} GB)
+已达阈值 {{printf "%.1f" .usage_percent}}%
+{{if .SiteDomain}}控制台: https://{{.SiteDomain}}/guard{{end}}

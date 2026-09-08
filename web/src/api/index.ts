@@ -5,3 +5,7 @@ export * from './auth';
 export * from './metrics';
 export * from './nodes';
 export * from './events';
+export * from './notify';
+export * from './cloud';
+export * from './jobs';
+export * from './guard';

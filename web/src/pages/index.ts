@@ -4,3 +4,6 @@ export * from './NodeDetail';
 export * from './Machines';
 export * from './Settings';
 export * from './Events';
+export * from './Cloud';
+export * from './Jobs';
+export * from './CloudGuard';
