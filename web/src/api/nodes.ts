@@ -1,38 +1,21 @@
 import { apiFetch } from './client';
+import { toItems } from './envelope';
 import {
-  BatchTagParams,
-  CreateEnrollTokenParams,
-  CreateEnrollTokenResponse,
-  CreateGroupParams,
-  CreateNodeParams,
-  CreateTagParams,
-  EnrollToken,
-  HealthResponse,
-  NodeBilling,
-  NodeDetail,
-  NodeGroup,
   NodeItem,
-  NodeTag,
-  PageResult,
-  SystemSettings,
-  UpdateBillingParams,
-  UpdateGroupParams,
+  NodeDetail,
+  NodeFacts,
+  CreateNodeParams,
   UpdateNodeParams,
-  UpdateTagParams,
+  HealthResponse,
 } from './types';
 
-/**
- * 列表端点统一返回分页信封 {items,total,page,page_size}（docs/12-api-spec.md §3 分页）。
- * 这里对「裸数组」与「信封」都兼容，并保证任何情况下都返回数组：
- * 上游一旦返回 null 或信封对象，页面上的 .map 会让整页崩掉（P1-27 F1）。
- */
-function toItems<T>(res: unknown): T[] {
-  if (Array.isArray(res)) {
-    return res as T[];
-  }
-  const items = (res as { items?: unknown } | null | undefined)?.items;
-  return Array.isArray(items) ? (items as T[]) : [];
-}
+// 导出子域模块，维持从 'api/nodes' 导入的向后兼容性
+export * from './envelope';
+export * from './groups';
+export * from './tags';
+export * from './billing';
+export * from './tokens';
+export * from './settings';
 
 export interface ListNodesParams {
   group_id?: string;
@@ -45,16 +28,33 @@ export interface ListNodesParams {
   page_size?: number;
 }
 
-// 节点查询
+export interface NodesPagedResult {
+  list: NodeItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export async function getNodes(params?: ListNodesParams | unknown): Promise<NodeItem[]> {
   const filter = params && typeof params === 'object' && !('queryKey' in params)
     ? (params as ListNodesParams)
     : undefined;
-  const res = await getNodesPaged(filter);
+  const res = await apiFetch<unknown>(`/api/v1/nodes${buildNodeQueryString(filter)}`);
   return toItems<NodeItem>(res);
 }
 
-export async function getNodesPaged(params?: ListNodesParams): Promise<PageResult<NodeItem>> {
+export async function getNodesPaged(params?: ListNodesParams): Promise<NodesPagedResult> {
+  const query = buildNodeQueryString(params);
+  const raw = await apiFetch<any>(`/api/v1/nodes${query}`);
+  return {
+    list: toItems<NodeItem>(raw),
+    total: typeof raw?.total === 'number' ? raw.total : 0,
+    page: typeof raw?.page === 'number' ? raw.page : 1,
+    page_size: typeof raw?.page_size === 'number' ? raw.page_size : 50,
+  };
+}
+
+function buildNodeQueryString(params?: ListNodesParams): string {
   const query = new URLSearchParams();
   if (params?.group_id) query.set('group_id', params.group_id);
   if (params?.tag_id) query.set('tag_id', params.tag_id);
@@ -66,7 +66,7 @@ export async function getNodesPaged(params?: ListNodesParams): Promise<PageResul
   if (params?.page_size) query.set('page_size', String(params.page_size));
 
   const qs = query.toString();
-  return await apiFetch<PageResult<NodeItem>>(`/api/v1/nodes${qs ? `?${qs}` : ''}`);
+  return qs ? `?${qs}` : '';
 }
 
 export async function getNode(id: string): Promise<NodeDetail> {
@@ -99,133 +99,17 @@ export async function revokeNodeToken(id: string): Promise<{ ok: boolean }> {
   });
 }
 
-// 健康检查（docs/12-api-spec.md §9）
-export async function checkHealth(): Promise<HealthResponse> {
-  try {
-    return await apiFetch<HealthResponse>('/healthz');
-  } catch {
-    return { status: 'error', db: 'error' };
-  }
+export async function getNodeFacts(id: string): Promise<NodeFacts> {
+  return await apiFetch<NodeFacts>(`/api/v1/nodes/${id}/facts`);
 }
 
-// 分组管理
-export async function getGroups(): Promise<NodeGroup[]> {
-  try {
-    return toItems<NodeGroup>(await apiFetch<unknown>('/api/v1/node-groups'));
-  } catch {
-    return [];
-  }
-}
-
-export { getGroups as getNodeGroups };
-
-export async function createGroup(params: CreateGroupParams): Promise<NodeGroup> {
-  return await apiFetch<NodeGroup>('/api/v1/node-groups', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function updateGroup(id: string, params: UpdateGroupParams): Promise<NodeGroup> {
-  return await apiFetch<NodeGroup>(`/api/v1/node-groups/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function deleteGroup(id: string): Promise<{ ok: boolean }> {
-  return await apiFetch<{ ok: boolean }>(`/api/v1/node-groups/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-// 标签管理
-export async function getTags(): Promise<NodeTag[]> {
-  try {
-    return toItems<NodeTag>(await apiFetch<unknown>('/api/v1/tags'));
-  } catch {
-    return [];
-  }
-}
-
-export async function createTag(params: CreateTagParams): Promise<NodeTag> {
-  return await apiFetch<NodeTag>('/api/v1/tags', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function updateTag(id: string, params: UpdateTagParams): Promise<NodeTag> {
-  return await apiFetch<NodeTag>(`/api/v1/tags/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function deleteTag(id: string): Promise<{ ok: boolean }> {
-  return await apiFetch<{ ok: boolean }>(`/api/v1/tags/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function replaceNodeTags(id: string, tagIds: string[]): Promise<{ ok: boolean }> {
-  return await apiFetch<{ ok: boolean }>(`/api/v1/nodes/${id}/tags`, {
-    method: 'POST',
-    body: JSON.stringify({ tag_ids: tagIds }),
-  });
-}
-
-export async function batchNodeTags(params: BatchTagParams): Promise<{ ok: boolean; affected?: number }> {
-  return await apiFetch<{ ok: boolean; affected?: number }>('/api/v1/nodes/tags:batch', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-// 计费信息管理
-export async function getNodeBilling(id: string): Promise<NodeBilling> {
-  return await apiFetch<NodeBilling>(`/api/v1/nodes/${id}/billing`);
-}
-
-export async function updateNodeBilling(id: string, params: UpdateBillingParams): Promise<NodeBilling> {
-  return await apiFetch<NodeBilling>(`/api/v1/nodes/${id}/billing`, {
+export async function putNodeFacts(id: string, facts: Partial<NodeFacts>): Promise<NodeFacts> {
+  return await apiFetch<NodeFacts>(`/api/v1/nodes/${id}/facts`, {
     method: 'PUT',
-    body: JSON.stringify(params),
+    body: JSON.stringify(facts),
   });
 }
 
-export async function deleteNodeBilling(id: string): Promise<{ ok: boolean }> {
-  return await apiFetch<{ ok: boolean }>(`/api/v1/nodes/${id}/billing`, {
-    method: 'DELETE',
-  });
-}
-
-// 注册令牌管理 (装机)
-export async function getEnrollTokens(page: number = 1, pageSize: number = 50): Promise<PageResult<EnrollToken>> {
-  return await apiFetch<PageResult<EnrollToken>>(`/api/v1/enroll-tokens?page=${page}&page_size=${pageSize}`);
-}
-
-export async function createEnrollToken(params: CreateEnrollTokenParams): Promise<CreateEnrollTokenResponse> {
-  return await apiFetch<CreateEnrollTokenResponse>('/api/v1/enroll-tokens', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function deleteEnrollToken(id: string): Promise<{ ok: boolean }> {
-  return await apiFetch<{ ok: boolean }>(`/api/v1/enroll-tokens/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-// 系统设置
-export async function getSettings(): Promise<SystemSettings> {
-  return await apiFetch<SystemSettings>('/api/v1/settings');
-}
-
-export async function updateSettings(updates: Partial<SystemSettings>): Promise<SystemSettings> {
-  return await apiFetch<SystemSettings>('/api/v1/settings', {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  });
+export async function checkHealth(): Promise<HealthResponse> {
+  return await apiFetch<HealthResponse>('/healthz');
 }

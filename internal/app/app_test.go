@@ -256,4 +256,3 @@ func TestApp_HealthzHandler_DevNoAuth(t *testing.T) {
 		t.Fatalf("expected dev_no_auth: true in healthz response, got %v", respDev["dev_no_auth"])
 	}
 }
-

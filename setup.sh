@@ -716,6 +716,18 @@ CFG_EOF
     fi
 
     echo "==> [5/8] 准备 dashd 可执行程序..."
+    if [ -d "$SCRIPT_DIR/cmd/dashd" ] && [ -f "$SCRIPT_DIR/scripts/lint-dist.sh" ]; then
+        echo "--> 检查前端产物一致性..."
+        if ! (cd "$SCRIPT_DIR" && ./scripts/lint-dist.sh); then
+            echo "❌ 前端产物与源码不一致，已拒绝构建并中止安装。" >&2
+            if ! command -v npm >/dev/null 2>&1; then
+                echo "   本机无 npm，请在有 Node 的机器上构建 (make build-web) 后再部署。" >&2
+            else
+                echo "   请先执行 make build-web，或提交已构建好的产物。" >&2
+            fi
+            exit 1
+        fi
+    fi
     BIN_SRC=""
     if [ -f "$SCRIPT_DIR/bin/dashd" ]; then
         BIN_SRC="$SCRIPT_DIR/bin/dashd"
@@ -912,6 +924,20 @@ cmd_upgrade() {
     done
 
     if [ -z "$NEW_BIN" ]; then
+        # ★ 前端产物一致性守卫（P1-25 / P1-27）：从源码路径产出或使用二进制时绝不能绕过守卫。
+        if [ -d "$SCRIPT_DIR/cmd/dashd" ] && [ -f "$SCRIPT_DIR/scripts/lint-dist.sh" ]; then
+            echo "--> 检查前端产物一致性..."
+            if ! (cd "$SCRIPT_DIR" && ./scripts/lint-dist.sh); then
+                echo "❌ 前端产物与源码不一致，已拒绝自动编译并中止升级。" >&2
+                if ! command -v npm >/dev/null 2>&1; then
+                    echo "   本机无 npm，请在有 Node 的机器上构建 (make build-web) 后再部署。" >&2
+                else
+                    echo "   请先执行 make build-web，或指定已构建好的 --binary。" >&2
+                fi
+                exit 1
+            fi
+        fi
+
         if [ -f "$SCRIPT_DIR/bin/dashd" ]; then
             NEW_BIN="$SCRIPT_DIR/bin/dashd"
         elif [ -f "./bin/dashd" ]; then
@@ -1150,6 +1176,44 @@ cmd_status() {
         fi
     fi
 
+    # 3.1 前端产物指纹检查与比对 (P1-27)
+    ONLINE_DIST_FP=""
+    if [ -n "$HEALTH_JSON" ]; then
+        ONLINE_DIST_FP=$(extract_json_val "$HEALTH_JSON" "dist_fingerprint")
+    fi
+    if [ -z "$ONLINE_DIST_FP" ] || [ "$ONLINE_DIST_FP" = "none" ]; then
+        BIN_CHECK=""
+        if [ -f /usr/local/bin/dashd ]; then
+            BIN_CHECK="/usr/local/bin/dashd"
+        elif [ -f "$SCRIPT_DIR/bin/dashd" ]; then
+            BIN_CHECK="$SCRIPT_DIR/bin/dashd"
+        fi
+        if [ -n "$BIN_CHECK" ]; then
+            BIN_OUT=$("$BIN_CHECK" -v 2>/dev/null || true)
+            ONLINE_DIST_FP=$(printf '%s' "$BIN_OUT" | grep -o 'dist: [^)]*' | sed 's/dist: //' || true)
+        fi
+    fi
+
+    SRC_DIST_FP=""
+    if [ -f "$SCRIPT_DIR/scripts/lint-dist.sh" ]; then
+        SRC_DIST_FP=$("$SCRIPT_DIR/scripts/lint-dist.sh" --print 2>/dev/null || true)
+    fi
+
+    DIST_FP_STATUS="$ONLINE_DIST_FP"
+    if [ -n "$ONLINE_DIST_FP" ] && [ "$ONLINE_DIST_FP" != "none" ]; then
+        if [ -n "$SRC_DIST_FP" ]; then
+            if [ "$ONLINE_DIST_FP" = "$SRC_DIST_FP" ]; then
+                DIST_FP_STATUS="${ONLINE_DIST_FP} (与当前源码一致 ✅)"
+            else
+                DIST_FP_STATUS="${ONLINE_DIST_FP} (❌ 与当前源码 ${SRC_DIST_FP} 不一致)"
+            fi
+        fi
+    elif [ "$ONLINE_DIST_FP" = "none" ]; then
+        DIST_FP_STATUS="none (未内嵌产物)"
+    else
+        DIST_FP_STATUS="未知"
+    fi
+
     # 4. 证书到期时间
     CONSOLE_CERT_EXPIRY="尚未生成"
     AGENT_CERT_EXPIRY="尚未生成"
@@ -1204,6 +1268,7 @@ cmd_status() {
     fi
     echo "Nginx 状态:     $NGINX_STATUS"
     echo "程序版本:       $VER"
+    echo "前端产物指纹:   $DIST_FP_STATUS"
     echo "数据库连通性:   $DB_STATUS"
     echo "控制台入口:     $CONSOLE_INFO"
     echo "控制台证书到期: $CONSOLE_CERT_EXPIRY"

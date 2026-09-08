@@ -7,6 +7,8 @@ import assert from 'node:assert';
 import './auth.test';
 import './overview_real.test';
 import './api_envelope.test';
+import './contract.test';
+import './empty_data_all_pages.test';
 
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { Overview } from '../src/pages/Overview';

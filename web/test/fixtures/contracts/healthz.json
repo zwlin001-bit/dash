@@ -1,0 +1,10 @@
+{
+  "agents_online": 0,
+  "db": "ok",
+  "dist_fingerprint": "",
+  "dropped_batches": 0,
+  "dropped_rows": 0,
+  "status": "ok",
+  "version": "v1.0.0-contract-test"
+}
+

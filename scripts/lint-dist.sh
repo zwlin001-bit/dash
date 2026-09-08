@@ -23,6 +23,11 @@ compute_fingerprint() {
     | LC_ALL=C sha256sum | cut -c1-16
 }
 
+if [[ "${1:-}" == "--print" || "${1:-}" == "-p" ]]; then
+  compute_fingerprint
+  exit 0
+fi
+
 if [[ "${1:-}" == "--write" || "${1:-}" == "-w" || "${1:-}" == "--update" ]]; then
   mkdir -p "$DIST_DIR"
   FP=$(compute_fingerprint)

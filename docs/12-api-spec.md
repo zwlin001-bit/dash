@@ -269,3 +269,62 @@ data: {}
 ```
 
 数据库不可用时返回 `503` 且 `db` 字段为 `error`，**但进程不退出**。
+
+---
+
+## 10. 全端点契约对账表（P1-27）
+
+本表根据 P1-27 任务要求产出，系统梳理全量控制台与 Agent 端点，核对「服务端实际返回」与「前端 TS 声明」的一致性。
+所有列表端点统一遵循信封解包与 `toItems()` 收口；契约不一致在编译期由静态类型检查与契约测试双重阻断。
+
+| 端点 (Method + Path) | 服务端实际返回 (`JSONSuccess` / 响应体) | 前端声明 (`api/*.ts` 对应函数及返回类型) | 对齐状态 |
+|---|---|---|---|
+| `POST /api/v1/login` | `{"user": User}` | `login(): Promise<LoginResponse>` (`{ user: User }`) | ✅ 一致 |
+| `POST /api/v1/logout` | `{"ok": true}` | `logout(): Promise<void>` | ✅ 一致 |
+| `GET /api/v1/me` | `{"user": User}` | `getMe(): Promise<User>` (`res.user`) | ✅ 一致 |
+| `POST /api/v1/me/password` | `{"ok": true}` | `changePassword(): Promise<void>` | ✅ 一致 |
+| `GET /api/v1/nodes` | `{"items":[Node...],"total":n,"page":p,"page_size":s}` | `getNodes(): Promise<Node[]>` (`toItems<Node>(raw)`) / `getNodesPaged(): Promise<PageResult<Node>>` | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/nodes` | `Node` 实体对象 (201 Created) | `createNode(): Promise<Node>` | ✅ 一致 |
+| `GET /api/v1/nodes/{id}` | `Node` 实体对象 | `getNode(): Promise<Node>` | ✅ 一致 |
+| `PATCH /api/v1/nodes/{id}` | `Node` 实体对象 | `updateNode(): Promise<Node>` | ✅ 一致 |
+| `DELETE /api/v1/nodes/{id}` | `{"ok": true}` | `deleteNode(): Promise<void>` | ✅ 一致 |
+| `POST /api/v1/nodes/{id}/token:revoke` | `{"ok": true}` | `revokeNodeToken(): Promise<void>` | ✅ 一致 |
+| `GET /api/v1/nodes/{id}/facts` | `NodeFacts` (事实字典) | `getNodeFacts(): Promise<NodeFacts>` | ✅ 一致 |
+| `PUT /api/v1/nodes/{id}/facts` | `NodeFacts` (事实字典) | `updateNodeFacts(): Promise<NodeFacts>` | ✅ 一致 |
+| `GET /api/v1/nodes/{id}/billing` | `NodeBilling` 对象 | `getNodeBilling(): Promise<NodeBilling>` | ✅ 一致 |
+| `PATCH /api/v1/nodes/{id}/billing` | `NodeBilling` 对象 | `updateNodeBilling(): Promise<NodeBilling>` | ✅ 一致 |
+| `PUT /api/v1/nodes/{id}/billing` | `NodeBilling` 对象 | `updateNodeBilling(): Promise<NodeBilling>` | ✅ 一致 |
+| `DELETE /api/v1/nodes/{id}/billing` | `{"ok": true}` | `deleteNodeBilling(): Promise<void>` | ✅ 一致 |
+| `GET /api/v1/node-groups` | `{"items":[NodeGroup...],"total":n,"page":p,"page_size":s}` | `getGroups(): Promise<NodeGroup[]>` (`toItems<NodeGroup>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/node-groups` | `NodeGroup` 实体对象 (201 Created) | `createGroup(): Promise<NodeGroup>` | ✅ 一致 |
+| `PATCH /api/v1/node-groups/{id}` | `NodeGroup` 实体对象 | `updateGroup(): Promise<NodeGroup>` | ✅ 一致 |
+| `DELETE /api/v1/node-groups/{id}` | `{"ok": true}` | `deleteGroup(): Promise<void>` | ✅ 一致 |
+| `GET /api/v1/tags` | `{"items":[NodeTag...],"total":n,"page":p,"page_size":s}` | `getTags(): Promise<NodeTag[]>` (`toItems<NodeTag>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/tags` | `NodeTag` 实体对象 (201 Created) | `createTag(): Promise<NodeTag>` | ✅ 一致 |
+| `PATCH /api/v1/tags/{id}` | `NodeTag` 实体对象 | `updateTag(): Promise<NodeTag>` | ✅ 一致 |
+| `DELETE /api/v1/tags/{id}` | `{"ok": true}` | `deleteTag(): Promise<void>` | ✅ 一致 |
+| `POST /api/v1/nodes/{id}/tags` | `{"ok": true}` | `replaceNodeTags(): Promise<{ ok: boolean }>` | ✅ 一致 (已修正原 NodeTag[] 误标) |
+| `POST /api/v1/nodes/{id}/tags/{tagId}` | `{"ok": true}` | `attachNodeTag(): Promise<void>` | ✅ 一致 |
+| `DELETE /api/v1/nodes/{id}/tags/{tagId}` | `{"ok": true}` | `detachNodeTag(): Promise<void>` | ✅ 一致 |
+| `POST /api/v1/nodes/tags:batch` | `{"ok": true}` | `batchNodeTags(): Promise<void>` | ✅ 一致 |
+| `GET /api/v1/enroll-tokens` | `{"items":[EnrollToken...],"total":n,"page":p,"page_size":s}` | `getEnrollTokens(): Promise<EnrollToken[]>` (`toItems<EnrollToken>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/enroll-tokens` | `EnrollToken` 实体对象 (201 Created) | `createEnrollToken(): Promise<EnrollToken>` | ✅ 一致 |
+| `DELETE /api/v1/enroll-tokens/{id}` | `{"ok": true}` | `deleteEnrollToken(): Promise<void>` | ✅ 一致 |
+| `GET /api/v1/events` | `{"items":[EventRecord...],"total":n,"limit":l,"offset":o}` | `fetchEvents(): Promise<EventListResponse>` (`toItems<EventRecord>(raw)`) | ✅ 一致 (特例：使用 limit/offset) |
+| `POST /api/v1/events/read` | `{"ok": true, "rows_affected": n}` | `markEventsRead(): Promise<{ ok: boolean, rows_affected: number }>` | ✅ 一致 |
+| `GET /api/v1/events/unread-count` | `{"unread_count": n}` | `fetchUnreadCount(): Promise<number>` (`res.unread_count`) | ✅ 一致 |
+| `GET /api/v1/event-types` | `{"items":[EventType...],"total":n}` | `fetchEventTypes(): Promise<EventType[]>` (`toItems<EventType>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `PATCH /api/v1/event-types/{event_type}` | `EventType` 实体对象 | `updateEventType(): Promise<EventType>` | ✅ 一致 |
+| `GET /api/v1/settings` | `Record<string, string>` (KV 字典) | `getSettings(): Promise<SettingsMap>` | ✅ 一致 |
+| `PATCH /api/v1/settings` | `Record<string, string>` (KV 字典) | `updateSettings(): Promise<SettingsMap>` | ✅ 一致 |
+| `GET /api/v1/nodes/{id}/metrics` | `{"metrics":{...},"points_returned":n,"source":"..."}` | `fetchMetrics(): Promise<MetricsResponse>` | ✅ 一致 |
+| `GET /api/v1/nodes/{id}/latest` | `TimeSeriesPoint` 实体对象 | `fetchLatestMetric(): Promise<LatestMetrics>` | ✅ 一致 |
+| `GET /api/v1/metrics/stream` | SSE 流 (`text/event-stream`) | `subscribeMetrics(): () => void` (EventSource) | ✅ 一致 |
+| `GET /api/v1/stream` | SSE 流 (`text/event-stream`) | 兼容别名同上 | ✅ 一致 |
+| `GET /healthz` | `{"status":"ok","version":"...","dist_fingerprint":"...","db":"ok",...}` | `checkHealth(): Promise<HealthResponse>` | ✅ 一致 |
+| `POST /api/agent/v1/enroll` | `{"node_id":"...","agent_token":"..."}` | Agent 端 `transport/enroll.go` 消费 | ✅ 一致 |
+| `GET /api/agent/v1/rpc` | WebSocket JSON-RPC 长连 | Agent 端 `transport/ws.go` 消费 | ✅ 一致 |
+| `POST /api/agent/v1/report` | `{"server_time_ms":...,"commands":[...]}` | Agent 端 `transport/fallback.go` 消费 | ✅ 一致 |
+| `GET /install.sh` | Shell 脚本文本 | Agent 自动化部署脚本 | ✅ 一致 |
+| `GET /dl/{filename}` | Agent 二进制流 | Agent 客户端二进制下载 | ✅ 一致 |
+

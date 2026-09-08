@@ -78,11 +78,10 @@ export const Machines: React.FC = () => {
     queryFn: getTags,
   });
 
-  const { data: enrollTokensData, isLoading: tokensLoading } = useQuery({
+  const { data: enrollTokens = [], isLoading: tokensLoading } = useQuery({
     queryKey: ['enroll-tokens'],
     queryFn: () => getEnrollTokens(1, 100),
   });
-  const enrollTokens = enrollTokensData?.items || [];
 
   // ==========================
   // 节点筛选与批量操作

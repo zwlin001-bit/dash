@@ -17,6 +17,15 @@ import (
 //go:embed all:dist
 var distFS embed.FS
 
+// DistFingerprint returns the embedded frontend build fingerprint from .build-fingerprint.
+func DistFingerprint() string {
+	data, err := fs.ReadFile(distFS, "dist/.build-fingerprint")
+	if err != nil {
+		return "none"
+	}
+	return strings.TrimSpace(string(data))
+}
+
 // WebModule 实现 app.Module 接口，负责挂载内嵌前端产物至 Web 服务路由。
 type WebModule struct{}
 
