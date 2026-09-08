@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -92,6 +93,7 @@ func (p *Provider) Describe() *provider.ProviderDescription {
 			"action_stop",
 			"cdt_traffic",
 			"billing",
+			"metric_list",
 		},
 	}
 }
@@ -634,5 +636,166 @@ func (p *Provider) Action(ctx context.Context, req provider.ActionParams) (*prov
 		JobHandle: handle,
 		Status:    "succeeded",
 		Message:   fmt.Sprintf("%s initiated for instance %s", apiName, req.Ref),
+	}, nil
+}
+
+// ListMetrics fetches metric time-series points from Aliyun.
+// Translates dash unified metric_code into provider metric names:
+// - _account + traffic_month_up -> CDT internet traffic
+// - instance + cpu_pct -> CMS CPUUtilization
+// - instance + net_up_bps -> CMS InternetOutRate (bits/s -> bytes/s)
+// - instance + net_down_bps -> CMS InternetInRate (bits/s -> bytes/s)
+// - instance + mem_used -> CMS memory_used
+func (p *Provider) ListMetrics(ctx context.Context, params provider.MetricListParams) (*provider.MetricListResult, error) {
+	ak := params.Credential["access_key_id"]
+	sk := params.Credential["access_key_secret"]
+	if ak == "" || sk == "" {
+		return nil, errors.New("aliyun: missing credentials")
+	}
+
+	// 1. Account-level CDT Traffic
+	if params.ResRef == "_account" && params.MetricCode == "traffic_month_up" {
+		cdtRes, err := p.GetCDTTraffic(ctx, params.Credential)
+		if err != nil {
+			return nil, err
+		}
+		ts := time.Now().UnixMilli()
+		if params.EndTimeMs > 0 {
+			ts = params.EndTimeMs
+		}
+		return &provider.MetricListResult{
+			ResRef:     params.ResRef,
+			MetricCode: params.MetricCode,
+			Points: []provider.MetricPoint{
+				{TsMs: ts, Value: float64(cdtRes.TrafficBytes)},
+			},
+		}, nil
+	}
+
+	// 2. CloudMonitor (CMS) ECS Metrics
+	var cmsMetricName string
+	isRateMetric := false
+	switch params.MetricCode {
+	case "cpu_pct":
+		cmsMetricName = "CPUUtilization"
+	case "net_up_bps":
+		cmsMetricName = "InternetOutRate"
+		isRateMetric = true
+	case "net_down_bps":
+		cmsMetricName = "InternetInRate"
+		isRateMetric = true
+	case "mem_used":
+		cmsMetricName = "memory_used"
+	default:
+		return nil, fmt.Errorf("aliyun: unsupported metric code %q", params.MetricCode)
+	}
+
+	region := params.Region
+	if region == "" {
+		region = "cn-hangzhou"
+	}
+
+	client, err := p.getSDKClient(region, ak, sk)
+	if err != nil {
+		return nil, err
+	}
+
+	req := requests.NewCommonRequest()
+	req.Method = "POST"
+	if d, ok := p.customDomain["DescribeMetricList"]; ok {
+		req.Domain = d
+	} else {
+		req.Domain = "metrics.aliyuncs.com"
+	}
+	req.Version = "2019-01-01"
+	req.ApiName = "DescribeMetricList"
+	req.Product = "Cms"
+	req.QueryParams["Namespace"] = "acs_ecs_dashboard"
+	req.QueryParams["MetricName"] = cmsMetricName
+	req.QueryParams["Dimensions"] = fmt.Sprintf(`[{"instanceId":"%s"}]`, params.ResRef)
+
+	period := params.PeriodSec
+	if period <= 0 {
+		period = 300 // 5 minutes default
+	}
+	req.QueryParams["Period"] = fmt.Sprintf("%d", period)
+
+	if params.StartTimeMs > 0 {
+		req.QueryParams["StartTime"] = fmt.Sprintf("%d", params.StartTimeMs)
+	}
+	if params.EndTimeMs > 0 {
+		req.QueryParams["EndTime"] = fmt.Sprintf("%d", params.EndTimeMs)
+	}
+	req.QueryParams["Length"] = "1440"
+
+	resp, err := p.doWithRetry(ctx, client, req)
+	if err != nil {
+		return nil, fmt.Errorf("aliyun cms DescribeMetricList failed: %w", err)
+	}
+
+	var cmsResp struct {
+		Code       string `json:"Code"`
+		Message    string `json:"Message"`
+		Datapoints string `json:"Datapoints"`
+	}
+	if err := json.Unmarshal(resp.GetHttpContentBytes(), &cmsResp); err != nil {
+		return nil, fmt.Errorf("aliyun cms parse response failed: %w", err)
+	}
+	if cmsResp.Code != "" && cmsResp.Code != "200" {
+		return nil, fmt.Errorf("aliyun cms returned error code %s: %s", cmsResp.Code, cmsResp.Message)
+	}
+
+	var rawDatapoints []struct {
+		Timestamp int64    `json:"timestamp"`
+		Average   *float64 `json:"Average"`
+		Value     *float64 `json:"Value"`
+		Maximum   *float64 `json:"Maximum"`
+		Minimum   *float64 `json:"Minimum"`
+	}
+
+	if cmsResp.Datapoints != "" {
+		if err := json.Unmarshal([]byte(cmsResp.Datapoints), &rawDatapoints); err != nil {
+			return nil, fmt.Errorf("aliyun cms parse Datapoints array failed: %w", err)
+		}
+	}
+
+	var points []provider.MetricPoint
+	for _, dp := range rawDatapoints {
+		var val float64
+		if dp.Average != nil {
+			val = *dp.Average
+		} else if dp.Value != nil {
+			val = *dp.Value
+		} else if dp.Maximum != nil {
+			val = *dp.Maximum
+		} else if dp.Minimum != nil {
+			val = *dp.Minimum
+		} else {
+			continue
+		}
+
+		if isRateMetric {
+			// CMS rates are Bits/s -> convert to Bytes/s (08-field-map.md)
+			val = val / 8.0
+		}
+
+		points = append(points, provider.MetricPoint{
+			TsMs:  dp.Timestamp,
+			Value: val,
+		})
+	}
+
+	sort.Slice(points, func(i, j int) bool {
+		return points[i].TsMs < points[j].TsMs
+	})
+
+	if points == nil {
+		points = []provider.MetricPoint{}
+	}
+
+	return &provider.MetricListResult{
+		ResRef:     params.ResRef,
+		MetricCode: params.MetricCode,
+		Points:     points,
 	}, nil
 }

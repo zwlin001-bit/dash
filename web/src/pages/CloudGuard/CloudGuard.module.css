@@ -169,6 +169,31 @@
   background-color: var(--err);
 }
 
+.cdtChartWrapper {
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+
+.cdtToggleBtn {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cdtToggleBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+  border-color: var(--border-main);
+}
+
 /* 实例卡片列表 */
 .instancesGrid {
   display: grid;

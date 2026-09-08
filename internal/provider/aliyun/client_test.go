@@ -363,3 +363,102 @@ func TestGroupingCallsDescribeAndCDT(t *testing.T) {
 	}
 }
 
+func TestListMetrics(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("Action")
+		if action == "" {
+			_ = r.ParseForm()
+			action = r.Form.Get("Action")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		switch action {
+		case "ListCdtInternetTraffic":
+			_, _ = w.Write([]byte(`{
+				"TrafficDetails": {
+					"TrafficDetail": [
+						{ "Traffic": 104857600, "ProductType": "ECS" }
+					]
+				}
+			}`))
+		case "DescribeMetricList":
+			metricName := r.URL.Query().Get("MetricName")
+			if metricName == "" {
+				metricName = r.Form.Get("MetricName")
+			}
+			if metricName == "CPUUtilization" {
+				_, _ = w.Write([]byte(`{
+					"Code": "200",
+					"Datapoints": "[{\"timestamp\":1700000000000,\"Average\":15.5},{\"timestamp\":1700000300000,\"Average\":20.0}]"
+				}`))
+			} else if metricName == "InternetOutRate" {
+				// 8000000 bits/s = 1000000 bytes/s
+				_, _ = w.Write([]byte(`{
+					"Code": "200",
+					"Datapoints": "[{\"timestamp\":1700000000000,\"Average\":8000000.0}]"
+				}`))
+			} else {
+				_, _ = w.Write([]byte(`{"Code":"200","Datapoints":"[]"}`))
+			}
+		default:
+			http.Error(w, "unknown action", 400)
+		}
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	p := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return createMockSDKClient(ts.URL)
+		}),
+		aliyun.WithCustomDomain("ListCdtInternetTraffic", u.Host),
+		aliyun.WithCustomDomain("DescribeMetricList", u.Host),
+	)
+
+	ctx := context.Background()
+	cred := map[string]string{"access_key_id": "ak", "access_key_secret": "sk"}
+
+	// 1. Account CDT traffic
+	resCDT, err := p.ListMetrics(ctx, provider.MetricListParams{
+		Credential: cred,
+		ResRef:     "_account",
+		MetricCode: "traffic_month_up",
+	})
+	if err != nil {
+		t.Fatalf("ListMetrics for _account failed: %v", err)
+	}
+	if len(resCDT.Points) != 1 || resCDT.Points[0].Value != 104857600 {
+		t.Fatalf("unexpected CDT points: %+v", resCDT.Points)
+	}
+
+	// 2. ECS CPU
+	resCPU, err := p.ListMetrics(ctx, provider.MetricListParams{
+		Credential: cred,
+		Region:     "cn-hangzhou",
+		ResRef:     "i-test123",
+		MetricCode: "cpu_pct",
+	})
+	if err != nil {
+		t.Fatalf("ListMetrics for cpu_pct failed: %v", err)
+	}
+	if len(resCPU.Points) != 2 || resCPU.Points[0].Value != 15.5 || resCPU.Points[1].Value != 20.0 {
+		t.Fatalf("unexpected CPU points: %+v", resCPU.Points)
+	}
+
+	// 3. ECS Net Up Rate (bits/s -> bytes/s)
+	resNet, err := p.ListMetrics(ctx, provider.MetricListParams{
+		Credential: cred,
+		Region:     "cn-hangzhou",
+		ResRef:     "i-test123",
+		MetricCode: "net_up_bps",
+	})
+	if err != nil {
+		t.Fatalf("ListMetrics for net_up_bps failed: %v", err)
+	}
+	if len(resNet.Points) != 1 || resNet.Points[0].Value != 1000000.0 {
+		t.Fatalf("expected 1000000 bytes/s, got %v", resNet.Points[0].Value)
+	}
+}
+
+

@@ -162,3 +162,68 @@ export const actionCloudResource = async (
     }
   );
 };
+
+// Cloud Metrics API (P2-10)
+export interface CloudMetricSeriesResponse {
+  cloud_account_id: string;
+  res_ref: string;
+  source: string; // "cloud_samples"
+  from_ms: number;
+  to_ms: number;
+  step_ms: number;
+  ts_ms: number[];
+  series: Record<string, (number | null)[]>;
+}
+
+export const fetchCloudResourceMetrics = async (
+  resourceId: string,
+  params?: { span?: TimeSeriesSpan; from_ms?: number; to_ms?: number; metric_code?: string }
+): Promise<CloudMetricSeriesResponse> => {
+  const search = new URLSearchParams();
+  const now = Date.now();
+  if (params?.span) {
+    let dur = 6 * 3600 * 1000;
+    if (params.span === '3d') dur = 3 * 86400 * 1000;
+    else if (params.span === '60d') dur = 60 * 86400 * 1000;
+    else if (params.span === '1y') dur = 365 * 86400 * 1000;
+    search.set('from_ms', String(now - dur));
+    search.set('to_ms', String(now));
+  } else {
+    if (params?.from_ms) search.set('from_ms', String(params.from_ms));
+    if (params?.to_ms) search.set('to_ms', String(params.to_ms));
+  }
+  if (params?.metric_code) search.set('metric_code', params.metric_code);
+  const q = search.toString();
+  return apiFetch<CloudMetricSeriesResponse>(`/api/v1/cloud-resources/${resourceId}/metrics${q ? `?${q}` : ''}`);
+};
+
+export const fetchCloudAccountMetrics = async (
+  accountId: string,
+  params?: { span?: TimeSeriesSpan; from_ms?: number; to_ms?: number; res_ref?: string; metric_code?: string; metric?: string }
+): Promise<CloudMetricSeriesResponse> => {
+  const search = new URLSearchParams();
+  const now = Date.now();
+  if (params?.span) {
+    let dur = 6 * 3600 * 1000;
+    if (params.span === '3d') dur = 3 * 86400 * 1000;
+    else if (params.span === '60d') dur = 60 * 86400 * 1000;
+    else if (params.span === '1y') dur = 365 * 86400 * 1000;
+    search.set('from_ms', String(now - dur));
+    search.set('to_ms', String(now));
+  } else {
+    if (params?.from_ms) search.set('from_ms', String(params.from_ms));
+    if (params?.to_ms) search.set('to_ms', String(params.to_ms));
+  }
+  if (params?.res_ref) search.set('res_ref', params.res_ref);
+  const code = params?.metric_code || params?.metric;
+  if (code) search.set('metric_code', code);
+  const q = search.toString();
+  return apiFetch<CloudMetricSeriesResponse>(`/api/v1/cloud-metrics/accounts/${accountId}${q ? `?${q}` : ''}`);
+};
+
+export const triggerCloudMetricSync = async (): Promise<{ ok: boolean; report?: any }> => {
+  return apiFetch<{ ok: boolean; report?: any }>('/api/v1/cloud-metrics/sync', {
+    method: 'POST',
+  });
+};
+

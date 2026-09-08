@@ -1,62 +1,32 @@
 {
   "items": [
     {
-      "id": "01M1ZB34111T2C033DKRRACKY7",
+      "id": "01M1ZNP3B8HEZ3SXRZH4HSFXJC",
       "event_type": "node.online",
       "severity": "info",
       "source_module": "inventory",
       "target_kind": "node",
-      "target_id": "01M1ZB3411JN0WW1TRPYGFDM9Z",
+      "target_id": "01M1ZNP3B88WJQ9T91E90GX3TE",
       "title": "Node Online",
       "is_read": false,
-      "occurred_at_ms": 1788831961121,
-      "created_at_ms": 1788831961121
+      "occurred_at_ms": 1788843068776,
+      "created_at_ms": 1788843068776
     },
     {
-      "id": "01M1ZB2TJ5SDV6M0WFKRFZ4E1P",
+      "id": "01M1ZNNR13W5AKNJ7ER8BW6FCA",
       "event_type": "node.online",
       "severity": "info",
       "source_module": "inventory",
       "target_kind": "node",
-      "target_id": "01M1ZB2TJ5EHMDS45G48T0DDZZ",
+      "target_id": "01M1ZNNR13B71CXJH6KH7X4SEW",
       "title": "Node Online",
       "is_read": false,
-      "occurred_at_ms": 1788831951429,
-      "created_at_ms": 1788831951429
-    },
-    {
-      "id": "01M1ZB1WVPA008FFQHTQE786XP",
-      "event_type": "node.online",
-      "severity": "info",
-      "source_module": "control",
-      "title": "event-2",
-      "is_read": true,
-      "occurred_at_ms": 1788831920005,
-      "created_at_ms": 1788831921014
-    },
-    {
-      "id": "01M1ZB1WVMJ4RBPCB04EKPE447",
-      "event_type": "node.online",
-      "severity": "info",
-      "source_module": "control",
-      "title": "event-1",
-      "is_read": true,
-      "occurred_at_ms": 1788831919005,
-      "created_at_ms": 1788831921012
-    },
-    {
-      "id": "01M1ZB1WVEM6KG2NP51H9S15QC",
-      "event_type": "node.online",
-      "severity": "info",
-      "source_module": "control",
-      "title": "event-0",
-      "is_read": true,
-      "occurred_at_ms": 1788831918005,
-      "created_at_ms": 1788831921006
+      "occurred_at_ms": 1788843057187,
+      "created_at_ms": 1788843057187
     }
   ],
   "limit": 50,
   "offset": 0,
-  "total": 5
+  "total": 2
 }
 

@@ -22,6 +22,7 @@ type ProviderClient interface {
 	GetCDTTraffic(ctx context.Context, cred map[string]string) (*CDTTrafficResult, error)
 	Action(ctx context.Context, req ActionParams) (*ActionResponse, error)
 	PollJob(ctx context.Context, jobHandle string) (*PollJobResponse, error)
+	ListMetrics(ctx context.Context, params MetricListParams) (*MetricListResult, error)
 	Close() error
 }
 
@@ -234,6 +235,14 @@ func (c *RPCClient) PollJob(ctx context.Context, jobHandle string) (*PollJobResp
 	return &res, nil
 }
 
+func (c *RPCClient) ListMetrics(ctx context.Context, params MetricListParams) (*MetricListResult, error) {
+	var res MetricListResult
+	if err := c.call(ctx, "metric.list", params, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 var _ ProviderClient = (*RPCClient)(nil)
 
 // MockClient is an in-memory client implementation useful for testing
@@ -246,6 +255,7 @@ type MockClient struct {
 	GetCDTTrafficFunc func(ctx context.Context, cred map[string]string) (*CDTTrafficResult, error)
 	ActionFunc        func(ctx context.Context, req ActionParams) (*ActionResponse, error)
 	PollJobFunc       func(ctx context.Context, jobHandle string) (*PollJobResponse, error)
+	ListMetricsFunc   func(ctx context.Context, params MetricListParams) (*MetricListResult, error)
 }
 
 func (m *MockClient) Describe(ctx context.Context) (*ProviderDescription, error) {
@@ -302,6 +312,13 @@ func (m *MockClient) PollJob(ctx context.Context, jobHandle string) (*PollJobRes
 		return m.PollJobFunc(ctx, jobHandle)
 	}
 	return &PollJobResponse{JobHandle: jobHandle, Status: "succeeded"}, nil
+}
+
+func (m *MockClient) ListMetrics(ctx context.Context, params MetricListParams) (*MetricListResult, error) {
+	if m.ListMetricsFunc != nil {
+		return m.ListMetricsFunc(ctx, params)
+	}
+	return &MetricListResult{ResRef: params.ResRef, MetricCode: params.MetricCode}, nil
 }
 
 func (m *MockClient) Close() error {

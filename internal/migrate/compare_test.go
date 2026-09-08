@@ -48,6 +48,7 @@ var expectedTables = []string{
 	"cloud_resources",
 	"guard_rules",
 	"guard_cycles",
+	"cloud_samples",
 }
 
 func getMySQLDB(t *testing.T) *db.DB {
@@ -159,8 +160,8 @@ func TestSchemaEquivalence(t *testing.T) {
 	}
 
 	// 1. Verify table counts
-	if len(expectedTables) != 28 {
-		t.Fatalf("expected 28 tables defined, got %d", len(expectedTables))
+	if len(expectedTables) != 36 {
+		t.Fatalf("expected 36 tables defined, got %d", len(expectedTables))
 	}
 
 	for _, tbl := range expectedTables {

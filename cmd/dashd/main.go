@@ -20,6 +20,7 @@ import (
 	"dash/internal/app"
 	"dash/internal/auth"
 	"dash/internal/cloud"
+	"dash/internal/cloudmetric"
 	"dash/internal/config"
 	"dash/internal/control"
 	"dash/internal/db"
@@ -73,6 +74,7 @@ var modules = []Module{
 	settings.NewModule(),
 	cloud.NewModule(),
 	guardApi.NewModule(),
+	cloudmetric.NewModule(),
 	api.NewModule(), // ★ 必须最后：它挂 "/" 作为 SPA 兜底路由
 }
 

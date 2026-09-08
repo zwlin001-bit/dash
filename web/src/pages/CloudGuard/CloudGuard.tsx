@@ -14,7 +14,43 @@ import {
   EvaluateResult,
   RuleUpdateRequest,
 } from '../../api';
+import { TimeSeriesChart } from '../../components/TimeSeriesChart/TimeSeriesChart';
+import { fetchCloudAccountMetrics } from '../../api/cloud';
+import { TimeSeriesSpan } from '../../api/types';
 import styles from './CloudGuard.module.css';
+
+const AccountCDTChart: React.FC<{ accountId: string; limitGB?: number }> = ({ accountId, limitGB }) => {
+  const [span, setSpan] = useState<TimeSeriesSpan>('60d');
+  const { data, isLoading } = useQuery({
+    queryKey: ['cloud-account-metrics', accountId, span],
+    queryFn: () => fetchCloudAccountMetrics(accountId, { span, metric: 'traffic_month_up' }),
+    refetchInterval: 60000,
+  });
+
+  const threshold =
+    limitGB && limitGB > 0
+      ? {
+          value: limitGB * 1024 * 1024 * 1024,
+          label: `关机阈值: ${limitGB} GB`,
+        }
+      : undefined;
+
+  return (
+    <div className={styles.cdtChartWrapper}>
+      <TimeSeriesChart
+        data={data}
+        span={span}
+        onSpanChange={setSpan}
+        title="CDT 流量月度曲线"
+        sourceBadge="云监控 · 5 分钟粒度"
+        metrics={['traffic_month_up']}
+        height={220}
+        loading={isLoading}
+        threshold={threshold}
+      />
+    </div>
+  );
+};
 
 const TIMEZONES = [
   { label: 'Asia/Shanghai (UTC+8)', value: 'Asia/Shanghai' },
@@ -43,6 +79,12 @@ export const CloudGuard: React.FC = () => {
 
   // Editing Rule Local State: Map<resource_id, Partial<RuleUpdateRequest>>
   const [editForms, setEditForms] = useState<Record<string, RuleUpdateRequest>>({});
+
+  // CDT Chart collapse state
+  const [collapsedCharts, setCollapsedCharts] = useState<Record<string, boolean>>({});
+  const toggleChart = (accId: string) => {
+    setCollapsedCharts((prev) => ({ ...prev, [accId]: !prev[accId] }));
+  };
 
   // Queries
   const { data: overview, isLoading, refetch: refetchOverview } = useQuery<OverviewResponse>({
@@ -251,8 +293,17 @@ export const CloudGuard: React.FC = () => {
                   {' / '}
                   <span>{limitGB !== undefined && limitGB !== null ? `${limitGB.toFixed(0)} GB (阈值)` : '--'}</span>
                 </span>
-                <span style={{ fontWeight: 600 }}>
-                  {percent !== undefined && percent !== null ? `${percent.toFixed(1)}%` : '--'}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+                  <span style={{ fontWeight: 600 }}>
+                    {percent !== undefined && percent !== null ? `${percent.toFixed(1)}%` : '--'}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.cdtToggleBtn}
+                    onClick={() => toggleChart(account.account_id)}
+                  >
+                    {collapsedCharts[account.account_id] ? '展开趋势图 ▼' : '收起趋势图 ▲'}
+                  </button>
                 </span>
               </div>
 
@@ -262,6 +313,11 @@ export const CloudGuard: React.FC = () => {
                   style={{ width: `${Math.min(Math.max(percent || 0, 0), 100)}%` }}
                 />
               </div>
+
+              {/* 账号级 CDT 流量月度曲线 + 阈值横线 */}
+              {!collapsedCharts[account.account_id] && (
+                <AccountCDTChart accountId={account.account_id} limitGB={limitGB} />
+              )}
             </div>
 
             {/* 该账号下的 ECS 实例卡片 */}

@@ -1,54 +1,23 @@
 {
   "items": [
     {
-      "id": "01M1ZA80A5WAQPQJHVV6403GN6",
-      "name": "tag-01M1ZA",
+      "id": "01M1ZNNR13YC7D8M5WBGJDR5YC",
+      "name": "tag-01M1ZNNR19F77QMQ79N415RXGA",
       "color": "#3b82f6",
-      "created_at_ms": 1788831072581,
-      "updated_at_ms": 1788831072581
-    },
-    {
-      "id": "01M1ZA90PE9W90K26TVG96Q1AA",
-      "name": "tag-01M1ZA90PW7066NASKHV2JRCKD",
-      "color": "#3b82f6",
-      "created_at_ms": 1788831105742,
-      "updated_at_ms": 1788831105742,
+      "created_at_ms": 1788843057187,
+      "updated_at_ms": 1788843057187,
       "node_count": 1
     },
     {
-      "id": "01M1ZB1H4H7GFXNN4G1J3K92SJ",
-      "name": "tag-01M1ZB1H54FT0RSN9DYNBHWDWB",
+      "id": "01M1ZNP3B8WXX69DJJHB25VX72",
+      "name": "tag-01M1ZNP3BCYR7KTZF2GER12HMP",
       "color": "#3b82f6",
-      "created_at_ms": 1788831909009,
-      "updated_at_ms": 1788831909009,
-      "node_count": 1
-    },
-    {
-      "id": "01M1ZB2CNDN6GAXZ9NKF7R0YAQ",
-      "name": "tag-01M1ZB2CNXPEXPR0QBVK9386N7",
-      "color": "#3b82f6",
-      "created_at_ms": 1788831937197,
-      "updated_at_ms": 1788831937197,
-      "node_count": 1
-    },
-    {
-      "id": "01M1ZB2TJ5DE572E5DTBPS6FMZ",
-      "name": "tag-01M1ZB2TJVBVZ0QK1ZR2FSP6W3",
-      "color": "#3b82f6",
-      "created_at_ms": 1788831951429,
-      "updated_at_ms": 1788831951429,
-      "node_count": 1
-    },
-    {
-      "id": "01M1ZB3411J1W16GYVH0CV7E4G",
-      "name": "tag-01M1ZB341KYCZSRQFN6W5ZS3T9",
-      "color": "#3b82f6",
-      "created_at_ms": 1788831961121,
-      "updated_at_ms": 1788831961121,
+      "created_at_ms": 1788843068776,
+      "updated_at_ms": 1788843068776,
       "node_count": 1
     }
   ],
-  "total": 6,
+  "total": 2,
   "page": 1,
   "page_size": 50
 }
