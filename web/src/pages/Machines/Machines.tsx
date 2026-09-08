@@ -21,6 +21,7 @@ import {
   getEnrollTokens,
   createEnrollToken,
   deleteEnrollToken,
+  getSettings,
   NodeItem,
   NodeGroup,
   NodeTag,
@@ -81,6 +82,12 @@ export const Machines: React.FC = () => {
   const { data: enrollTokens = [], isLoading: tokensLoading } = useQuery({
     queryKey: ['enroll-tokens'],
     queryFn: () => getEnrollTokens(1, 100),
+  });
+
+  const { data: settingsData } = useQuery({
+    queryKey: ['system-settings'],
+    queryFn: getSettings,
+    enabled: activeTab === 'install',
   });
 
   // ==========================
@@ -1256,6 +1263,17 @@ export const Machines: React.FC = () => {
                     gap: 'var(--sp-2)',
                   }}
                 >
+                  {(!settingsData?.['site.domain'] ||
+                    settingsData['site.domain'] === 'localhost:8080' ||
+                    createdTokenResult.install_cmd.includes('localhost:8080')) && (
+                    <div className={styles.dangerBox}>
+                      <strong>⚠️ 站点域名未配置，此命令无法在其他机器上执行</strong>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        请前往「设置」页面配置「站点访问域名 (settings.site.domain)」，否则 Agent 只能在服务端本机安装与通信。
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontWeight: 600, color: 'var(--ok)' }}>
                       ✓ 令牌生成成功！请在目标主机执行以下一键安装命令：

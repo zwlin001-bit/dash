@@ -73,13 +73,43 @@ func TestSettingsCRUD(t *testing.T) {
 		t.Errorf("expected 5, got %d", updated.RetentionRawDays)
 	}
 
-	// 3. Reject modifying domain
-	_, err = svc.UpdateSettings(ctx, map[string]any{"site.domain": "new.com"}, "user", "u1", "127.0.0.1")
-	if err == nil {
-		t.Errorf("expected domain modification to fail")
+	// 3. Update domain (P2-14 allows editing site.domain and site.console_domain)
+	updatedWithDomain, err := svc.UpdateSettings(ctx, map[string]any{"site.domain": "dash.newdomain.org:8443"}, "user", "u1", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("expected domain modification to succeed, got: %v", err)
+	}
+	if updatedWithDomain.SiteDomain != "dash.newdomain.org:8443" {
+		t.Errorf("expected dash.newdomain.org:8443, got %s", updatedWithDomain.SiteDomain)
 	}
 
-	// 4. Reject invalid interval
+	// 4. Reject invalid domain formats (scheme, path, invalid chars, invalid ports)
+	invalidDomains := []string{
+		"https://x.com",
+		"http://x.com",
+		"x.com/path",
+		"x.com:99999",
+		"x.com:abc",
+		"x.com?foo=bar",
+		"x..com",
+		"-x.com",
+	}
+	for _, inv := range invalidDomains {
+		_, err = svc.UpdateSettings(ctx, map[string]any{"site.domain": inv}, "user", "u1", "127.0.0.1")
+		if err == nil {
+			t.Errorf("expected invalid domain %q to fail validation", inv)
+		}
+	}
+
+	// 5. Allow clearing domain to empty string
+	clearedDomain, err := svc.UpdateSettings(ctx, map[string]any{"site.domain": ""}, "user", "u1", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("expected clearing domain to succeed, got: %v", err)
+	}
+	if clearedDomain.SiteDomain != "" {
+		t.Errorf("expected empty domain, got %s", clearedDomain.SiteDomain)
+	}
+
+	// 6. Reject invalid interval
 	_, err = svc.UpdateSettings(ctx, map[string]any{"collect.interval_fast_s": 0}, "user", "u1", "127.0.0.1")
 	if err == nil {
 		t.Errorf("expected invalid fast interval to fail")
