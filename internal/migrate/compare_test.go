@@ -243,22 +243,12 @@ func TestMigrateIdempotency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status query failed: %v", err)
 	}
-<<<<<<< HEAD
 	if len(statusList) == 0 {
 		t.Fatalf("expected migrations, got 0")
 	}
 	for _, s := range statusList {
 		if !s.Applied {
 			t.Fatalf("migration %s (v%d) not applied: %+v", s.Name, s.Version, s)
-		}
-=======
-	if len(statusList) < 2 {
-		t.Fatalf("unexpected migration status: %+v", statusList)
->>>>>>> origin/agy/p2-03-jobs
-	}
-	for _, s := range statusList {
-		if !s.Applied {
-			t.Fatalf("migration %s is not applied: %+v", s.Name, statusList)
 		}
 	}
 }
