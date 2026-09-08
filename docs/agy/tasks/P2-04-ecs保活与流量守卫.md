@@ -231,3 +231,21 @@ guard_test.go:27: skipping test, MySQL 33306 not available: connection refused
 ★ **第一次实跑请用一台不重要的测试实例，验收项会真的关机。**
 
 **任务 P2-04 通过，两块待补验。**
+
+## 第 2 轮 · 2026-09-08 · 验收补跑（P2-12）· ✅ 5项测试全部实跑通过
+
+通过 `make test-db-up` 启动临时 MySQL (33306)，执行：
+`go test -v -count=1 ./internal/guard -run "^TestAcceptance"`
+
+| 验收项 | 实跑耗时 | 实测状态 |
+|---|---|---|
+| 3 只监控不动手 (`TestAcceptance3_ActionsEnabledFalse_DoesNotMutate`) | 0.03s | ✅ PASS |
+| 4 演练模式 (`TestAcceptance4_DryRunMode`) | 0.02s | ✅ PASS |
+| 7 月初重置补检 (`TestAcceptance7_MonthResetCatchup`) | 0.03s | ✅ PASS |
+| 8 批量调用次数合并 (`TestAcceptance8_BatchGroupingCalls`) | 0.05s | ✅ PASS |
+| 9 通知去重抑制 (`TestAcceptance9_DedupNotification`) | 0.05s | ✅ PASS |
+| 10 预警提前通知 (`TestAcceptance10_PrewarningAndDedup`) | 0.00s | ✅ PASS |
+
+原先 SKIP 的 5 项 DB 依赖测试已全部在真实 MySQL 上实跑通过，0 个 SKIP。
+
+**任务 P2-04 数据库验收项补跑完成。**

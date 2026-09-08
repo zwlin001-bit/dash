@@ -873,52 +873,6 @@ export const CloudGuard: React.FC = () => {
               </div>
             </div>
 
-            <div className={styles.tableWrapper} style={{ marginTop: 'var(--sp-3)' }}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>实例</th>
-                    <th>地域</th>
-                    <th>当前状态</th>
-                    <th>拟执行动作</th>
-                    <th>判定原因</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dryRunResult.items.map((item) => (
-                    <tr key={item.resource_id}>
-                      <td>
-                        <strong>{item.resource_name || item.resource_ref}</strong>
-                        <div className="text-dim" style={{ fontSize: '11px' }}>
-                          {item.account_name}
-                        </div>
-                      </td>
-                      <td>{item.region}</td>
-                      <td>{item.current_status}</td>
-                      <td>
-                        <span
-                          className={
-                            item.proposed_action === 'stop'
-                              ? styles.actionTagStop
-                              : item.proposed_action === 'start'
-                              ? styles.actionTagStart
-                              : styles.actionTagNoop
-                          }
-                        >
-                          {item.proposed_action === 'stop'
-                            ? '🛑 关机'
-                            : item.proposed_action === 'start'
-                            ? '🚀 开机'
-                            : '保持'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '12px' }}>{item.reason}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--sp-4)' }}>
               <button
                 type="button"

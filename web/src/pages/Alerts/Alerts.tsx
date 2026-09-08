@@ -10,6 +10,7 @@ import {
   triggerAlertEval,
   AlertRule,
   fetchNotifyChannels,
+  NotifyChannel,
 } from '../../api';
 import styles from './Alerts.module.css';
 
@@ -50,7 +51,7 @@ export const Alerts: React.FC = () => {
     queryKey: ['notify-channels'],
     queryFn: fetchNotifyChannels,
   });
-  const channels = channelsData?.items || [];
+  const channels: NotifyChannel[] = Array.isArray(channelsData) ? channelsData : ((channelsData as any)?.items || []);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);

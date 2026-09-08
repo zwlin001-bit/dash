@@ -131,4 +131,22 @@ job_steps(id, job_id, step_index i32, name str(64),
 `ListJobs` 在 `total == 0` 时提前返回 `[]*Job{}`，前端也有 `!jobsData?.jobs` 守卫，
 **不会崩**，但形状与规格不一致。与 P2-01 的同类偏差**一并并入 P1-27 的对账**。
 
-**任务 P2-03 关闭。**
+## 第 2 轮 · 2026-09-08 · 验收补跑（P2-12）· ✅ 全部实跑通过
+
+通过 `make test-db-up` 启动临时 MySQL (33306)，执行：
+`go test -v -count=1 ./internal/jobs -run "^TestAcceptance"`
+
+| 验收项 | 实跑耗时 | 实测状态 |
+|---|---|---|
+| 1 三步进度 (`TestAcceptance1_ThreeStepsProgress`) | 0.05s | ✅ PASS |
+| 2 断点重试 (`TestAcceptance2_IdempotentStepRetry`) | 0.12s | ✅ PASS |
+| 3 崩溃恢复 (`TestAcceptance3_CrashRecovery`) | 0.06s | ✅ PASS |
+| 4 同 target 不并发 (`TestAcceptance4_TargetConcurrencyLock`) | 0.03s | ✅ PASS |
+| 5 总超时 (`TestAcceptance5_JobTimeout`) | 0.23s | ✅ PASS |
+| 6 取消 (`TestAcceptance6_JobCancellation`) | 0.03s | ✅ PASS |
+| 7 事件与审计 (`TestAcceptance7_EventsAndAudit`) | 0.14s | ✅ PASS |
+| 8 worker 池上限 (`TestAcceptance8_WorkerPoolLimit`) | 0.55s | ✅ PASS (实测 observed max concurrent workers: 4) |
+
+8 条测试全部在真实 MySQL 上实跑通过，0 个 SKIP。
+
+**任务 P2-03 验收补跑完成，正式通过。**
