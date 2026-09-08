@@ -23,6 +23,10 @@ export const Settings: React.FC = () => {
 
   // --- 系统配置表单状态 ---
   const [domain, setDomain] = useState('dash.example.com');
+  const [consoleDomain, setConsoleDomain] = useState('');
+  const [certNotice, setCertNotice] = useState<string | null>(null);
+  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [copiedCertCmd, setCopiedCertCmd] = useState(false);
   const [fastInterval, setFastInterval] = useState('5');
   const [slowInterval, setSlowInterval] = useState('60');
   const [enableConns, setEnableConns] = useState(true);
@@ -79,7 +83,8 @@ export const Settings: React.FC = () => {
 
   useEffect(() => {
     if (settingsData) {
-      if (settingsData['site.domain']) setDomain(settingsData['site.domain']);
+      setDomain(settingsData['site.domain'] ?? '');
+      setConsoleDomain(settingsData['site.console_domain'] ?? '');
       if (settingsData['collect.interval_fast_s'] !== undefined) {
         setFastInterval(String(settingsData['collect.interval_fast_s']));
       }
@@ -130,11 +135,20 @@ export const Settings: React.FC = () => {
     mutationFn: async (updates: Partial<SystemSettings>) => {
       return await updateSettings(updates);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['system-settings'] });
       setNotice('✓ 系统设置已保存并同步（已下发至在线 Agent）');
       setErrorMsg('');
       setTimeout(() => setNotice(''), 4000);
+
+      // 若修改了 site.domain 且不为空，设置证书重签提示
+      if (variables['site.domain'] !== undefined) {
+        const trimmed = variables['site.domain'].trim();
+        const oldDomain = settingsData?.['site.domain']?.trim() ?? '';
+        if (trimmed && trimmed !== oldDomain) {
+          setCertNotice(`sudo ./setup.sh install --agent-domain ${trimmed}`);
+        }
+      }
     },
     onError: (err: any) => {
       setErrorMsg(err?.message || '保存设置失败');
@@ -337,6 +351,45 @@ export const Settings: React.FC = () => {
 
   const handleSettingsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const trimmedDomain = domain.trim();
+    const trimmedConsoleDomain = consoleDomain.trim();
+
+    // 域名校验函数：不许带 scheme、不许带路径/参数/空格
+    const validateDomainInput = (val: string, label: string): string | null => {
+      if (!val) return null; // 允许清空
+      const lower = val.toLowerCase();
+      if (lower.includes('://') || lower.startsWith('http:') || lower.startsWith('https:')) {
+        return `${label} 不能包含协议头 (如 http:// 或 https://)`;
+      }
+      if (/[/?#\s]/.test(val)) {
+        return `${label} 不能包含路径 (/)、参数 (?) 或空格`;
+      }
+      // 检查 host / port
+      if (val.includes(':')) {
+        const parts = val.split(':');
+        if (parts.length !== 2) {
+          return `${label} 格式错误，必须为 域名:端口 或合法域名`;
+        }
+        const port = parseInt(parts[1], 10);
+        if (isNaN(port) || port < 1 || port > 65535) {
+          return `${label} 端口号必须在 1 ~ 65535 之间`;
+        }
+      }
+      return null;
+    };
+
+    const domainErr = validateDomainInput(trimmedDomain, '访问域名 (site.domain)');
+    if (domainErr) {
+      setErrorMsg(domainErr);
+      return;
+    }
+    const consoleDomainErr = validateDomainInput(trimmedConsoleDomain, '控制台域名 (site.console_domain)');
+    if (consoleDomainErr) {
+      setErrorMsg(consoleDomainErr);
+      return;
+    }
+
     const fast = parseInt(fastInterval, 10);
     const slow = parseInt(slowInterval, 10);
     const raw = parseInt(rawRetention, 10);
@@ -354,6 +407,8 @@ export const Settings: React.FC = () => {
     }
 
     updateSettingsMutation.mutate({
+      'site.domain': trimmedDomain,
+      'site.console_domain': trimmedConsoleDomain,
       'collect.interval_fast_s': fast,
       'collect.interval_slow_s': slow,
       'collect.enable_conns': enableConns,
@@ -409,17 +464,66 @@ export const Settings: React.FC = () => {
             <div className="card">
               <div className="card-body">
                 <h2 className={styles.sectionTitle}>站点与访问配置</h2>
+
+                {/* 证书重签提示 */}
+                {certNotice && (
+                  <div className={styles.certNoticeBox} style={{ marginTop: 'var(--sp-2)', marginBottom: 'var(--sp-2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--warn)' }}>
+                        ⚠️ 域名已更新。现有证书仍是旧域名签发的，请在服务器上执行以下命令重新签发：
+                      </span>
+                      <button
+                        type="button"
+                        className="btn mini ghost"
+                        onClick={() => setCertNotice(null)}
+                        title="关闭提示"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className={styles.installCodeBox}>
+                      <div className={styles.installCmd}>{certNotice}</div>
+                      <button
+                        type="button"
+                        className={styles.copyBtn}
+                        onClick={() => {
+                          navigator.clipboard.writeText(certNotice);
+                          setCopiedCertCmd(true);
+                          setTimeout(() => setCopiedCertCmd(false), 2000);
+                        }}
+                      >
+                        {copiedCertCmd ? '✓ 已复制' : '📋 复制命令'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>访问域名 (settings.site.domain)</label>
+                    <label className={styles.label}>Agent 接入域名 (settings.site.domain)</label>
                     <input
                       type="text"
                       className={`${styles.input} cell-mono`}
                       value={domain}
-                      disabled
+                      onChange={(e) => setDomain(e.target.value)}
+                      placeholder="例如 dash.example.com 或 1.2.3.4:8443"
                     />
                     <span className={styles.hint}>
-                      第一期只读展示，修改需通过 setup.sh 或配置文件调整
+                      用于 Agent 通信与装机脚本下载。不带 http:// 或 https://，可带端口
+                    </span>
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>控制台域名 (settings.site.console_domain)</label>
+                    <input
+                      type="text"
+                      className={`${styles.input} cell-mono`}
+                      value={consoleDomain}
+                      onChange={(e) => setConsoleDomain(e.target.value)}
+                      placeholder="可选，例如 console.example.com"
+                    />
+                    <span className={styles.hint}>
+                      双域名模式下网页端专属访问域名；未配置则使用接入域名
                     </span>
                   </div>
 
@@ -433,6 +537,58 @@ export const Settings: React.FC = () => {
                     />
                     <span className={styles.hint}>由配置文件或环境变量 DASH_SERVER_LISTEN 决定</span>
                   </div>
+                </div>
+
+                {/* 装机命令即时回显与预警 */}
+                <div
+                  style={{
+                    marginTop: 'var(--sp-4)',
+                    paddingTop: 'var(--sp-3)',
+                    borderTop: '1px solid var(--border-dim)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--sp-2)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span className={styles.label} style={{ fontWeight: 600 }}>
+                      装机命令预览 (使用当前域名)
+                    </span>
+                    <span className={styles.hint}>保存域名后将在全系统生效</span>
+                  </div>
+
+                  {!domain.trim() || domain.trim() === 'localhost:8080' ? (
+                    <div className={styles.dangerBox}>
+                      <strong>⚠️ 站点域名未配置，此命令无法在其他机器上执行</strong>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        当前未配置有效域名或使用 localhost 兜底，请配置真实的公网域名或 IP:端口。
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {(() => {
+                    const previewDomain = domain.trim() || 'localhost:8080';
+                    const endpoint = previewDomain.startsWith('http://') || previewDomain.startsWith('https://')
+                      ? previewDomain
+                      : `https://${previewDomain}`;
+                    const previewCmd = `curl -fsSL ${endpoint}/install.sh | sh -s -- --enroll <token>`;
+                    return (
+                      <div className={styles.installCodeBox}>
+                        <div className={styles.installCmd}>{previewCmd}</div>
+                        <button
+                          type="button"
+                          className={styles.copyBtn}
+                          onClick={() => {
+                            navigator.clipboard.writeText(previewCmd);
+                            setCopiedCmd(true);
+                            setTimeout(() => setCopiedCmd(false), 2000);
+                          }}
+                        >
+                          {copiedCmd ? '✓ 已复制' : '📋 复制命令'}
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

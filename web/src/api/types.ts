@@ -254,6 +254,7 @@ export interface UpdateBillingParams {
 // 系统设置
 export interface SystemSettings {
   'site.domain': string;
+  'site.console_domain'?: string;
   'retention.raw_days': number;
   'retention.1m_days': number;
   'retention.1h_days': number;

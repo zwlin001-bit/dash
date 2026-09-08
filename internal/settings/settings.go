@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -82,13 +83,9 @@ func (s *Service) GetSettings(ctx context.Context) (*SystemSettings, error) {
 		v := strings.TrimSpace(val.String)
 		switch key {
 		case "site.domain":
-			if v != "" {
-				st.SiteDomain = v
-			}
+			st.SiteDomain = v
 		case "site.console_domain":
-			if v != "" {
-				st.ConsoleDomain = v
-			}
+			st.ConsoleDomain = v
 		case "retention.raw_days":
 			if n, err := strconv.Atoi(v); err == nil {
 				st.RetentionRawDays = n
@@ -132,20 +129,6 @@ func (s *Service) UpdateSettings(ctx context.Context, updates map[string]any, ac
 		hasServerConfig    bool
 	)
 
-	// 不允许修改 site.domain 与 site.console_domain（第一期只读展示）
-	if dom, ok := updates["site.domain"]; ok {
-		cur, _ := s.GetSettings(ctx)
-		if cur != nil && fmt.Sprintf("%v", dom) != cur.SiteDomain {
-			return nil, errors.New("domain_read_only")
-		}
-	}
-	if dom, ok := updates["site.console_domain"]; ok {
-		cur, _ := s.GetSettings(ctx)
-		if cur != nil && fmt.Sprintf("%v", dom) != cur.ConsoleDomain {
-			return nil, errors.New("domain_read_only")
-		}
-	}
-
 	validKeys := map[string]bool{
 		"site.domain":             true,
 		"site.console_domain":     true,
@@ -165,6 +148,16 @@ func (s *Service) UpdateSettings(ctx context.Context, updates map[string]any, ac
 			continue
 		}
 		switch k {
+		case "site.domain", "site.console_domain":
+			strVal, ok := v.(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid_%s: must be a string", strings.ReplaceAll(k, ".", "_"))
+			}
+			strVal = strings.TrimSpace(strVal)
+			if err := validateDomainOrHostPort(strVal); err != nil {
+				return nil, fmt.Errorf("invalid_%s: %w", strings.ReplaceAll(k, ".", "_"), err)
+			}
+			dbUpdates[k] = strVal
 		case "retention.raw_days", "retention.1m_days", "retention.1h_days", "retention.1d_days":
 			num, err := toInt(v)
 			if err != nil || num < 0 {
@@ -267,13 +260,14 @@ func (s *Service) HandlePatch(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.UpdateSettings(r.Context(), updates, actorKind, actorID, ip)
 	if err != nil {
-		if err.Error() == "domain_read_only" {
-			JSONError(w, http.StatusBadRequest, "invalid_param", "域名在第一期只读展示，不可在线修改", "site.domain")
-			return
-		}
 		if strings.HasPrefix(err.Error(), "invalid_") {
-			field := strings.TrimPrefix(err.Error(), "invalid_")
-			JSONError(w, http.StatusBadRequest, "invalid_param", "参数校验失败: "+field, field)
+			parts := strings.SplitN(err.Error(), ": ", 2)
+			field := strings.TrimPrefix(parts[0], "invalid_")
+			msg := "参数校验失败: " + field
+			if len(parts) > 1 {
+				msg = parts[1]
+			}
+			JSONError(w, http.StatusBadRequest, "invalid_param", msg, field)
 			return
 		}
 		JSONError(w, http.StatusInternalServerError, "server_error", "保存系统设置失败: "+err.Error(), nil)
@@ -333,3 +327,67 @@ func toBool(v any) (bool, bool) {
 	}
 	return false, false
 }
+
+// validateDomainOrHostPort 校验域名或 域名:端口 格式。
+// 规则：允许为空字符串（清空域名）；禁止带 scheme（如 http://, https://）；禁止带路径（/）、参数（?）、哈希（#）或空格；
+// 格式必须为合法主机名/IP，或主机名:端口 (1-65535)。
+func validateDomainOrHostPort(val string) error {
+	if val == "" {
+		return nil
+	}
+
+	lower := strings.ToLower(val)
+	if strings.Contains(lower, "://") || strings.HasPrefix(lower, "http:") || strings.HasPrefix(lower, "https:") {
+		return errors.New("域名不能包含协议头 (如 http:// 或 https://)")
+	}
+	if strings.ContainsAny(val, "/?# \t\r\n") {
+		return errors.New("域名不能包含路径 (/)、参数或空格")
+	}
+
+	host := val
+	if strings.Contains(val, ":") {
+		h, portStr, err := net.SplitHostPort(val)
+		if err != nil {
+			return errors.New("域名端口格式错误，必须为 域名:端口 或合法域名")
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port < 1 || port > 65535 {
+			return errors.New("端口号必须在 1 ~ 65535 之间")
+		}
+		host = h
+	}
+
+	if host == "" {
+		return errors.New("域名不能为空")
+	}
+
+	// 校验 host 格式：可以为 IPv4/IPv6 或 hostname
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return nil
+	}
+
+	// 校验 hostname
+	if len(host) > 253 {
+		return errors.New("域名长度不能超过 253 个字符")
+	}
+	labels := strings.Split(host, ".")
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 {
+			return errors.New("域名各标签长度必须在 1 ~ 63 个字符之间")
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return errors.New("域名标签不能以短横线 '-' 开头或结尾")
+		}
+		for _, ch := range label {
+			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-') {
+				return errors.New("域名只能包含英文字母、数字和短横线 '-'")
+			}
+		}
+	}
+
+	return nil
+}
+
