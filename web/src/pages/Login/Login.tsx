@@ -75,6 +75,9 @@ export const Login: React.FC = () => {
 
   return (
     <div className={styles.container}>
+      <div className={styles.gridBg} />
+      <div className={styles.glow1} />
+      <div className={styles.glow2} />
       <div className={styles.loginCard}>
         <div className={styles.header}>
           <div className={styles.title}>DASH</div>
