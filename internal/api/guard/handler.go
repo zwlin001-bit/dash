@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,20 +13,40 @@ import (
 	"dash/internal/audit"
 	"dash/internal/auth"
 	"dash/internal/cloud"
+	"dash/internal/db"
 	"dash/internal/guard"
 	"dash/internal/jobs"
 	"dash/internal/logx"
 	"dash/internal/ulid"
 )
 
+type Store interface {
+	DB() *db.DB
+	ListRules(ctx context.Context) (map[string]*guard.GuardRule, error)
+	ListRecentCycles(ctx context.Context, limit, offset int) ([]guard.GuardCycle, int, error)
+	GetRuleByResourceID(ctx context.Context, resourceID string) (*guard.GuardRule, error)
+	UpsertRule(ctx context.Context, rule *guard.GuardRule) error
+}
+
+type CloudService interface {
+	ListAccounts(ctx context.Context) ([]cloud.CloudAccount, error)
+	ListResources(ctx context.Context, accountID, providerCode, resKind, region, status string) ([]cloud.CloudResource, error)
+	GetResource(ctx context.Context, id string) (*cloud.CloudResource, error)
+	GetAccount(ctx context.Context, id string) (*cloud.CloudAccount, error)
+}
+
+type Engine interface {
+	EvaluateOnce(ctx context.Context, isDryRun bool) (*guard.EvaluateResult, error)
+}
+
 type Handler struct {
-	guardEngine *guard.Engine
-	store       *guard.Store
-	cloudSvc    *cloud.Service
+	guardEngine Engine
+	store       Store
+	cloudSvc    CloudService
 	jobEngine   *jobs.Engine
 }
 
-func NewHandler(ge *guard.Engine, store *guard.Store, cloudSvc *cloud.Service, je *jobs.Engine) *Handler {
+func NewHandler(ge Engine, store Store, cloudSvc CloudService, je *jobs.Engine) *Handler {
 	return &Handler{
 		guardEngine: ge,
 		store:       store,
@@ -348,6 +369,10 @@ func (h *Handler) HandleListCycles(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+
+	if cycles == nil {
+		cycles = []guard.GuardCycle{}
 	}
 
 	page := (offset / limit) + 1

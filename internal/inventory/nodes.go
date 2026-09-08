@@ -61,6 +61,7 @@ type NodeService struct {
 	facts        *FactsService
 	billing      *BillingService
 	latestGetter func(nodeID string) (any, bool)
+	ListNodesFn  func(ctx context.Context, f ListNodesFilter) (*PageResult, error)
 }
 
 func NewNodeService(database *db.DB, tags *TagService, facts *FactsService, billing *BillingService) *NodeService {
@@ -91,6 +92,9 @@ type ListNodesFilter struct {
 
 // ListNodes 查询节点列表，支持多条件过滤与批量关联字段装配。
 func (s *NodeService) ListNodes(ctx context.Context, f ListNodesFilter) (*PageResult, error) {
+	if s.ListNodesFn != nil {
+		return s.ListNodesFn(ctx, f)
+	}
 	if f.Page <= 0 {
 		f.Page = 1
 	}

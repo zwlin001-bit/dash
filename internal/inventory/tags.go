@@ -27,7 +27,9 @@ type Tag struct {
 
 // TagService 负责标签及节点打标签的业务逻辑。
 type TagService struct {
-	db *db.DB
+	db                *db.DB
+	ListTagsFn        func(ctx context.Context, page, pageSize int) (*PageResult, error)
+	ReplaceNodeTagsFn func(ctx context.Context, nodeID string, tagIDs []string, actorKind, actorID, ip string) error
 }
 
 func NewTagService(database *db.DB) *TagService {
@@ -36,6 +38,9 @@ func NewTagService(database *db.DB) *TagService {
 
 // ListTags 列出所有标签（支持分页与关联节点计数）。
 func (s *TagService) ListTags(ctx context.Context, page, pageSize int) (*PageResult, error) {
+	if s.ListTagsFn != nil {
+		return s.ListTagsFn(ctx, page, pageSize)
+	}
 	var total int64
 	err := s.db.QueryRow(ctx, `SELECT count(1) FROM tags`).Scan(&total)
 	if err != nil {
@@ -334,6 +339,9 @@ func (s *TagService) DetachTag(ctx context.Context, nodeID, tagID string, actorK
 
 // ReplaceNodeTags 全量替换节点的标签。
 func (s *TagService) ReplaceNodeTags(ctx context.Context, nodeID string, tagIDs []string, actorKind, actorID, ip string) error {
+	if s.ReplaceNodeTagsFn != nil {
+		return s.ReplaceNodeTagsFn(ctx, nodeID, tagIDs, actorKind, actorID, ip)
+	}
 	var nodeExists int
 	_ = s.db.QueryRow(ctx, `SELECT count(1) FROM nodes WHERE id = ?`, nodeID).Scan(&nodeExists)
 	if nodeExists == 0 {

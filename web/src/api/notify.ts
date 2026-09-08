@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { toItems } from './envelope';
 import { NotifyChannel, NotifyRule, NotifyDelivery } from './types';
 
 export interface DeliveriesFilter {
@@ -10,7 +11,7 @@ export interface DeliveriesFilter {
 }
 
 export interface DeliveriesListResponse {
-  items: NotifyDelivery[];
+  deliveries: NotifyDelivery[];
   total: number;
   limit: number;
   offset: number;
@@ -18,8 +19,9 @@ export interface DeliveriesListResponse {
 
 // Channels
 
-export async function fetchNotifyChannels(): Promise<{ items: NotifyChannel[] }> {
-  return apiFetch<{ items: NotifyChannel[] }>('/api/v1/notify/channels');
+export async function fetchNotifyChannels(): Promise<NotifyChannel[]> {
+  const res = await apiFetch<unknown>('/api/v1/notify/channels');
+  return toItems<NotifyChannel>(res);
 }
 
 export async function createNotifyChannel(data: {
@@ -64,8 +66,9 @@ export async function testNotifyChannel(id: string, text?: string): Promise<{ ok
 
 // Rules
 
-export async function fetchNotifyRules(): Promise<{ items: NotifyRule[] }> {
-  return apiFetch<{ items: NotifyRule[] }>('/api/v1/notify/rules');
+export async function fetchNotifyRules(): Promise<NotifyRule[]> {
+  const res = await apiFetch<unknown>('/api/v1/notify/rules');
+  return toItems<NotifyRule>(res);
 }
 
 export async function createNotifyRule(data: Partial<NotifyRule>): Promise<NotifyRule> {
@@ -100,5 +103,11 @@ export async function fetchNotifyDeliveries(filter: DeliveriesFilter = {}): Prom
 
   const qs = params.toString();
   const url = qs ? `/api/v1/notify/deliveries?${qs}` : '/api/v1/notify/deliveries';
-  return apiFetch<DeliveriesListResponse>(url);
+  const raw = await apiFetch<any>(url);
+  return {
+    deliveries: toItems<NotifyDelivery>(raw),
+    total: typeof raw?.total === 'number' ? raw.total : 0,
+    limit: typeof raw?.limit === 'number' ? raw.limit : (filter.limit || 50),
+    offset: typeof raw?.offset === 'number' ? raw.offset : (filter.offset || 0),
+  };
 }

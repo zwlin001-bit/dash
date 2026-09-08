@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { toItems } from './envelope';
 
 export interface CredentialSummary {
   id: string;
@@ -70,8 +71,8 @@ export interface DiscoveredResource {
 
 // Credentials API
 export const fetchCredentials = async (): Promise<CredentialSummary[]> => {
-  const res = await apiFetch<{ items: CredentialSummary[] }>('/api/v1/credentials');
-  return res?.items || [];
+  const res = await apiFetch<unknown>('/api/v1/credentials');
+  return toItems<CredentialSummary>(res);
 };
 
 export const createCredential = async (data: {
@@ -92,8 +93,8 @@ export const deleteCredential = async (id: string): Promise<void> => {
 
 // Cloud Accounts API
 export const fetchCloudAccounts = async (): Promise<CloudAccount[]> => {
-  const res = await apiFetch<{ items: CloudAccount[] }>('/api/v1/cloud-accounts');
-  return res?.items || [];
+  const res = await apiFetch<unknown>('/api/v1/cloud-accounts');
+  return toItems<CloudAccount>(res);
 };
 
 export const createCloudAccount = async (data: Partial<CloudAccount>): Promise<CloudAccount> => {
@@ -122,11 +123,11 @@ export const discoverCloudResources = async (data: {
   regions?: string[];
   account_site?: string;
 }): Promise<DiscoveredResource[]> => {
-  const res = await apiFetch<{ items: DiscoveredResource[] }>('/api/v1/cloud-accounts/discover', {
+  const res = await apiFetch<unknown>('/api/v1/cloud-accounts/discover', {
     method: 'POST',
     body: JSON.stringify(data),
   });
-  return res?.items || [];
+  return toItems<DiscoveredResource>(res);
 };
 
 // Cloud Resources API
@@ -146,8 +147,8 @@ export const fetchCloudResources = async (params?: {
 
   const query = search.toString();
   const url = `/api/v1/cloud-resources${query ? `?${query}` : ''}`;
-  const res = await apiFetch<{ items: CloudResource[] }>(url);
-  return res?.items || [];
+  const res = await apiFetch<unknown>(url);
+  return toItems<CloudResource>(res);
 };
 
 export const actionCloudResource = async (

@@ -19,15 +19,52 @@ import (
 	"dash/internal/provider"
 )
 
+// CredentialStore defines the credential storage operations.
+type CredentialStore interface {
+	List(ctx context.Context) ([]credentials.Summary, error)
+	Create(ctx context.Context, name, credKind string, payload []byte) (*credentials.Summary, error)
+	Delete(ctx context.Context, id string) error
+}
+
+// CloudService defines the cloud resource operations.
+type CloudService interface {
+	EnsureBuiltinProviders(ctx context.Context) error
+	ListAccounts(ctx context.Context) ([]CloudAccount, error)
+	GetAccount(ctx context.Context, id string) (*CloudAccount, error)
+	CreateAccount(ctx context.Context, acc CloudAccount) (*CloudAccount, error)
+	UpdateAccount(ctx context.Context, id string, acc CloudAccount) (*CloudAccount, error)
+	DeleteAccount(ctx context.Context, id string) error
+	DiscoverAccount(ctx context.Context, credID string, regions []string, site string) ([]provider.NormalizedResource, error)
+	TriggerSync(ctx context.Context, accountID string) (string, error)
+	GetSyncStatus(jobID string) (*SyncJobStatus, error)
+	ListResources(ctx context.Context, accountID, providerCode, resKind, region, status string) ([]CloudResource, error)
+	GetResource(ctx context.Context, id string) (*CloudResource, error)
+	ActionResource(ctx context.Context, id, action string) (*provider.ActionResponse, error)
+}
+
 // Module implements app.Module for cloud resources and credentials.
 type Module struct {
-	svc       *Service
-	credStore *credentials.Store
+	svc       CloudService
+	credStore CredentialStore
 	pm        *provider.Manager
 }
 
 func NewModule() *Module {
 	return &Module{}
+}
+
+// NewModuleWithServices creates a Module with injected services (for testing and fixture generation).
+func NewModuleWithServices(credStore CredentialStore, svc CloudService) *Module {
+	m := &Module{
+		credStore: credStore,
+		svc:       svc,
+	}
+	return m
+}
+
+// RegisterRoutes registers cloud routes directly to an App (useful when services are injected).
+func (m *Module) RegisterRoutes(a *app.App) {
+	m.registerRoutes(a)
 }
 
 func (m *Module) Name() string {
@@ -52,9 +89,10 @@ func (m *Module) Register(a *app.App) error {
 		}
 	}
 
-	m.credStore = credentials.NewStore(a.DB, masterKey)
+	rawCredStore := credentials.NewStore(a.DB, masterKey)
+	m.credStore = rawCredStore
 	m.pm = provider.NewManager(filepath.Join(os.TempDir(), "dash-runtime"), "bin", "/usr/local/bin")
-	m.svc = NewService(a.DB, m.credStore, m.pm)
+	m.svc = NewService(a.DB, rawCredStore, m.pm)
 
 	if a.DB != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -69,11 +107,11 @@ func (m *Module) Register(a *app.App) error {
 	return nil
 }
 
-func (m *Module) Service() *Service {
+func (m *Module) Service() CloudService {
 	return m.svc
 }
 
-func (m *Module) CredStore() *credentials.Store {
+func (m *Module) CredStore() CredentialStore {
 	return m.credStore
 }
 
@@ -132,9 +170,14 @@ func (m *Module) handleListCredentials(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "server_error", err.Error())
 		return
 	}
+	if list == nil {
+		list = []credentials.Summary{}
+	}
 	jsonSuccess(w, http.StatusOK, map[string]any{
-		"items": list,
-		"total": len(list),
+		"items":     list,
+		"total":     len(list),
+		"page":      1,
+		"page_size": len(list),
 	})
 }
 
@@ -209,9 +252,14 @@ func (m *Module) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "server_error", err.Error())
 		return
 	}
+	if list == nil {
+		list = []CloudAccount{}
+	}
 	jsonSuccess(w, http.StatusOK, map[string]any{
-		"items": list,
-		"total": len(list),
+		"items":     list,
+		"total":     len(list),
+		"page":      1,
+		"page_size": len(list),
 	})
 }
 
@@ -300,9 +348,14 @@ func (m *Module) handleDiscover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if resources == nil {
+		resources = []provider.NormalizedResource{}
+	}
 	jsonSuccess(w, http.StatusOK, map[string]any{
-		"items": resources,
-		"total": len(resources),
+		"items":     resources,
+		"total":     len(resources),
+		"page":      1,
+		"page_size": len(resources),
 	})
 }
 
@@ -352,9 +405,14 @@ func (m *Module) handleListResources(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "server_error", err.Error())
 		return
 	}
+	if list == nil {
+		list = []CloudResource{}
+	}
 	jsonSuccess(w, http.StatusOK, map[string]any{
-		"items": list,
-		"total": len(list),
+		"items":     list,
+		"total":     len(list),
+		"page":      1,
+		"page_size": len(list),
 	})
 }
 

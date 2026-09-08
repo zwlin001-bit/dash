@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { toItems } from './envelope';
 
 export type JobState = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type StepState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
@@ -62,6 +63,8 @@ export interface SubmitJobRequest {
 export interface JobsListResponse {
   jobs: Job[];
   total: number;
+  page?: number;
+  page_size?: number;
 }
 
 export async function fetchJobs(params?: {
@@ -81,7 +84,13 @@ export async function fetchJobs(params?: {
   if (params?.offset !== undefined) query.set('offset', params.offset.toString());
 
   const qs = query.toString();
-  return apiFetch<JobsListResponse>(`/api/v1/jobs${qs ? `?${qs}` : ''}`);
+  const raw = await apiFetch<any>(`/api/v1/jobs${qs ? `?${qs}` : ''}`);
+  return {
+    jobs: toItems<Job>(raw),
+    total: typeof raw?.total === 'number' ? raw.total : 0,
+    page: raw?.page,
+    page_size: raw?.page_size,
+  };
 }
 
 export async function fetchJobDetail(id: string): Promise<{ job: Job }> {

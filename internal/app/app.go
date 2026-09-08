@@ -34,6 +34,7 @@ type App struct {
 	GuardEngine     any    // 供各业务模块调用的 ECS 保活与流量守卫引擎 (P2-04)
 	Version         string // 服务端当前运行版本
 	DistFingerprint string // 前端内嵌静态产物内容指纹 (P1-27)
+	HealthCheckPing func(ctx context.Context) error // 可选探活重载 (测试与 Fixture 生成时跳过真库 Ping)
 
 	mu             sync.RWMutex
 	routes         []RouteInfo
@@ -181,7 +182,13 @@ func (a *App) HealthzHandler() http.HandlerFunc {
 		httpStatus := http.StatusOK
 		status := "ok"
 
-		if a.DB == nil {
+		if a.HealthCheckPing != nil {
+			if err := a.HealthCheckPing(r.Context()); err != nil {
+				dbStatus = "error"
+				status = "error"
+				httpStatus = http.StatusServiceUnavailable
+			}
+		} else if a.DB == nil {
 			dbStatus = "error"
 			status = "error"
 			httpStatus = http.StatusServiceUnavailable
