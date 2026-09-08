@@ -38,11 +38,34 @@ if [ -n "$FORBIDDEN" ]; then
   EXIT_CODE=1
 fi
 
+# 3. 第三道：阿里云 SDK 纪律检查（P2-02）
+# 只允许 import github.com/aliyun/alibaba-cloud-sdk-go/sdk 核心包与 CommonRequest，
+# 严禁 import 任何 sdk/services/* 子包，防止二进制膨胀。
+echo "Running Aliyun SDK import discipline lint..."
+FORBIDDEN_ALIYUN_DIRECT=$(grep -rnE '["`]github\.com/aliyun/alibaba-cloud-sdk-go/services/[^"`]*["`]' . \
+  --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=web 2>/dev/null \
+  | grep -Ev '^[0-9]+:[[:space:]]*//' || true)
+
+if [ -n "$FORBIDDEN_ALIYUN_DIRECT" ]; then
+  echo "❌ ERROR: Prohibited alibaba-cloud-sdk-go/services import found:" >&2
+  echo "$FORBIDDEN_ALIYUN_DIRECT" >&2
+  EXIT_CODE=1
+fi
+
+FORBIDDEN_ALIYUN_DEPS=$(go list -deps ./... 2>/dev/null \
+  | grep 'github.com/aliyun/alibaba-cloud-sdk-go/services' || true)
+
+if [ -n "$FORBIDDEN_ALIYUN_DEPS" ]; then
+  echo "❌ ERROR: Transitive alibaba-cloud-sdk-go/services dependencies detected:" >&2
+  echo "$FORBIDDEN_ALIYUN_DEPS" >&2
+  EXIT_CODE=1
+fi
+
 if [ $EXIT_CODE -ne 0 ]; then
   echo "" >&2
-  echo "❌ Lint failed: agent/** and cmd/dash-agent must not depend on server internal packages (only internal/protocol is permitted)." >&2
+  echo "❌ Lint failed: import discipline checks failed." >&2
   exit 1
 fi
 
-echo "✅ Import discipline lint passed: no forbidden internal imports in agent/** or cmd/dash-agent."
+echo "✅ Import discipline lint passed: all agent and SDK import constraints satisfied."
 exit 0

@@ -80,6 +80,7 @@ func TestRegisterModules_Order(t *testing.T) {
 		"events",
 		"notify",
 		"settings",
+		"cloud",
 		"web",
 	}
 
