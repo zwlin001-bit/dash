@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchGuardOverview,
   updateGuardRule,
+  updateAccountPolicy,
   dryRunGuard,
   evaluateGuard,
   forceStartInstance,
@@ -13,6 +14,7 @@ import {
   GuardRule,
   EvaluateResult,
   RuleUpdateRequest,
+  AccountPolicyUpdateRequest,
 } from '../../api';
 import { TimeSeriesChart } from '../../components/TimeSeriesChart/TimeSeriesChart';
 import { Sparkline } from '../../components/Sparkline/Sparkline';
@@ -108,6 +110,7 @@ const InstanceCard: React.FC<InstanceCardProps> = ({
   });
 
   const rule = inst.rule;
+  const accountActionsDisabled = account.policy ? !account.policy.actions_enabled : false;
   let statusBadgeClass = styles.statusStopped;
   if (inst.status === 'Running') {
     statusBadgeClass = styles.statusRunning;
@@ -216,7 +219,14 @@ const InstanceCard: React.FC<InstanceCardProps> = ({
 
       {/* 3. traffic-row + progress */}
       <div className={styles.trafficRow}>
-        <span>出网流量 / 阈值</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+          出网流量 / 阈值
+          {inst.limit_origin === 'account' ? (
+            <span className={styles.originBadgeInherit} title="继承自账号级阈值">继承账号</span>
+          ) : (
+            <span className={styles.originBadgeOverride} title="设备独立覆盖阈值">设备覆盖</span>
+          )}
+        </span>
         <span className={styles.trafficRowValue}>
           {cdtUsedGB.toFixed(2)} GB / {limitGB.toFixed(0)} GB ({usagePercent.toFixed(1)}%)
         </span>
@@ -239,7 +249,14 @@ const InstanceCard: React.FC<InstanceCardProps> = ({
 
       {/* 5. next-line */}
       <div className={styles.nextLine}>
-        <span>⏱️ 下一次日程:</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+          ⏱️ 下一次日程:
+          {inst.schedule_origin === 'account' ? (
+            <span className={styles.originBadgeInherit} title="继承自账号级日程">继承账号</span>
+          ) : (
+            <span className={styles.originBadgeOverride} title="设备独立日程">设备覆盖</span>
+          )}
+        </span>
         <span style={{ fontFamily: 'var(--font-mono)' }}>{formatScheduleNext(inst)}</span>
       </div>
 
@@ -252,6 +269,28 @@ const InstanceCard: React.FC<InstanceCardProps> = ({
       {/* 可展开守卫配置区域 */}
       {showRuleEdit && (
         <div className={styles.ruleForm} style={{ marginTop: 'var(--sp-2)' }}>
+          {/* 继承账号策略开关 (跟随账号 / 自定义) */}
+          <div className={styles.switchRow}>
+            <div className={styles.switchLabelArea}>
+              <strong>策略继承模式</strong>
+              <span className={styles.switchDesc}>
+                {form.inherit_account
+                  ? '跟随账号策略（未覆盖字段继承账号设置）'
+                  : '设备自定义模式（独立维护配置）'}
+              </span>
+            </div>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-2)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={form.inherit_account ?? true}
+                onChange={(e) => onFormChange({ inherit_account: e.target.checked })}
+              />
+              <span style={{ fontSize: '12px', color: 'var(--text-main)' }}>
+                {form.inherit_account ? '跟随账号' : '自定义'}
+              </span>
+            </label>
+          </div>
+
           {/* 启用守卫总开关 */}
           <div className={styles.switchRow}>
             <div className={styles.switchLabelArea}>
@@ -265,28 +304,41 @@ const InstanceCard: React.FC<InstanceCardProps> = ({
             />
           </div>
 
-          {/* 执行动作开关 (安全关键) */}
-          <div className={styles.switchRow}>
+          {/* 执行动作开关 (安全关键，受账号级 actions_enabled 双重锁保护) */}
+          <div className={`${styles.switchRow} ${accountActionsDisabled ? styles.fieldDisabled : ''}`}>
             <div className={styles.switchLabelArea}>
-              <strong style={{ color: form.actions_enabled ? 'var(--warn)' : 'var(--text-main)' }}>
+              <strong style={{ color: form.actions_enabled && !accountActionsDisabled ? 'var(--warn)' : 'var(--text-main)' }}>
                 允许执行云上动作 (Actions Enabled)
               </strong>
               <span className={styles.switchDesc}>
-                {form.actions_enabled
+                {accountActionsDisabled
+                  ? '账号级总闸已关闭，处于仅监控模式，所有设备动作禁止执行'
+                  : form.actions_enabled
                   ? '已授权自动开停机！到达条件将实际操作云服务器'
                   : '新建默认关闭；关闭时仅发送通知事件，不动真实机器'}
               </span>
+              {accountActionsDisabled && (
+                <span className={styles.disabledReason}>
+                  ⚠️ 账号级动作总闸已锁定：必须先在账号设置中开启允许动作
+                </span>
+              )}
             </div>
             <input
               type="checkbox"
               checked={form.actions_enabled}
+              disabled={accountActionsDisabled}
               onChange={(e) => onFormChange({ actions_enabled: e.target.checked })}
             />
           </div>
 
           {/* 流量阈值 */}
           <div className={styles.fieldRow}>
-            <span>流量限额阈值 (GB):</span>
+            <span>
+              流量限额阈值 (GB):
+              {form.inherit_account && form.traffic_limit_gb === undefined && (
+                <span className={styles.originBadgeInherit} style={{ marginLeft: '6px' }}>继承账号</span>
+              )}
+            </span>
             <input
               type="number"
               className={styles.input}
@@ -411,10 +463,18 @@ export const CloudGuard: React.FC = () => {
   // Editing Rule Local State: Map<resource_id, Partial<RuleUpdateRequest>>
   const [editForms, setEditForms] = useState<Record<string, RuleUpdateRequest>>({});
 
+  // Editing Account Policy Local State: Map<account_id, Partial<AccountPolicyUpdateRequest>>
+  const [accountPolicyForms, setAccountPolicyForms] = useState<Record<string, AccountPolicyUpdateRequest>>({});
+  const [expandedAccountPolicies, setExpandedAccountPolicies] = useState<Record<string, boolean>>({});
+
   // CDT Chart collapse state
   const [collapsedCharts, setCollapsedCharts] = useState<Record<string, boolean>>({});
   const toggleChart = (accId: string) => {
     setCollapsedCharts((prev) => ({ ...prev, [accId]: !prev[accId] }));
+  };
+
+  const toggleAccountPolicy = (accId: string) => {
+    setExpandedAccountPolicies((prev) => ({ ...prev, [accId]: !prev[accId] }));
   };
 
   // Queries
@@ -439,6 +499,19 @@ export const CloudGuard: React.FC = () => {
       setEditForms((prev) => {
         const next = { ...prev };
         delete next[variables.resId];
+        return next;
+      });
+    },
+  });
+
+  const updateAccountPolicyMutation = useMutation({
+    mutationFn: ({ accountId, req }: { accountId: string; req: AccountPolicyUpdateRequest }) =>
+      updateAccountPolicy(accountId, req),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['guard-overview'] });
+      setAccountPolicyForms((prev) => {
+        const next = { ...prev };
+        delete next[variables.accountId];
         return next;
       });
     },
@@ -490,6 +563,7 @@ export const CloudGuard: React.FC = () => {
       schedule_start: custom.schedule_start ?? rule?.schedule_start ?? '08:30',
       schedule_stop: custom.schedule_stop ?? rule?.schedule_stop ?? '20:00',
       schedule_tz: custom.schedule_tz ?? rule?.schedule_tz ?? 'Asia/Shanghai',
+      inherit_account: custom.inherit_account ?? rule?.inherit_account ?? true,
     };
   };
 
@@ -506,6 +580,36 @@ export const CloudGuard: React.FC = () => {
   const handleSaveRule = (resId: string, rule?: GuardRule) => {
     const req = getFormValue(resId, rule);
     updateRuleMutation.mutate({ resId, req });
+  };
+
+  const getAccountPolicyFormValue = (acc: AccountOverview): AccountPolicyUpdateRequest => {
+    const custom = accountPolicyForms[acc.account_id] || {};
+    const policy = acc.policy;
+    return {
+      is_enabled: custom.is_enabled ?? policy?.is_enabled ?? true,
+      actions_enabled: custom.actions_enabled ?? policy?.actions_enabled ?? false,
+      traffic_limit_gb: custom.traffic_limit_gb ?? policy?.traffic_limit_gb ?? acc.traffic_limit_gb ?? 50,
+      traffic_action: custom.traffic_action ?? policy?.traffic_action ?? 'stop',
+      schedule_enabled: custom.schedule_enabled ?? policy?.schedule_enabled ?? false,
+      schedule_start: custom.schedule_start ?? policy?.schedule_start ?? '08:30',
+      schedule_stop: custom.schedule_stop ?? policy?.schedule_stop ?? '20:00',
+      schedule_tz: custom.schedule_tz ?? policy?.schedule_tz ?? 'Asia/Shanghai',
+    };
+  };
+
+  const handleAccountPolicyFormChange = (accountId: string, patch: Partial<AccountPolicyUpdateRequest>) => {
+    setAccountPolicyForms((prev) => ({
+      ...prev,
+      [accountId]: {
+        ...(prev[accountId] || {}),
+        ...patch,
+      },
+    }));
+  };
+
+  const handleSaveAccountPolicy = (acc: AccountOverview) => {
+    const req = getAccountPolicyFormValue(acc);
+    updateAccountPolicyMutation.mutate({ accountId: acc.account_id, req });
   };
 
   const formatScheduleNext = (inst: InstanceOverview): string => {
@@ -664,12 +768,203 @@ export const CloudGuard: React.FC = () => {
               </div>
             </div>
 
+            {/* 仅监控模式横幅 (P2-11 §3: 账号级 actions_enabled=false 时醒目展示) */}
+            {account.policy && !account.policy.actions_enabled && (
+              <div className={styles.monitorOnlyBanner}>
+                <span>🛡️</span>
+                <div>
+                  <strong>当前账号处于「仅监控」模式：</strong>
+                  账号级动作总闸已关闭。到达阈值或日程时系统照常评估并发出告警通知，但不执行任何实际的云上启停操作。设备级动作配置已被全局锁定。
+                </div>
+              </div>
+            )}
+
             {/* CDT 错误提示 */}
             {account.cdt_error && (
               <div className={styles.errorBanner}>
                 ⚠️ CDT 流量查询失败: {account.cdt_error}（系统已进入安全隔离模式，暂停所有自动开机）
               </div>
             )}
+
+            {/* 账号级保活策略控制区 (P2-11 §3) */}
+            {(() => {
+              const policyForm = getAccountPolicyFormValue(account);
+              const isPolicyExpanded = !!expandedAccountPolicies[account.account_id];
+              const isPolicyDirty = !!accountPolicyForms[account.account_id];
+
+              return (
+                <div className={styles.accountPolicyControls}>
+                  <div className={styles.accountPolicyHeader}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+                      <strong>⚙️ 账号级保活与调度策略</strong>
+                      <span className="text-dim" style={{ fontSize: '12px' }}>
+                        {account.policy?.is_enabled === false
+                          ? '（守卫已暂停）'
+                          : account.policy?.actions_enabled
+                          ? '（允许自动动作）'
+                          : '（仅监控模式）'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+                      {isPolicyExpanded && (
+                        <button
+                          type="button"
+                          className="btn mini primary"
+                          disabled={!isPolicyDirty || updateAccountPolicyMutation.isPending}
+                          onClick={() => handleSaveAccountPolicy(account)}
+                        >
+                          {updateAccountPolicyMutation.isPending ? '保存中...' : '保存策略'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={styles.cdtToggleBtn}
+                        onClick={() => toggleAccountPolicy(account.account_id)}
+                      >
+                        {isPolicyExpanded ? '收起策略配置 ▲' : '配置账号策略 ▼'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isPolicyExpanded && (
+                    <div className={styles.accountPolicyGrid}>
+                      <div className={styles.accountPolicyItem}>
+                        <div className={styles.switchRow}>
+                          <div className={styles.switchLabelArea}>
+                            <strong>启用账号守卫</strong>
+                            <span className={styles.switchDesc}>关闭将跳过整个账号评估</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={policyForm.is_enabled ?? true}
+                            onChange={(e) =>
+                              handleAccountPolicyFormChange(account.account_id, {
+                                is_enabled: e.target.checked,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className={styles.accountPolicyItem}>
+                        <div className={styles.switchRow}>
+                          <div className={styles.switchLabelArea}>
+                            <strong style={{ color: policyForm.actions_enabled ? 'var(--warn)' : 'var(--text-main)' }}>
+                              账号动作总闸 (Actions Enabled)
+                            </strong>
+                            <span className={styles.switchDesc}>
+                              {policyForm.actions_enabled
+                                ? '允许账号下所有授权设备执行真实启停'
+                                : '急停开关：关闭后全账号仅监控，不执行启停'}
+                            </span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={policyForm.actions_enabled ?? false}
+                            onChange={(e) =>
+                              handleAccountPolicyFormChange(account.account_id, {
+                                actions_enabled: e.target.checked,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className={styles.accountPolicyItem}>
+                        <div className={styles.fieldRow}>
+                          <span>全账号 CDT 月度限额 (GB):</span>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            style={{ width: '90px' }}
+                            min="1"
+                            max="500"
+                            value={policyForm.traffic_limit_gb ?? 50}
+                            onChange={(e) =>
+                              handleAccountPolicyFormChange(account.account_id, {
+                                traffic_limit_gb: parseFloat(e.target.value) || 50,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className={styles.accountPolicyItem} style={{ gridColumn: '1 / -1' }}>
+                        <div className={styles.scheduleBox}>
+                          <div className={styles.switchRow}>
+                            <div className={styles.switchLabelArea}>
+                              <strong>账号默认每日开关机日程</strong>
+                              <span className={styles.switchDesc}>未单独设置日程的实例将继承此时间窗口</span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={policyForm.schedule_enabled ?? false}
+                              onChange={(e) =>
+                                handleAccountPolicyFormChange(account.account_id, {
+                                  schedule_enabled: e.target.checked,
+                                })
+                              }
+                            />
+                          </div>
+
+                          {policyForm.schedule_enabled && (
+                            <>
+                              <div className={styles.scheduleInputs}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+                                  <span className={styles.propLabel}>开机时间</span>
+                                  <input
+                                    type="time"
+                                    className={styles.input}
+                                    value={policyForm.schedule_start || '08:30'}
+                                    onChange={(e) =>
+                                      handleAccountPolicyFormChange(account.account_id, {
+                                        schedule_start: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+                                  <span className={styles.propLabel}>关机时间</span>
+                                  <input
+                                    type="time"
+                                    className={styles.input}
+                                    value={policyForm.schedule_stop || '20:00'}
+                                    onChange={(e) =>
+                                      handleAccountPolicyFormChange(account.account_id, {
+                                        schedule_stop: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <span className={styles.propLabel}>时区</span>
+                                <select
+                                  className={styles.select}
+                                  value={policyForm.schedule_tz || 'Asia/Shanghai'}
+                                  onChange={(e) =>
+                                    handleAccountPolicyFormChange(account.account_id, {
+                                      schedule_tz: e.target.value,
+                                    })
+                                  }
+                                >
+                                  {TIMEZONES.map((tz) => (
+                                    <option key={tz.value} value={tz.value}>
+                                      {tz.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* 账号级 CDT 流量条 */}
             <div className={styles.trafficBarArea}>

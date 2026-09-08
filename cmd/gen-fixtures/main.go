@@ -760,6 +760,57 @@ func (s *fakeGuardStore) GetRuleByResourceID(ctx context.Context, resourceID str
 func (s *fakeGuardStore) UpsertRule(ctx context.Context, rule *guardmodel.GuardRule) error {
 	return nil
 }
+func (s *fakeGuardStore) GetAccountPolicy(ctx context.Context, accountID string) (*guardmodel.GuardAccountPolicy, error) {
+	if s.empty {
+		return nil, nil
+	}
+	limit := 100.0
+	schedStart := "09:00"
+	schedStop := "18:00"
+	return &guardmodel.GuardAccountPolicy{
+		CloudAccountID:  accountID,
+		IsEnabled:       true,
+		ActionsEnabled:  false,
+		TrafficLimitGB:  &limit,
+		TrafficAction:   "stop",
+		WarnRatio:       0.8,
+		ScheduleEnabled: true,
+		ScheduleStart:   &schedStart,
+		ScheduleStop:    &schedStop,
+		ScheduleTZ:      "Asia/Shanghai",
+		EvalIntervalS:   60,
+		CreatedAtMs:     fixedTimeMs,
+		UpdatedAtMs:     fixedTimeMs,
+	}, nil
+}
+func (s *fakeGuardStore) ListAccountPolicies(ctx context.Context) (map[string]*guardmodel.GuardAccountPolicy, error) {
+	if s.empty {
+		return map[string]*guardmodel.GuardAccountPolicy{}, nil
+	}
+	limit := 100.0
+	schedStart := "09:00"
+	schedStop := "18:00"
+	return map[string]*guardmodel.GuardAccountPolicy{
+		"01M1ZA80A5J7VCHRZTZ09MR0QE": {
+			CloudAccountID:  "01M1ZA80A5J7VCHRZTZ09MR0QE",
+			IsEnabled:       true,
+			ActionsEnabled:  false,
+			TrafficLimitGB:  &limit,
+			TrafficAction:   "stop",
+			WarnRatio:       0.8,
+			ScheduleEnabled: true,
+			ScheduleStart:   &schedStart,
+			ScheduleStop:    &schedStop,
+			ScheduleTZ:      "Asia/Shanghai",
+			EvalIntervalS:   60,
+			CreatedAtMs:     fixedTimeMs,
+			UpdatedAtMs:     fixedTimeMs,
+		},
+	}, nil
+}
+func (s *fakeGuardStore) UpsertAccountPolicy(ctx context.Context, p *guardmodel.GuardAccountPolicy) error {
+	return nil
+}
 
 // fakeGuardEngine
 type fakeGuardEngine struct {

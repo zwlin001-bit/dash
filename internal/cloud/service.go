@@ -86,6 +86,33 @@ func (s *Service) CreateAccount(ctx context.Context, acc CloudAccount) (*CloudAc
 		return nil, fmt.Errorf("cloud: invalid credential_id: %w", err)
 	}
 
+	// ★ P2-11 §2 / 验收6: 立刻做一次 provider.healthcheck 验证凭据可用，不可用就拒绝保存且不留半条脏数据
+	_, pt, err := s.credStore.GetDecrypted(ctx, acc.CredentialID)
+	if err != nil {
+		return nil, fmt.Errorf("cloud: decrypt credential failed: %w", err)
+	}
+	var credMap map[string]string
+	if err := json.Unmarshal(pt, &credMap); err != nil {
+		return nil, fmt.Errorf("cloud: parse credential payload failed: %w", err)
+	}
+
+	client, err := s.getProviderClient(ctx, acc.ProviderCode)
+	if err != nil {
+		return nil, fmt.Errorf("cloud: get provider client %s failed: %w", acc.ProviderCode, err)
+	}
+
+	chkRegion := acc.DefaultRegion
+	if chkRegion == "" {
+		chkRegion = "cn-hangzhou"
+	}
+	hRes, err := client.Healthcheck(ctx, credMap, chkRegion)
+	if err != nil {
+		return nil, fmt.Errorf("cloud: credential verification failed: %s", logx.Redact(err.Error()))
+	}
+	if hRes != nil && !hRes.OK {
+		return nil, fmt.Errorf("cloud: credential verification failed: %s", logx.Redact(hRes.Message))
+	}
+
 	acc.ID = ulid.New()
 	now := time.Now().UnixMilli()
 	acc.CreatedAtMs = now
@@ -97,10 +124,13 @@ func (s *Service) CreateAccount(ctx context.Context, acc CloudAccount) (*CloudAc
 
 	q := `INSERT INTO cloud_accounts (id, provider_code, name, credential_id, default_region, account_site, config_json, is_enabled, created_at_ms, updated_at_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := s.db.Exec(ctx, q, acc.ID, acc.ProviderCode, acc.Name, acc.CredentialID, acc.DefaultRegion, acc.AccountSite, acc.ConfigJSON, 1, now, now)
+	_, err = s.db.Exec(ctx, q, acc.ID, acc.ProviderCode, acc.Name, acc.CredentialID, acc.DefaultRegion, acc.AccountSite, acc.ConfigJSON, 1, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("cloud: create account failed: %w", err)
 	}
+
+	// ★ P2-11 §2: 存完自动跑一次 resource.list / sync 发现实例
+	_, _ = s.TriggerSync(ctx, acc.ID)
 
 	return &acc, nil
 }
