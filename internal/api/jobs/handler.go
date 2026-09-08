@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"dash/internal/app"
 	"dash/internal/jobs"
 	"dash/internal/logx"
 )
@@ -39,6 +40,16 @@ func NewHandler(engine *jobs.Engine) *Handler {
 // NewHandlerWithStore 创建带独立 Store 与 Registry 的 Handler 实例（供测试与 Fixture 生成）。
 func NewHandlerWithStore(store Store, registry Registry) *Handler {
 	return &Handler{store: store, registry: registry}
+}
+
+func (h *Handler) RegisterAppRoutes(a *app.App) {
+	a.HandleAuthed("GET /api/v1/jobs", h.HandleListJobs)
+	a.HandleAuthed("POST /api/v1/jobs", h.HandleSubmitJob)
+	a.HandleAuthed("GET /api/v1/jobs/kinds", h.HandleListKinds)
+	a.HandleAuthed("GET /api/v1/jobs/{id}", h.HandleGetJob)
+	a.HandleAuthed("POST /api/v1/jobs/{id}/cancel", h.HandleCancelJob)
+	a.HandleAuthed("POST /api/v1/jobs/{id}/retry", h.HandleRetryJob)
+	a.HandleAuthed("GET /api/v1/jobs/{id}/stream", h.HandleStream)
 }
 
 func (h *Handler) getStore() Store {

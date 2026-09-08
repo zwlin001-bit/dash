@@ -327,4 +327,43 @@ data: {}
 | `POST /api/agent/v1/report` | `{"server_time_ms":...,"commands":[...]}` | Agent 端 `transport/fallback.go` 消费 | ✅ 一致 |
 | `GET /install.sh` | Shell 脚本文本 | Agent 自动化部署脚本 | ✅ 一致 |
 | `GET /dl/{filename}` | Agent 二进制流 | Agent 客户端二进制下载 | ✅ 一致 |
+| `GET /api/v1/notify/channels` | `{"items":[NotifyChannel...],"total":n,"page":p,"page_size":s}` | `fetchNotifyChannels(): Promise<NotifyChannel[]>` (`toItems<NotifyChannel>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/notify/channels` | `NotifyChannel` 实体对象 (201 Created) | `createNotifyChannel(): Promise<NotifyChannel>` | ✅ 一致 |
+| `GET /api/v1/notify/channels/{id}` | `NotifyChannel` 实体对象 | 内部/查询使用 | ✅ 一致 |
+| `PUT /api/v1/notify/channels/{id}` | `NotifyChannel` 实体对象 | `updateNotifyChannel(): Promise<NotifyChannel>` | ✅ 一致 |
+| `DELETE /api/v1/notify/channels/{id}` | `{"ok": true}` | `deleteNotifyChannel(): Promise<{ ok: boolean }>` | ✅ 一致 |
+| `POST /api/v1/notify/channels/{id}/test` | `{"ok": boolean, "message": string}` | `testNotifyChannel(): Promise<{ ok: boolean; message: string }>` | ✅ 一致 |
+| `GET /api/v1/notify/rules` | `{"items":[NotifyRule...],"total":n,"page":p,"page_size":s}` | `fetchNotifyRules(): Promise<NotifyRule[]>` (`toItems<NotifyRule>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/notify/rules` | `NotifyRule` 实体对象 (201 Created) | `createNotifyRule(): Promise<NotifyRule>` | ✅ 一致 |
+| `GET /api/v1/notify/rules/{id}` | `NotifyRule` 实体对象 | 内部/查询使用 | ✅ 一致 |
+| `PUT /api/v1/notify/rules/{id}` | `NotifyRule` 实体对象 | `updateNotifyRule(): Promise<NotifyRule>` | ✅ 一致 |
+| `DELETE /api/v1/notify/rules/{id}` | `{"ok": true}` | `deleteNotifyRule(): Promise<{ ok: boolean }>` | ✅ 一致 |
+| `GET /api/v1/notify/deliveries` | `{"items":[NotifyDelivery...],"total":n,"limit":l,"offset":o}` | `fetchNotifyDeliveries(): Promise<DeliveriesListResponse>` (`toItems<NotifyDelivery>(raw)`) | ✅ 一致 (特例：使用 limit/offset) |
+| `GET /api/v1/credentials` | `{"items":[CredentialSummary...],"total":n,"page":p,"page_size":s}` | `fetchCredentials(): Promise<CredentialSummary[]>` (`toItems<CredentialSummary>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/credentials` | `CredentialSummary` 实体对象 (201 Created) | `createCredential(): Promise<CredentialSummary>` | ✅ 一致 |
+| `DELETE /api/v1/credentials/{id}` | `{"ok": true}` | `deleteCredential(): Promise<void>` | ✅ 一致 |
+| `GET /api/v1/cloud-accounts` | `{"items":[CloudAccount...],"total":n,"page":p,"page_size":s}` | `fetchCloudAccounts(): Promise<CloudAccount[]>` (`toItems<CloudAccount>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/cloud-accounts` | `CloudAccount` 实体对象 (201 Created) | `createCloudAccount(): Promise<CloudAccount>` | ✅ 一致 |
+| `GET /api/v1/cloud-accounts/{id}` | `CloudAccount` 实体对象 | 内部/查询使用 | ✅ 一致 |
+| `PUT /api/v1/cloud-accounts/{id}` | `CloudAccount` 实体对象 | 内部/更新使用 | ✅ 一致 |
+| `DELETE /api/v1/cloud-accounts/{id}` | `{"ok": true}` | `deleteCloudAccount(): Promise<void>` | ✅ 一致 |
+| `POST /api/v1/cloud-accounts/discover` | `{"items":[DiscoveredResource...],"total":n,"page":p,"page_size":s}` | `discoverCloudResources(): Promise<DiscoveredResource[]>` (`toItems<DiscoveredResource>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/cloud-accounts/{id}/sync` | `{"job_id": string}` | `triggerCloudSync(): Promise<{ job_id: string }>` | ✅ 一致 |
+| `GET /api/v1/cloud-accounts/sync/{job_id}` | `SyncJobStatus` 实体对象 | `getSyncStatus(): Promise<SyncJobStatus>` | ✅ 一致 |
+| `GET /api/v1/cloud-resources` | `{"items":[CloudResource...],"total":n,"page":p,"page_size":s}` | `fetchCloudResources(): Promise<CloudResource[]>` (`toItems<CloudResource>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `GET /api/v1/cloud-resources/{id}` | `CloudResource` 实体对象 | 内部/查询使用 | ✅ 一致 |
+| `POST /api/v1/cloud-resources/{id}/action` | `{"job_handle": string, "status": string, "message": string}` | `actionCloudResource(): Promise<{ job_handle: string; status: string; message?: string }>` | ✅ 一致 |
+| `GET /api/v1/jobs` | `{"items":[Job...],"total":n,"page":p,"page_size":s}` | `fetchJobs(): Promise<JobsListResponse>` (`toItems<Job>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/jobs` | `{"job": Job}` (202 Accepted) | `submitJob(): Promise<{ job: Job }>` | ✅ 一致 |
+| `GET /api/v1/jobs/kinds` | `{"kinds":[JobDefinition...]}` | `fetchJobKinds(): Promise<{ kinds: JobDefinition[] }>` | ✅ 一致 |
+| `GET /api/v1/jobs/{id}` | `{"job": Job}` | `fetchJobDetail(): Promise<{ job: Job }>` | ✅ 一致 |
+| `POST /api/v1/jobs/{id}/cancel` | `{"job": Job}` | `cancelJob(): Promise<{ job: Job }>` | ✅ 一致 |
+| `POST /api/v1/jobs/{id}/retry` | `{"job": Job}` | `retryJob(): Promise<{ job: Job }>` | ✅ 一致 |
+| `GET /api/v1/jobs/{id}/stream` | SSE 流 (`text/event-stream`) | 作业执行进度事件流 | ✅ 一致 |
+| `GET /api/v1/guard/overview` | `OverviewResponse` 实体对象 | `fetchGuardOverview(): Promise<OverviewResponse>` | ✅ 一致 |
+| `POST /api/v1/guard/dry-run` | `EvaluateResult` 实体对象 | `dryRunGuard(): Promise<EvaluateResult>` (`toItems<EvaluationItem>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `POST /api/v1/guard/evaluate` | `EvaluateResult` 实体对象 | `evaluateGuard(): Promise<EvaluateResult>` (`toItems<EvaluationItem>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `GET /api/v1/guard/cycles` | `{"items":[GuardCycle...],"total":n,"page":p,"page_size":s}` | `fetchGuardCycles(): Promise<GuardCyclesResponse>` (`toItems<GuardCycle>(raw)`) | ✅ 一致 (统一经 `toItems` 解包) |
+| `PUT /api/v1/guard/rules/{resource_id}` | `GuardRule` 实体对象 | `updateGuardRule(): Promise<GuardRule>` | ✅ 一致 |
+| `POST /api/v1/guard/instances/{resource_id}/force-start` | `{"message": string, "job_id": string}` (202 Accepted) | `forceStartInstance(): Promise<{ message: string; job_id: string }>` | ✅ 一致 |
 

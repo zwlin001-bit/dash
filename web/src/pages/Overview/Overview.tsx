@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { checkHealth, getNodeGroups, getNodes, getTags } from '../../api/nodes';
+import { checkHealth, getNodeGroups, getNodes, getTags } from '../../api';
 import { subscribeMetricsStream, SSEConnectionStatus } from '../../api/metrics';
 import { MetricStreamEvent, NodeLatest, NodeStateStreamEvent } from '../../api/types';
 import { fmt, formatBytes, formatBps, formatTimeAgo } from '../../utils';

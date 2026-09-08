@@ -1,0 +1,18 @@
+{
+  "items": [
+    {
+      "attempt": 1,
+      "channel_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "created_at_ms": 1757222400000,
+      "event_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "rendered_text": "Node node-01M1ZA went offline",
+      "rule_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "state": "sent",
+      "updated_at_ms": 1757222400000
+    }
+  ],
+  "limit": 50,
+  "offset": 0,
+  "total": 1
+}

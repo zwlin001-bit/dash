@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"dash/internal/app"
 	"dash/internal/audit"
 	"dash/internal/auth"
 	"dash/internal/cloud"
@@ -44,6 +45,14 @@ type Handler struct {
 	store       Store
 	cloudSvc    CloudService
 	jobEngine   *jobs.Engine
+	NowFunc     func() time.Time
+}
+
+func (h *Handler) now() time.Time {
+	if h.NowFunc != nil {
+		return h.NowFunc()
+	}
+	return time.Now()
 }
 
 func NewHandler(ge Engine, store Store, cloudSvc CloudService, je *jobs.Engine) *Handler {
@@ -53,6 +62,21 @@ func NewHandler(ge Engine, store Store, cloudSvc CloudService, je *jobs.Engine) 
 		cloudSvc:    cloudSvc,
 		jobEngine:   je,
 	}
+}
+
+func (h *Handler) RegisterAppRoutes(a *app.App) {
+	a.HandleAuthed("GET /api/v1/guard/overview", h.HandleOverview)
+	a.HandleAuthed("POST /api/v1/guard/dry-run", h.HandleDryRun)
+	a.HandleAuthed("POST /api/v1/guard/evaluate", h.HandleEvaluate)
+	a.HandleAuthed("GET /api/v1/guard/cycles", h.HandleListCycles)
+	a.HandleAuthed("PUT /api/v1/guard/rules/", h.HandleUpdateRule)
+	a.HandleAuthed("POST /api/v1/guard/instances/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/force-start") {
+			h.HandleForceStart(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 }
 
 // HandleOverview handles GET /api/v1/guard/overview.
@@ -70,7 +94,7 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 		rulesMap = make(map[string]*guard.GuardRule)
 	}
 
-	now := time.Now()
+	now := h.now()
 	nowMs := now.UnixMilli()
 
 	var accountOverviews []guard.AccountOverview

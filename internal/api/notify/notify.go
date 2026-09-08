@@ -54,7 +54,7 @@ func (h *Handler) getDispatcher() *notify.Dispatcher {
 }
 
 // RegisterAppRoutes registers notification APIs to App with authentication.
-func RegisterAppRoutes(a *app.App, s *notify.Store, d *notify.Dispatcher) {
+func RegisterAppRoutes(a *app.App, s Store, d *notify.Dispatcher) {
 	h := NewHandler(s, d)
 
 	// Channels
@@ -77,7 +77,7 @@ func RegisterAppRoutes(a *app.App, s *notify.Store, d *notify.Dispatcher) {
 }
 
 // RegisterRoutes registers routes directly to an http.ServeMux (useful for testing).
-func RegisterRoutes(mux *http.ServeMux, s *notify.Store, d *notify.Dispatcher) {
+func RegisterRoutes(mux *http.ServeMux, s Store, d *notify.Dispatcher) {
 	h := NewHandler(s, d)
 
 	// Channels

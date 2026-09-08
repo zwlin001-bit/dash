@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getSettings, updateSettings } from '../../api/nodes';
+import { getSettings, updateSettings } from '../../api';
 import { changePassword } from '../../api/auth';
 import {
   fetchNotifyChannels,

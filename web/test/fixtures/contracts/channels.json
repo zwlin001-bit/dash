@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "channel_kind": "telegram",
+      "config_json": "{\"chat_id\":\"-1001234567890\"}",
+      "created_at_ms": 1757222400000,
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "is_enabled": true,
+      "masked_secret": "bot123456:ABC-DEF",
+      "name": "Telegram Alert Bot",
+      "updated_at_ms": 1757222400000
+    }
+  ],
+  "page": 1,
+  "page_size": 1,
+  "total": 1
+}

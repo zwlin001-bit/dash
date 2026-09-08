@@ -78,6 +78,13 @@
 
 提交前自查：`grep -c "<你这次改动里的特征字符串>" internal/api/dist/assets/*.js` 必须命中。
 
+### ★ 新增或修改 API 端点必须履行的两处登记义务
+
+新增或修改任何 HTTP API 端点时，**必须同时完成两处登记**，缺少任何一处会被 `make lint` 拦截或在契约测试中暴露：
+
+1. **登记对账表**：在 `docs/12-api-spec.md` §10 的对账表中追加/更新行，逐字段核对并记录服务端实际返回结构、前端声明类型与对齐状态。
+2. **登记契约 fixture 并更新**：在 `cmd/gen-fixtures/main.go` 中注册该端点（每个列表端点必须包含「有数据」与「空数据」两份 fixture，空列表必须返回 `items: []` 而非 `null`），然后运行 `make fixtures` 生成固化 fixture。`make lint` 中的 `lint-fixtures` 守卫会自动校验 fixture 是否与服务端实现严格一致，防止服务端响应发生未察觉的漂移。
+
 ### ★ 任务完成必须自己推送分支
 
 ```sh
@@ -136,5 +143,6 @@ git push -u origin <你的分支名>
 - [ ] 新建的目录有 `README.md`（职责边界、对外接口、依赖谁）
 - [ ] 日志里翻不到任何机密
 - [ ] 只做了自己这一个任务
+- [ ] ★ 新增/改动 API 端点 → 已登记 `docs/12-api-spec.md` 对账表并在 `cmd/gen-fixtures/main.go` 登记生成 fixture（`make fixtures` 无 diff）
 - [ ] ★ 改了 `web/src/` → **已跑 `make build-web` 并提交 `internal/api/dist/`**
 - [ ] ★ **已 `git push -u origin <分支>`，且 `git log --oneline -1 origin/<分支>` 能看到自己的提交**

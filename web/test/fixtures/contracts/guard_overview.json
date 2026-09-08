@@ -1,0 +1,59 @@
+{
+  "accounts": [
+    {
+      "account_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "account_name": "prod-aliyun-main",
+      "account_site": "china",
+      "default_region": "cn-hangzhou",
+      "instances": [
+        {
+          "next_schedule_action": "stop",
+          "next_schedule_time_ms": 1757239200000,
+          "private_ips": [
+            "[\"172.16.0.10\"]"
+          ],
+          "public_ips": [
+            "[\"120.76.1.2\"]"
+          ],
+          "region": "cn-hangzhou",
+          "resource_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+          "resource_name": "web-app-01",
+          "resource_ref": "i-bp1abcdef123456",
+          "rule": {
+            "actions_enabled": true,
+            "cloud_resource_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+            "created_at_ms": 1757222400000,
+            "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+            "is_enabled": true,
+            "schedule_enabled": true,
+            "schedule_start": "09:00",
+            "schedule_stop": "18:00",
+            "schedule_tz": "Asia/Shanghai",
+            "traffic_action": "stop",
+            "updated_at_ms": 1757222400000
+          },
+          "status": "Running"
+        }
+      ],
+      "provider_code": "aliyun",
+      "usage_percent": 0
+    }
+  ],
+  "actions_enabled_count": 1,
+  "current_time_ms": 1757222400000,
+  "guarded_count": 1,
+  "recent_cycles": [
+    {
+      "acted": 0,
+      "cdt_used_gb": 12.5,
+      "cloud_account_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "created_at_ms": 1757222400000,
+      "duration_ms": 320,
+      "evaluated": 1,
+      "failed": 0,
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "started_at_ms": 1757222400000
+    }
+  ],
+  "total_instances": 1
+}
