@@ -25,6 +25,7 @@ import (
 	"dash/internal/inventory"
 	"dash/internal/logx"
 	"dash/internal/migrate"
+	"dash/internal/notify"
 	"dash/internal/settings"
 	"dash/internal/ulid"
 	"strings"
@@ -52,8 +53,9 @@ type Module = app.Module
 // 4. control: Agent 长连接、RPC 调用与在线状态维护 (依赖 Ingester 落库指标)
 // 5. metrics: 指标时序查询与 SSE 实时广播 (监听 Ingester 最新值推送)
 // 6. events: 事件发布与订阅总线
-// 7. settings: 系统全局配置管理
-// 8. api: 静态资源与 SPA 路由（★ 必须最后：挂 "/" 作为 SPA 兜底路由）
+// 7. notify: 消息通知投递、渠道与路由 (依赖 events 总线)
+// 8. settings: 系统全局配置管理
+// 9. api: 静态资源与 SPA 路由（★ 必须最后：挂 "/" 作为 SPA 兜底路由）
 var modules = []Module{
 	auth.NewModule(),
 	inventory.NewModule(),
@@ -61,6 +63,7 @@ var modules = []Module{
 	control.NewModule(),
 	metrics.NewModule(),
 	events.NewModule(),
+	notify.NewModule(),
 	settings.NewModule(),
 	api.NewModule(), // ★ 必须最后：它挂 "/" 作为 SPA 兜底路由
 }

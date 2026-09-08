@@ -11,6 +11,7 @@ import (
 
 	"dash/internal/app"
 	eventsapi "dash/internal/api/events"
+	notifyapi "dash/internal/api/notify"
 )
 
 //go:embed all:dist
@@ -31,6 +32,9 @@ func (m *WebModule) Name() string {
 func (m *WebModule) Register(a *app.App) error {
 	// 注册事件相关 API 到 App（带鉴权）
 	eventsapi.RegisterAppRoutes(a, nil)
+
+	// 注册通知相关 API 到 App（带鉴权）
+	notifyapi.RegisterAppRoutes(a, nil, nil)
 
 	// 免鉴权白名单：前端静态资源及 SPA 兜底路由
 	a.HandlePublic("/", Handler().ServeHTTP)
@@ -96,5 +100,6 @@ func serveIndexHTML(w http.ResponseWriter, fsys fs.FS) {
 // RegisterRoutes 注册静态资源及 SPA 前端路由至 mux。
 func RegisterRoutes(mux *http.ServeMux) {
 	eventsapi.RegisterRoutes(mux, nil)
+	notifyapi.RegisterRoutes(mux, nil, nil)
 	mux.Handle("/", Handler())
 }
