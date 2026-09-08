@@ -219,13 +219,13 @@ func TestDecideInstance_PriorityAndRules(t *testing.T) {
 		ScheduleTZ:      "Asia/Shanghai",
 		TrafficLimitGB:  &limit100,
 	}
-	d1 := guard.DecideInstance(resRunning, rule1, 50.0, nil, midnight)
+	d1 := guard.DecideInstance(resRunning, rule1, nil, 50.0, nil, midnight)
 	if d1.ProposedAction != guard.ActionStop || d1.Reason != "处于计划关机时段" {
 		t.Fatalf("Rule 1 expected ActionStop by schedule; got %s (%s)", d1.ProposedAction, d1.Reason)
 	}
 
 	// 条件 2: 日程启用 且 处于计划运行时段 (12:00) 且 实例 Stopped 且 流量未超 → 启动
-	d2 := guard.DecideInstance(resStopped, rule1, 50.0, nil, noon)
+	d2 := guard.DecideInstance(resStopped, rule1, nil, 50.0, nil, noon)
 	if d2.ProposedAction != guard.ActionStart || d2.Reason != "处于计划运行时段且流量未超" {
 		t.Fatalf("Rule 2 expected ActionStart by schedule; got %s (%s)", d2.ProposedAction, d2.Reason)
 	}
@@ -237,19 +237,19 @@ func TestDecideInstance_PriorityAndRules(t *testing.T) {
 		ScheduleEnabled: false,
 		TrafficLimitGB:  &limit100,
 	}
-	d3 := guard.DecideInstance(resRunning, rule3, 105.0, nil, noon)
+	d3 := guard.DecideInstance(resRunning, rule3, nil, 105.0, nil, noon)
 	if d3.ProposedAction != guard.ActionStop {
 		t.Fatalf("Rule 3 expected ActionStop by traffic; got %s", d3.ProposedAction)
 	}
 
 	// 条件 4: 流量 < 阈值 且 实例 Stopped 且 不在计划关机时段 → 启动（保活）
-	d4 := guard.DecideInstance(resStopped, rule3, 50.0, nil, noon)
+	d4 := guard.DecideInstance(resStopped, rule3, nil, 50.0, nil, noon)
 	if d4.ProposedAction != guard.ActionStart {
 		t.Fatalf("Rule 4 expected ActionStart by keepalive; got %s", d4.ProposedAction)
 	}
 
 	// 条件 5: 实例正常 Running 且流量正常 → 不动
-	d5 := guard.DecideInstance(resRunning, rule3, 50.0, nil, noon)
+	d5 := guard.DecideInstance(resRunning, rule3, nil, 50.0, nil, noon)
 	if d5.ProposedAction != guard.ActionNoop {
 		t.Fatalf("Rule 5 expected ActionNoop; got %s", d5.ProposedAction)
 	}
@@ -292,13 +292,13 @@ func TestSafetyProperties_CDTFailureIsolation(t *testing.T) {
 	cdtErr := errors.New("CDT query forbidden (NoPermission)")
 
 	// 1. 安全性质 1: 计划关机即使 CDT 失败，依然照常关机！
-	dStop := guard.DecideInstance(resRunning, rule, 0, cdtErr, midnight)
+	dStop := guard.DecideInstance(resRunning, rule, nil, 0, cdtErr, midnight)
 	if dStop.ProposedAction != guard.ActionStop {
 		t.Fatalf("Safety 1 violation: scheduled stop must proceed even when CDT fails; got %s", dStop.ProposedAction)
 	}
 
 	// 2. 安全性质 2: 读不到流量时，绝不许启动实例！
-	dStartSched := guard.DecideInstance(resStopped, rule, 0, cdtErr, noon)
+	dStartSched := guard.DecideInstance(resStopped, rule, nil, 0, cdtErr, noon)
 	if dStartSched.ProposedAction != guard.ActionNoop {
 		t.Fatalf("Safety 2 violation: must NOT start instance when CDT query fails; got %s", dStartSched.ProposedAction)
 	}
@@ -309,7 +309,7 @@ func TestSafetyProperties_CDTFailureIsolation(t *testing.T) {
 		ScheduleEnabled: false,
 		TrafficLimitGB:  &limit100,
 	}
-	dKeepalive := guard.DecideInstance(resStopped, ruleNoSched, 0, cdtErr, noon)
+	dKeepalive := guard.DecideInstance(resStopped, ruleNoSched, nil, 0, cdtErr, noon)
 	if dKeepalive.ProposedAction != guard.ActionNoop {
 		t.Fatalf("Safety 2 violation: keepalive must NOT start instance when CDT query fails; got %s", dKeepalive.ProposedAction)
 	}
@@ -331,7 +331,7 @@ func TestSafetyProperty3_TransitionalStatus(t *testing.T) {
 			ID:     "res-trans",
 			Status: st,
 		}
-		d := guard.DecideInstance(res, rule, 200.0, nil, noon)
+		d := guard.DecideInstance(res, rule, nil, 200.0, nil, noon)
 		if d.ProposedAction != guard.ActionNoop {
 			t.Fatalf("Safety 3 violation: transitional status %s must be skipped (noop); got %s", st, d.ProposedAction)
 		}
@@ -555,17 +555,17 @@ func TestAcceptance10_PrewarningAndDedup(t *testing.T) {
 	}
 
 	// 75 GB < 80% → 不预警
-	if guard.ShouldPrewarn(rule, 75.0) {
+	if guard.ShouldPrewarn(rule, nil, 75.0) {
 		t.Errorf("expected ShouldPrewarn false for 75GB/100GB")
 	}
 
 	// 85 GB (85%) → 预警
-	if !guard.ShouldPrewarn(rule, 85.0) {
+	if !guard.ShouldPrewarn(rule, nil, 85.0) {
 		t.Errorf("expected ShouldPrewarn true for 85GB/100GB")
 	}
 
 	// 105 GB (超额) → 由停机规则接管，不发 prewarn
-	if guard.ShouldPrewarn(rule, 105.0) {
+	if guard.ShouldPrewarn(rule, nil, 105.0) {
 		t.Errorf("expected ShouldPrewarn false for >=100%%")
 	}
 }
@@ -591,6 +591,12 @@ VALUES (?, ?, 'aliyun', 'ecs', 'i-reset-01', 'inst-reset', 'cn-hangzhou', 'Stopp
 
 	store := guard.NewStore(d)
 	limit50 := 50.0
+	_ = store.UpsertAccountPolicy(ctx, &guard.GuardAccountPolicy{
+		CloudAccountID: accID,
+		IsEnabled:      true,
+		ActionsEnabled: true,
+		TrafficLimitGB: &limit50,
+	})
 	lastAction := "traffic_stop"
 	rule := &guard.GuardRule{
 		CloudResourceID: resID,

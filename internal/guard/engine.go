@@ -194,8 +194,16 @@ func (e *Engine) EvaluateOnce(ctx context.Context, dryRun bool) (*EvaluateResult
 		rulesMap = make(map[string]*GuardRule)
 	}
 
+	// 3. 加载全部账号策略映射 (P2-11)
+	accountPolicies, err := e.store.ListAccountPolicies(ctx)
+	if err != nil {
+		logx.Warn("guard: list account policies failed, proceeding with defaults", "err", err)
+		accountPolicies = make(map[string]*GuardAccountPolicy)
+	}
+
 	for _, acc := range accounts {
-		e.evaluateAccount(ctx, acc, rulesMap, now, dryRun, result)
+		acctPolicy := accountPolicies[acc.ID]
+		e.evaluateAccount(ctx, acc, acctPolicy, rulesMap, now, dryRun, result)
 	}
 
 	result.DurationMs = int(time.Now().UnixMilli() - startMs)
@@ -238,7 +246,13 @@ FROM cloud_accounts WHERE is_enabled = 1`
 	return accs, rows.Err()
 }
 
-func (e *Engine) evaluateAccount(ctx context.Context, acc cloud.CloudAccount, rulesMap map[string]*GuardRule, now time.Time, dryRun bool, result *EvaluateResult) {
+func (e *Engine) evaluateAccount(ctx context.Context, acc cloud.CloudAccount, acctPolicy *GuardAccountPolicy, rulesMap map[string]*GuardRule, now time.Time, dryRun bool, result *EvaluateResult) {
+	// ★ P2-11 验收4: 账号级 is_enabled=false → 整个账号整轮跳过，不产生任何云 API 调用（日志可证）
+	if acctPolicy != nil && !acctPolicy.IsEnabled {
+		logx.Info("guard: account policy is_enabled=false, skipping entire evaluation", "account_id", acc.ID, "account_name", acc.Name)
+		return
+	}
+
 	cycleStartMs := time.Now().UnixMilli()
 
 	// 查取解密凭据
@@ -373,12 +387,16 @@ func (e *Engine) evaluateAccount(ctx context.Context, acc cloud.CloudAccount, ru
 			}
 		}
 
-		item := DecideInstance(inst, rule, cdtUsedGB, cdtErr, now)
+		item := DecideInstance(inst, rule, acctPolicy, cdtUsedGB, cdtErr, now)
 		item.AccountName = acc.Name
 		cycleEvaluated++
 
-		// 80% 达阈值前预警 (P2-04 §4)
-		if ShouldPrewarn(rule, cdtUsedGB) {
+		// 80% 达阈值前预警 (P2-04 §4 / P2-11 §1)
+		if ShouldPrewarn(rule, acctPolicy, cdtUsedGB) {
+			limitVal := 0.0
+			if item.TrafficLimitGB != nil {
+				limitVal = *item.TrafficLimitGB
+			}
 			events.Emit(ctx, events.Event{
 				Type:       "cloud.guard.traffic_warning",
 				Source:     "guard",
@@ -389,17 +407,19 @@ func (e *Engine) evaluateAccount(ctx context.Context, acc cloud.CloudAccount, ru
 					"instance_name":    inst.Name,
 					"region":           inst.Region,
 					"cdt_used_gb":      cdtUsedGB,
-					"traffic_limit_gb": *rule.TrafficLimitGB,
-					"usage_percent":    (cdtUsedGB / *rule.TrafficLimitGB) * 100.0,
+					"traffic_limit_gb": limitVal,
+					"usage_percent":    item.UsagePercent,
 					"account_name":     acc.Name,
+					"decided_by":       item.DecidedBy,
 				},
 				DedupKey: fmt.Sprintf("guard:%s:cloud.guard.traffic_warning:%s", rule.ID, monthKey),
 			})
 		}
 
 		// 动作执行 (或演练记录)
+		// ★ P2-11 §1: item.WouldExecute 已经反映了双重门锁 (eff.ActionsEnabled)
 		if item.ProposedAction == ActionStop {
-			if rule.ActionsEnabled && !dryRun {
+			if item.WouldExecute && !dryRun {
 				job, err := e.submitECSJob(ctx, inst, acc, "stop", item.Reason)
 				if err != nil {
 					cycleFailed++
@@ -432,10 +452,11 @@ func (e *Engine) evaluateAccount(ctx context.Context, acc cloud.CloudAccount, ru
 							"instance_name":    inst.Name,
 							"region":           inst.Region,
 							"cdt_used_gb":      cdtUsedGB,
-							"traffic_limit_gb": getLimitVal(rule.TrafficLimitGB),
+							"traffic_limit_gb": getLimitVal(item.TrafficLimitGB),
 							"status_before":    inst.Status,
 							"status_after":     "Stopping",
 							"reason":           item.Reason,
+							"decided_by":       item.DecidedBy,
 						},
 						DedupKey: fmt.Sprintf("guard:%s:cloud.guard.instance_stopped:%s", rule.ID, monthKey),
 					})
@@ -457,16 +478,17 @@ func (e *Engine) evaluateAccount(ctx context.Context, acc cloud.CloudAccount, ru
 						"instance_name":    inst.Name,
 						"region":           inst.Region,
 						"cdt_used_gb":      cdtUsedGB,
-						"traffic_limit_gb": getLimitVal(rule.TrafficLimitGB),
+						"traffic_limit_gb": getLimitVal(item.TrafficLimitGB),
 						"status_before":    inst.Status,
 						"status_after":     inst.Status,
 						"reason":           item.Reason + " (actions_enabled=false)",
+						"decided_by":       item.DecidedBy,
 					},
 					DedupKey: fmt.Sprintf("guard:%s:cloud.guard.instance_stopped:%s", rule.ID, monthKey),
 				})
 			}
 		} else if item.ProposedAction == ActionStart {
-			if rule.ActionsEnabled && !dryRun {
+			if item.WouldExecute && !dryRun {
 				job, err := e.submitECSJob(ctx, inst, acc, "start", item.Reason)
 				if err != nil {
 					cycleFailed++
@@ -499,10 +521,11 @@ func (e *Engine) evaluateAccount(ctx context.Context, acc cloud.CloudAccount, ru
 							"instance_name":    inst.Name,
 							"region":           inst.Region,
 							"cdt_used_gb":      cdtUsedGB,
-							"traffic_limit_gb": getLimitVal(rule.TrafficLimitGB),
+							"traffic_limit_gb": getLimitVal(item.TrafficLimitGB),
 							"status_before":    inst.Status,
 							"status_after":     "Starting",
 							"reason":           item.Reason,
+							"decided_by":       item.DecidedBy,
 						},
 						DedupKey: fmt.Sprintf("guard:%s:cloud.guard.instance_started:%s", rule.ID, monthKey),
 					})
@@ -523,10 +546,11 @@ func (e *Engine) evaluateAccount(ctx context.Context, acc cloud.CloudAccount, ru
 						"instance_name":    inst.Name,
 						"region":           inst.Region,
 						"cdt_used_gb":      cdtUsedGB,
-						"traffic_limit_gb": getLimitVal(rule.TrafficLimitGB),
+						"traffic_limit_gb": getLimitVal(item.TrafficLimitGB),
 						"status_before":    inst.Status,
 						"status_after":     inst.Status,
 						"reason":           item.Reason + " (actions_enabled=false)",
+						"decided_by":       item.DecidedBy,
 					},
 					DedupKey: fmt.Sprintf("guard:%s:cloud.guard.instance_started:%s", rule.ID, monthKey),
 				})

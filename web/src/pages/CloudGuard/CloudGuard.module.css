@@ -789,3 +789,83 @@
     opacity: 0.75;
   }
 }
+
+/* 监控模式醒目横幅 (P2-11 §3) */
+.monitorOnlyBanner {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-left: 4px solid var(--warn);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--warn);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 500;
+}
+
+/* 来源标记 Badge (P2-11 §3) */
+.originBadgeInherit {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  border: 1px solid var(--border-light);
+  font-weight: 500;
+}
+
+.originBadgeOverride {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+/* 账号卡片控制区 */
+.accountPolicyControls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.accountPolicyHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.accountPolicyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-3);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-dim);
+}
+
+.accountPolicyItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.fieldDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.disabledReason {
+  font-size: 11px;
+  color: var(--warn);
+  margin-top: 2px;
+}

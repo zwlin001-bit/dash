@@ -1,6 +1,35 @@
 import { apiFetch } from './client';
 import { toItems } from './envelope';
 
+export interface GuardAccountPolicy {
+  cloud_account_id: string;
+  is_enabled: boolean;
+  actions_enabled: boolean;
+  traffic_limit_gb?: number;
+  traffic_action: string;
+  warn_ratio: number;
+  schedule_enabled: boolean;
+  schedule_start?: string;
+  schedule_stop?: string;
+  schedule_tz: string;
+  eval_interval_s: number;
+  created_at_ms: number;
+  updated_at_ms: number;
+}
+
+export interface AccountPolicyUpdateRequest {
+  is_enabled?: boolean;
+  actions_enabled?: boolean;
+  traffic_limit_gb?: number;
+  traffic_action?: string;
+  warn_ratio?: number;
+  schedule_enabled?: boolean;
+  schedule_start?: string;
+  schedule_stop?: string;
+  schedule_tz?: string;
+  eval_interval_s?: number;
+}
+
 export interface GuardRule {
   id: string;
   cloud_resource_id: string;
@@ -12,6 +41,7 @@ export interface GuardRule {
   schedule_start?: string;
   schedule_stop?: string;
   schedule_tz: string;
+  inherit_account: boolean;
   last_eval_at_ms?: number;
   last_action?: string;
   last_action_at_ms?: number;
@@ -50,6 +80,7 @@ export interface EvaluationItem {
   in_schedule_run: boolean;
   next_schedule_action?: string;
   next_schedule_time_ms?: number;
+  decided_by?: string;
   would_execute: boolean;
   job_submitted?: boolean;
   job_id?: string;
@@ -77,6 +108,12 @@ export interface InstanceOverview {
   private_ips: string[];
   billing_info?: string;
   rule?: GuardRule;
+  inherit_account?: boolean;
+  effective_limit_gb?: number;
+  limit_origin?: string;
+  effective_schedule?: boolean;
+  schedule_origin?: string;
+  effective_actions?: boolean;
   next_schedule_action?: string;
   next_schedule_time_ms?: number;
 }
@@ -87,10 +124,12 @@ export interface AccountOverview {
   provider_code: string;
   default_region: string;
   account_site: string;
+  credential_fp?: string;
   cdt_used_gb?: number;
   traffic_limit_gb?: number;
   usage_percent: number;
   cdt_error?: string;
+  policy?: GuardAccountPolicy;
   instances: InstanceOverview[];
 }
 
@@ -112,6 +151,7 @@ export interface RuleUpdateRequest {
   schedule_start?: string;
   schedule_stop?: string;
   schedule_tz?: string;
+  inherit_account?: boolean;
 }
 
 export interface ForceStartRequest {
@@ -125,6 +165,13 @@ export async function fetchGuardOverview(): Promise<OverviewResponse> {
 
 export async function updateGuardRule(resourceId: string, req: RuleUpdateRequest): Promise<GuardRule> {
   return apiFetch<GuardRule>(`/api/v1/guard/rules/${resourceId}`, {
+    method: 'PUT',
+    body: JSON.stringify(req),
+  });
+}
+
+export async function updateAccountPolicy(accountId: string, req: AccountPolicyUpdateRequest): Promise<GuardAccountPolicy> {
+  return apiFetch<GuardAccountPolicy>(`/api/v1/guard/accounts/${accountId}/policy`, {
     method: 'PUT',
     body: JSON.stringify(req),
   });
