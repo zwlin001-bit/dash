@@ -77,6 +77,9 @@ func (m *mockBillingClient) Describe(ctx context.Context) (*provider.ProviderDes
 func (m *mockBillingClient) Healthcheck(ctx context.Context, cred map[string]string, region string) (*provider.HealthcheckResult, error) {
 	return &provider.HealthcheckResult{OK: true}, nil
 }
+func (m *mockBillingClient) ListRegions(ctx context.Context, cred map[string]string) ([]provider.Region, error) {
+	return []provider.Region{{RegionID: "cn-hangzhou", LocalName: "华东1（杭州）"}}, nil
+}
 func (m *mockBillingClient) ListResources(ctx context.Context, cred map[string]string, region, kind, accountSite string) ([]provider.NormalizedResource, error) {
 	return nil, nil
 }

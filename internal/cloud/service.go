@@ -353,6 +353,24 @@ func (s *Service) DiscoverAccount(ctx context.Context, credentialID string, regi
 	return client.Discover(ctx, credMap, regions, accountSite)
 }
 
+// ListRegions returns region candidates for credential (with optional fallback to builtin).
+func (s *Service) ListRegions(ctx context.Context, credentialID string) ([]provider.Region, error) {
+	var credMap map[string]string
+	if credentialID != "" {
+		_, pt, err := s.credStore.GetDecrypted(ctx, credentialID)
+		if err == nil {
+			_ = json.Unmarshal(pt, &credMap)
+		}
+	}
+
+	client, err := s.getProviderClient(ctx, "aliyun")
+	if err != nil {
+		return nil, fmt.Errorf("cloud: get provider client: %w", err)
+	}
+
+	return client.ListRegions(ctx, credMap)
+}
+
 // TriggerSync starts an asynchronous sync job and returns the job ID immediately.
 func (s *Service) TriggerSync(ctx context.Context, accountID string) (string, error) {
 	if _, err := s.GetAccount(ctx, accountID); err != nil {
@@ -425,10 +443,11 @@ func (s *Service) executeSync(ctx context.Context, jobID, accountID string) {
 	}
 
 	// 2. Discover ECS instances across regions
-	regions := []string{acc.DefaultRegion}
-	if acc.DefaultRegion == "" {
-		regions = []string{"cn-hangzhou", "cn-shanghai", "cn-beijing", "cn-shenzhen", "cn-hongkong", "ap-southeast-1"}
+	regions := acc.GetScanRegions()
+	if len(regions) == 0 && acc.DefaultRegion != "" {
+		regions = []string{acc.DefaultRegion}
 	}
+	// Note: if regions is empty, client.Discover will scan all available regions.
 
 	resources, err := client.Discover(ctx, credMap, regions, acc.AccountSite)
 	if err != nil {

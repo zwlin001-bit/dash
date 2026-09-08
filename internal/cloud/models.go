@@ -1,5 +1,7 @@
 package cloud
 
+import "encoding/json"
+
 // ProviderInfo represents a registered cloud provider in providers table.
 type ProviderInfo struct {
 	ProviderCode string `json:"provider_code"`
@@ -9,6 +11,12 @@ type ProviderInfo struct {
 	ConfigJSON   string `json:"config_json,omitempty"`
 	CreatedAtMs  int64  `json:"created_at_ms"`
 	UpdatedAtMs  int64  `json:"updated_at_ms"`
+}
+
+// AccountConfig defines configuration options stored in cloud_accounts.config_json.
+type AccountConfig struct {
+	ScanRegions     []string `json:"scan_regions,omitempty"`
+	CDTTrafficBytes int64    `json:"cdt_traffic_bytes,omitempty"`
 }
 
 // CloudAccount represents a tenant/account in cloud_accounts table.
@@ -24,6 +32,20 @@ type CloudAccount struct {
 	LastSyncAtMs  int64  `json:"last_sync_at_ms,omitempty"`
 	CreatedAtMs   int64  `json:"created_at_ms"`
 	UpdatedAtMs   int64  `json:"updated_at_ms"`
+}
+
+// GetScanRegions returns configured scan_regions from ConfigJSON if present.
+func (a *CloudAccount) GetScanRegions() []string {
+	if a.ConfigJSON == "" {
+		return nil
+	}
+	var conf struct {
+		ScanRegions []string `json:"scan_regions"`
+	}
+	if err := json.Unmarshal([]byte(a.ConfigJSON), &conf); err != nil {
+		return nil
+	}
+	return conf.ScanRegions
 }
 
 // CloudResource represents a discovered/synced asset in cloud_resources table.

@@ -92,6 +92,11 @@ export const deleteCredential = async (id: string): Promise<void> => {
   await apiFetch(`/api/v1/credentials/${id}`, { method: 'DELETE' });
 };
 
+export interface CloudRegion {
+  region_id: string;
+  local_name: string;
+}
+
 // Cloud Accounts API
 export const fetchCloudAccounts = async (): Promise<CloudAccount[]> => {
   const res = await apiFetch<unknown>('/api/v1/cloud-accounts');
@@ -103,6 +108,19 @@ export const createCloudAccount = async (data: Partial<CloudAccount>): Promise<C
     method: 'POST',
     body: JSON.stringify(data),
   });
+};
+
+export const updateCloudAccount = async (id: string, data: Partial<CloudAccount>): Promise<CloudAccount> => {
+  return apiFetch<CloudAccount>(`/api/v1/cloud-accounts/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+export const fetchCloudRegions = async (credentialId?: string): Promise<CloudRegion[]> => {
+  const q = credentialId ? `?credential_id=${encodeURIComponent(credentialId)}` : '';
+  const res = await apiFetch<unknown>(`/api/v1/cloud-accounts/regions${q}`);
+  return toItems<CloudRegion>(res);
 };
 
 export const deleteCloudAccount = async (id: string): Promise<void> => {

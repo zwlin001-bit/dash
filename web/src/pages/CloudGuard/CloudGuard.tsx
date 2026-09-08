@@ -660,7 +660,7 @@ export const CloudGuard: React.FC = () => {
                 <span className={styles.providerTag}>{account.provider_code}</span>
               </div>
               <div className="text-dim" style={{ fontSize: '12px' }}>
-                默认地域: {account.default_region || 'cn-hangzhou'} | 实例数: {account.instances.length}
+                默认地域: {account.default_region || '全部'} | 实例数: {account.instances.length}
               </div>
             </div>
 

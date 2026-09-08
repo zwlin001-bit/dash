@@ -122,6 +122,21 @@ func handleRequest(ctx context.Context, conn net.Conn, req provider.Request, p *
 		}
 		sendResult(conn, req.ID, res)
 
+	case "provider.regions":
+		var params provider.ListRegionsParams
+		if len(req.Params) > 0 {
+			if err := json.Unmarshal(req.Params, &params); err != nil {
+				sendError(conn, req.ID, -32602, "Invalid params: "+err.Error())
+				return
+			}
+		}
+		res, err := p.ListRegions(ctx, params.Credential)
+		if err != nil {
+			sendError(conn, req.ID, -32000, err.Error())
+			return
+		}
+		sendResult(conn, req.ID, res)
+
 	case "resource.list":
 		var params provider.ListResourcesParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {

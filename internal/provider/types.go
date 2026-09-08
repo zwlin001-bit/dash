@@ -47,6 +47,17 @@ type HealthcheckResult struct {
 	Message string `json:"message,omitempty"`
 }
 
+// Region represents a cloud provider region/location
+type Region struct {
+	RegionID  string `json:"region_id"`
+	LocalName string `json:"local_name"`
+}
+
+// ListRegionsParams parameters for provider.regions
+type ListRegionsParams struct {
+	Credential map[string]string `json:"credential,omitempty"`
+}
+
 // ResourceSpecs holds compute/memory/disk specs
 type ResourceSpecs struct {
 	VCPU   int `json:"vcpu"`

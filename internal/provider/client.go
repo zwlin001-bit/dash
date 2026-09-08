@@ -16,6 +16,7 @@ import (
 type ProviderClient interface {
 	Describe(ctx context.Context) (*ProviderDescription, error)
 	Healthcheck(ctx context.Context, cred map[string]string, region string) (*HealthcheckResult, error)
+	ListRegions(ctx context.Context, cred map[string]string) ([]Region, error)
 	ListResources(ctx context.Context, cred map[string]string, region, kind, accountSite string) ([]NormalizedResource, error)
 	GetResource(ctx context.Context, cred map[string]string, region, kind, ref string) (*NormalizedResource, error)
 	Discover(ctx context.Context, cred map[string]string, regions []string, accountSite string) ([]NormalizedResource, error)
@@ -177,6 +178,18 @@ func (c *RPCClient) Healthcheck(ctx context.Context, cred map[string]string, reg
 	return &res, nil
 }
 
+func (c *RPCClient) ListRegions(ctx context.Context, cred map[string]string) ([]Region, error) {
+	var res []Region
+	params := ListRegionsParams{Credential: cred}
+	if err := c.call(ctx, "provider.regions", params, &res); err != nil {
+		return nil, err
+	}
+	if res == nil {
+		res = []Region{}
+	}
+	return res, nil
+}
+
 func (c *RPCClient) ListResources(ctx context.Context, cred map[string]string, region, kind, accountSite string) ([]NormalizedResource, error) {
 	var res []NormalizedResource
 	params := ListResourcesParams{Credential: cred, Region: region, Kind: kind, AccountSite: accountSite}
@@ -259,6 +272,7 @@ var _ ProviderClient = (*RPCClient)(nil)
 type MockClient struct {
 	DescribeFunc      func(ctx context.Context) (*ProviderDescription, error)
 	HealthcheckFunc   func(ctx context.Context, cred map[string]string, region string) (*HealthcheckResult, error)
+	ListRegionsFunc   func(ctx context.Context, cred map[string]string) ([]Region, error)
 	ListResourcesFunc func(ctx context.Context, cred map[string]string, region, kind, accountSite string) ([]NormalizedResource, error)
 	GetResourceFunc   func(ctx context.Context, cred map[string]string, region, kind, ref string) (*NormalizedResource, error)
 	DiscoverFunc      func(ctx context.Context, cred map[string]string, regions []string, accountSite string) ([]NormalizedResource, error)
@@ -281,6 +295,13 @@ func (m *MockClient) Healthcheck(ctx context.Context, cred map[string]string, re
 		return m.HealthcheckFunc(ctx, cred, region)
 	}
 	return &HealthcheckResult{OK: true}, nil
+}
+
+func (m *MockClient) ListRegions(ctx context.Context, cred map[string]string) ([]Region, error) {
+	if m.ListRegionsFunc != nil {
+		return m.ListRegionsFunc(ctx, cred)
+	}
+	return []Region{}, nil
 }
 
 func (m *MockClient) ListResources(ctx context.Context, cred map[string]string, region, kind, accountSite string) ([]NormalizedResource, error) {

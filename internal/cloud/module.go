@@ -35,6 +35,7 @@ type CloudService interface {
 	UpdateAccount(ctx context.Context, id string, acc CloudAccount) (*CloudAccount, error)
 	DeleteAccount(ctx context.Context, id string) error
 	DiscoverAccount(ctx context.Context, credID string, regions []string, site string) ([]provider.NormalizedResource, error)
+	ListRegions(ctx context.Context, credID string) ([]provider.Region, error)
 	TriggerSync(ctx context.Context, accountID string) (string, error)
 	GetSyncStatus(jobID string) (*SyncJobStatus, error)
 	ListResources(ctx context.Context, accountID, providerCode, resKind, region, status string) ([]CloudResource, error)
@@ -133,6 +134,7 @@ func (m *Module) registerRoutes(a *app.App) {
 	a.HandleAuthed("DELETE /api/v1/cloud-accounts/{id}", m.handleDeleteAccount)
 
 	// Auto-discovery & Sync
+	a.HandleAuthed("GET /api/v1/cloud-accounts/regions", m.handleListRegions)
 	a.HandleAuthed("POST /api/v1/cloud-accounts/discover", m.handleDiscover)
 	a.HandleAuthed("POST /api/v1/cloud-accounts/{id}/sync", m.handleTriggerSync)
 	a.HandleAuthed("GET /api/v1/cloud-accounts/sync/{job_id}", m.handleGetSyncStatus)
@@ -327,6 +329,24 @@ func (m *Module) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 // Discover & Sync Handlers
+func (m *Module) handleListRegions(w http.ResponseWriter, r *http.Request) {
+	credID := r.URL.Query().Get("credential_id")
+	regions, err := m.svc.ListRegions(r.Context(), credID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "list_regions_failed", err.Error())
+		return
+	}
+	if regions == nil {
+		regions = []provider.Region{}
+	}
+	jsonSuccess(w, http.StatusOK, map[string]any{
+		"items":     regions,
+		"total":     len(regions),
+		"page":      1,
+		"page_size": len(regions),
+	})
+}
+
 func (m *Module) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CredentialID string   `json:"credential_id"`

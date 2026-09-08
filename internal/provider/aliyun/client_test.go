@@ -600,3 +600,76 @@ func TestListBills(t *testing.T) {
 		t.Errorf("expected 2 instance bill calls for pagination, got %d", atomic.LoadInt32(&billCalls))
 	}
 }
+
+func TestDescribeRegionsAndFallback(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("Action")
+		if action == "" {
+			_ = r.ParseForm()
+			action = r.Form.Get("Action")
+		}
+
+		if action == "DescribeRegions" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"Regions": {
+					"Region": [
+						{ "RegionId": "cn-hangzhou", "LocalName": "华东1（杭州）" },
+						{ "RegionId": "eu-central-1", "LocalName": "欧洲中部 1 (法兰克福)" }
+					]
+				}
+			}`))
+			return
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	p := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return createMockSDKClient(ts.URL)
+		}),
+		aliyun.WithCustomDomain("DescribeRegions", u.Host),
+	)
+
+	ctx := context.Background()
+	cred := map[string]string{"access_key_id": "ak", "access_key_secret": "sk"}
+
+	// 1. Success case: returns from API
+	regs, err := p.ListRegions(ctx, cred)
+	if err != nil {
+		t.Fatalf("ListRegions failed: %v", err)
+	}
+	if len(regs) != 2 {
+		t.Fatalf("expected 2 regions, got %d", len(regs))
+	}
+	if regs[0].RegionID != "cn-hangzhou" || regs[1].RegionID != "eu-central-1" {
+		t.Errorf("unexpected regions: %+v", regs)
+	}
+
+	// 2. Fallback case: empty cred or server error falls back to DefaultBuiltinRegions
+	pErr := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return nil, fmt.Errorf("network connection error")
+		}),
+	)
+	fallbackRegs, err := pErr.ListRegions(ctx, cred)
+	if err != nil {
+		t.Fatalf("fallback expected nil error, got: %v", err)
+	}
+	if len(fallbackRegs) == 0 {
+		t.Fatalf("expected builtin fallback regions, got empty")
+	}
+	// Check that default builtin includes standard regions
+	foundHangzhou := false
+	for _, r := range fallbackRegs {
+		if r.RegionID == "cn-hangzhou" && r.LocalName != "" {
+			foundHangzhou = true
+			break
+		}
+	}
+	if !foundHangzhou {
+		t.Errorf("expected cn-hangzhou in builtin fallback list")
+	}
+}

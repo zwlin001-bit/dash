@@ -190,6 +190,79 @@ func (p *Provider) doWithRetry(ctx context.Context, client *sdk.Client, req *req
 	return nil, fmt.Errorf("aliyun request failed after %d attempts: %w", attempts, lastErr)
 }
 
+// DescribeRegions calls DescribeRegions API to list available ECS regions.
+func (p *Provider) DescribeRegions(ctx context.Context, ak, sk string) ([]provider.Region, error) {
+	if ak == "" || sk == "" {
+		return nil, errors.New("aliyun: missing credentials")
+	}
+
+	client, err := p.getSDKClient("cn-hangzhou", ak, sk)
+	if err != nil {
+		return nil, err
+	}
+
+	req := requests.NewCommonRequest()
+	req.Method = "POST"
+	if d, ok := p.customDomain["DescribeRegions"]; ok {
+		req.Domain = d
+	} else {
+		req.Domain = "ecs.cn-hangzhou.aliyuncs.com"
+	}
+	req.Version = "2014-05-26"
+	req.ApiName = "DescribeRegions"
+	req.Product = "Ecs"
+
+	resp, err := p.doWithRetry(ctx, client, req)
+	if err != nil {
+		return nil, fmt.Errorf("aliyun describe regions error: %w", err)
+	}
+
+	return parseRegionsResponse(resp.GetHttpContentBytes())
+}
+
+// ListRegions returns region candidates for credential. Falls back to DefaultBuiltinRegions on error.
+func (p *Provider) ListRegions(ctx context.Context, cred map[string]string) ([]provider.Region, error) {
+	ak := cred["access_key_id"]
+	sk := cred["access_key_secret"]
+	if ak != "" && sk != "" {
+		regions, err := p.DescribeRegions(ctx, ak, sk)
+		if err == nil && len(regions) > 0 {
+			return regions, nil
+		}
+		if err != nil {
+			logx.Warn("describe regions failed, falling back to builtin list", "err", logx.Redact(err.Error()))
+		}
+	}
+	return DefaultBuiltinRegions(), nil
+}
+
+func parseRegionsResponse(body []byte) ([]provider.Region, error) {
+	var raw struct {
+		Regions struct {
+			Region []struct {
+				RegionID  string `json:"RegionId"`
+				LocalName string `json:"LocalName"`
+			} `json:"Region"`
+		} `json:"Regions"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, fmt.Errorf("aliyun: parse describe regions response: %w", err)
+	}
+	var res []provider.Region
+	for _, r := range raw.Regions.Region {
+		if r.RegionID != "" {
+			res = append(res, provider.Region{
+				RegionID:  r.RegionID,
+				LocalName: r.LocalName,
+			})
+		}
+	}
+	if len(res) == 0 {
+		return nil, errors.New("aliyun: empty regions in response")
+	}
+	return res, nil
+}
+
 // Healthcheck verifies AK/SK credentials by checking connectivity
 func (p *Provider) Healthcheck(ctx context.Context, cred map[string]string, region string) (*provider.HealthcheckResult, error) {
 	ak := cred["access_key_id"]
@@ -550,9 +623,15 @@ func (p *Provider) Discover(ctx context.Context, cred map[string]string, regions
 	}
 
 	if len(regions) == 0 {
-		regions = []string{
-			"cn-hangzhou", "cn-shanghai", "cn-beijing", "cn-shenzhen",
-			"cn-hongkong", "ap-southeast-1", "ap-northeast-1", "us-west-1",
+		available, err := p.DescribeRegions(ctx, ak, sk)
+		if err == nil && len(available) > 0 {
+			for _, r := range available {
+				regions = append(regions, r.RegionID)
+			}
+		} else {
+			for _, r := range DefaultBuiltinRegions() {
+				regions = append(regions, r.RegionID)
+			}
 		}
 	}
 

@@ -6,7 +6,9 @@ import {
   deleteCredential,
   fetchCloudAccounts,
   createCloudAccount,
+  updateCloudAccount,
   deleteCloudAccount,
+  fetchCloudRegions,
   triggerCloudSync,
   fetchCloudResources,
   actionCloudResource,
@@ -236,11 +238,18 @@ export const Cloud: React.FC = () => {
 
   const [newAccName, setNewAccName] = useState<string>('');
   const [newAccCredID, setNewAccCredID] = useState<string>('');
-  const [newAccRegion, setNewAccRegion] = useState<string>('cn-hongkong');
+  const [newAccRegions, setNewAccRegions] = useState<string[]>([]);
   const [newAccSite, setNewAccSite] = useState<string>('china');
+
+  // Edit Account state
+  const [editingAccount, setEditingAccount] = useState<CloudAccount | null>(null);
+  const [editAccName, setEditAccName] = useState<string>('');
+  const [editAccSite, setEditAccSite] = useState<string>('china');
+  const [editAccRegions, setEditAccRegions] = useState<string[]>([]);
 
   // Discover state
   const [selectedCredForDiscover, setSelectedCredForDiscover] = useState<string>('');
+  const [discoverRegions, setDiscoverRegions] = useState<string[]>([]);
   const [discoveredList, setDiscoveredList] = useState<DiscoveredResource[]>([]);
   const [isDiscovering, setIsDiscovering] = useState<boolean>(false);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
@@ -254,6 +263,35 @@ export const Cloud: React.FC = () => {
   const { data: accounts = [], refetch: refetchAccounts } = useQuery({
     queryKey: ['cloud-accounts'],
     queryFn: fetchCloudAccounts,
+  });
+
+  // Regions query for Add Account
+  const {
+    data: candidateRegionsForNew = [],
+    isError: isRegionsErrorForNew,
+  } = useQuery({
+    queryKey: ['cloud-regions', newAccCredID],
+    queryFn: () => fetchCloudRegions(newAccCredID || undefined),
+    enabled: showAddAccModal,
+  });
+
+  // Regions query for Edit Account
+  const {
+    data: candidateRegionsForEdit = [],
+    isError: isRegionsErrorForEdit,
+  } = useQuery({
+    queryKey: ['cloud-regions', editingAccount?.credential_id],
+    queryFn: () => fetchCloudRegions(editingAccount?.credential_id || undefined),
+    enabled: !!editingAccount,
+  });
+
+  // Regions query for Discover
+  const {
+    data: candidateRegionsForDiscover = [],
+  } = useQuery({
+    queryKey: ['cloud-regions', selectedCredForDiscover],
+    queryFn: () => fetchCloudRegions(selectedCredForDiscover || undefined),
+    enabled: showDiscoverModal,
   });
 
   const { data: resources = [], isLoading: isLoadingResources, refetch: refetchResources } = useQuery({
@@ -297,9 +335,22 @@ export const Cloud: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['cloud-accounts'] });
       setShowAddAccModal(false);
       setNewAccName('');
+      setNewAccRegions([]);
     },
     onError: (err: any) => {
       alert('添加云账号失败: ' + (err?.response?.data?.error?.message || err.message));
+    },
+  });
+
+  const updateAccMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CloudAccount> }) =>
+      updateCloudAccount(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cloud-accounts'] });
+      setEditingAccount(null);
+    },
+    onError: (err: any) => {
+      alert('更新云账号失败: ' + (err?.response?.data?.error?.message || err.message));
     },
   });
 
@@ -352,7 +403,7 @@ export const Cloud: React.FC = () => {
     try {
       const items = await discoverCloudResources({
         credential_id: selectedCredForDiscover,
-        regions: ['cn-hangzhou', 'cn-shanghai', 'cn-beijing', 'cn-shenzhen', 'cn-hongkong', 'ap-southeast-1'],
+        regions: discoverRegions.length > 0 ? discoverRegions : undefined,
       });
       setDiscoveredList(items);
     } catch (err: any) {
@@ -369,6 +420,26 @@ export const Cloud: React.FC = () => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
+
+  // Derive unique regions present in existing resources or accounts
+  const availableFilterRegions = Array.from(
+    new Set(
+      resources
+        .map((r) => r.region)
+        .concat(
+          accounts.flatMap((a) => {
+            try {
+              if (a.config_json) {
+                const p = JSON.parse(a.config_json);
+                if (Array.isArray(p.scan_regions)) return p.scan_regions;
+              }
+            } catch (e) {}
+            return a.default_region ? [a.default_region] : [];
+          })
+        )
+        .filter(Boolean)
+    )
+  ).sort();
 
   return (
     <div className={styles.pageContainer}>
@@ -416,11 +487,11 @@ export const Cloud: React.FC = () => {
               onChange={(e) => setFilterRegion(e.target.value)}
             >
               <option value="">全部区域</option>
-              <option value="cn-hongkong">cn-hongkong</option>
-              <option value="cn-hangzhou">cn-hangzhou</option>
-              <option value="cn-shanghai">cn-shanghai</option>
-              <option value="cn-beijing">cn-beijing</option>
-              <option value="ap-southeast-1">ap-southeast-1</option>
+              {availableFilterRegions.map((reg) => (
+                <option key={reg} value={reg}>
+                  {reg}
+                </option>
+              ))}
             </select>
 
             <select
@@ -573,7 +644,7 @@ export const Cloud: React.FC = () => {
                     <th>账号名称</th>
                     <th>厂商</th>
                     <th>站点</th>
-                    <th>默认区域</th>
+                    <th>扫描区域</th>
                     <th>最近同步</th>
                     <th>CDT 公网流量</th>
                     <th>操作</th>
@@ -582,10 +653,14 @@ export const Cloud: React.FC = () => {
                 <tbody>
                   {accounts.map((acc) => {
                     let cdtBytes = 0;
+                    let scanRegionsCount: number | null = null;
                     try {
                       if (acc.config_json) {
                         const parsed = JSON.parse(acc.config_json);
                         cdtBytes = parsed.cdt_traffic_bytes || 0;
+                        if (Array.isArray(parsed.scan_regions) && parsed.scan_regions.length > 0) {
+                          scanRegionsCount = parsed.scan_regions.length;
+                        }
                       }
                     } catch (e) {}
 
@@ -594,7 +669,9 @@ export const Cloud: React.FC = () => {
                         <td style={{ fontWeight: 600 }}>{acc.name}</td>
                         <td>阿里云</td>
                         <td>{acc.account_site === 'international' ? '国际站' : '中国站'}</td>
-                        <td>{acc.default_region || '全部'}</td>
+                        <td>
+                          {scanRegionsCount !== null ? `已选 ${scanRegionsCount} 个` : '全部'}
+                        </td>
                         <td>
                           {acc.last_sync_at_ms
                             ? new Date(acc.last_sync_at_ms).toLocaleString()
@@ -605,6 +682,26 @@ export const Cloud: React.FC = () => {
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              className="btn mini secondary"
+                              onClick={() => {
+                                setEditingAccount(acc);
+                                setEditAccName(acc.name);
+                                setEditAccSite(acc.account_site || 'china');
+                                let regions: string[] = [];
+                                try {
+                                  if (acc.config_json) {
+                                    const p = JSON.parse(acc.config_json);
+                                    if (Array.isArray(p.scan_regions)) {
+                                      regions = p.scan_regions;
+                                    }
+                                  }
+                                } catch (e) {}
+                                setEditAccRegions(regions);
+                              }}
+                            >
+                              编辑
+                            </button>
                             <button
                               className="btn mini secondary"
                               disabled={syncingAccountId === acc.id}
@@ -812,19 +909,67 @@ export const Cloud: React.FC = () => {
                 value={newAccSite}
                 onChange={(e) => setNewAccSite(e.target.value)}
               >
-                <option value="china">中国站 (business.aliyuncs.com)</option>
-                <option value="international">国际站 (business.ap-southeast-1.aliyuncs.com)</option>
+                <option value="china">中国站 (中国大陆)</option>
+                <option value="international">国际站 (海外及港澳台)</option>
               </select>
             </div>
             <div className={styles.formGroup}>
-              <label className={styles.formLabel}>默认扫描区域</label>
-              <input
-                className={styles.input}
-                style={{ width: '100%' }}
-                placeholder="如 cn-hongkong"
-                value={newAccRegion}
-                onChange={(e) => setNewAccRegion(e.target.value)}
-              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className={styles.formLabel} style={{ marginBottom: 0 }}>
+                  扫描区域 ({newAccRegions.length === 0 ? '扫全部区域' : `已选 ${newAccRegions.length} 个`})
+                </label>
+                <div style={{ fontSize: '12px' }}>
+                  <button
+                    type="button"
+                    className="btn mini ghost"
+                    onClick={() => {
+                      if (newAccRegions.length === candidateRegionsForNew.length) {
+                        setNewAccRegions([]);
+                      } else {
+                        setNewAccRegions(candidateRegionsForNew.map((r) => r.region_id));
+                      }
+                    }}
+                  >
+                    {newAccRegions.length === candidateRegionsForNew.length ? '清空 (全扫)' : '全选'}
+                  </button>
+                </div>
+              </div>
+
+              {isRegionsErrorForNew && (
+                <div className={styles.notice} style={{ color: 'var(--warn)' }}>
+                  ⚠️ 未能获取区域列表，正在使用内置清单
+                </div>
+              )}
+
+              {newAccRegions.length === 0 && candidateRegionsForNew.length > 0 && (
+                <div className={styles.notice}>
+                  🛡️ 提示：未勾选特定区域将扫描全部可用区域（共 {candidateRegionsForNew.length} 个区域，约需 {candidateRegionsForNew.length} 次 API 调用）
+                </div>
+              )}
+
+              <div className={styles.regionGrid}>
+                {candidateRegionsForNew.map((r) => {
+                  const checked = newAccRegions.includes(r.region_id);
+                  return (
+                    <label key={r.region_id} className={styles.regionItem}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewAccRegions([...newAccRegions, r.region_id]);
+                          } else {
+                            setNewAccRegions(newAccRegions.filter((id) => id !== r.region_id));
+                          }
+                        }}
+                      />
+                      <span>
+                        {r.local_name} <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>({r.region_id})</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             <div className={styles.formActions}>
               <button className="btn mini ghost" onClick={() => setShowAddAccModal(false)}>
@@ -838,12 +983,129 @@ export const Cloud: React.FC = () => {
                     provider_code: 'aliyun',
                     name: newAccName,
                     credential_id: newAccCredID,
-                    default_region: newAccRegion,
                     account_site: newAccSite,
+                    config_json: JSON.stringify({ scan_regions: newAccRegions }),
                   });
                 }}
               >
                 创建账号
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: 编辑云账号 */}
+      {editingAccount && (
+        <div className={styles.modalBackdrop}>
+          <div className={styles.modal}>
+            <h3 style={{ marginTop: 0 }}>编辑云账号</h3>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>账号名称</label>
+              <input
+                className={styles.input}
+                style={{ width: '100%' }}
+                value={editAccName}
+                onChange={(e) => setEditAccName(e.target.value)}
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>账号站点 (决定 BSS 账单 Endpoint)</label>
+              <select
+                className={styles.select}
+                style={{ width: '100%' }}
+                value={editAccSite}
+                onChange={(e) => setEditAccSite(e.target.value)}
+              >
+                <option value="china">中国站 (中国大陆)</option>
+                <option value="international">国际站 (海外及港澳台)</option>
+              </select>
+            </div>
+            <div className={styles.formGroup}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className={styles.formLabel} style={{ marginBottom: 0 }}>
+                  扫描区域 ({editAccRegions.length === 0 ? '扫全部区域' : `已选 ${editAccRegions.length} 个`})
+                </label>
+                <div style={{ fontSize: '12px' }}>
+                  <button
+                    type="button"
+                    className="btn mini ghost"
+                    onClick={() => {
+                      if (editAccRegions.length === candidateRegionsForEdit.length) {
+                        setEditAccRegions([]);
+                      } else {
+                        setEditAccRegions(candidateRegionsForEdit.map((r) => r.region_id));
+                      }
+                    }}
+                  >
+                    {editAccRegions.length === candidateRegionsForEdit.length ? '清空 (全扫)' : '全选'}
+                  </button>
+                </div>
+              </div>
+
+              {isRegionsErrorForEdit && (
+                <div className={styles.notice} style={{ color: 'var(--warn)' }}>
+                  ⚠️ 未能获取区域列表，正在使用内置清单
+                </div>
+              )}
+
+              {editAccRegions.length === 0 && candidateRegionsForEdit.length > 0 && (
+                <div className={styles.notice}>
+                  🛡️ 提示：未勾选特定区域将扫描全部可用区域（共 {candidateRegionsForEdit.length} 个区域，约需 {candidateRegionsForEdit.length} 次 API 调用）
+                </div>
+              )}
+
+              <div className={styles.regionGrid}>
+                {candidateRegionsForEdit.map((r) => {
+                  const checked = editAccRegions.includes(r.region_id);
+                  return (
+                    <label key={r.region_id} className={styles.regionItem}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEditAccRegions([...editAccRegions, r.region_id]);
+                          } else {
+                            setEditAccRegions(editAccRegions.filter((id) => id !== r.region_id));
+                          }
+                        }}
+                      />
+                      <span>
+                        {r.local_name} <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>({r.region_id})</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <div className={styles.formActions}>
+              <button className="btn mini ghost" onClick={() => setEditingAccount(null)}>
+                取消
+              </button>
+              <button
+                className="btn mini primary"
+                disabled={!editAccName}
+                onClick={() => {
+                  let existingConfig: any = {};
+                  try {
+                    if (editingAccount.config_json) {
+                      existingConfig = JSON.parse(editingAccount.config_json);
+                    }
+                  } catch (e) {}
+                  existingConfig.scan_regions = editAccRegions;
+
+                  updateAccMutation.mutate({
+                    id: editingAccount.id,
+                    data: {
+                      name: editAccName,
+                      account_site: editAccSite,
+                      config_json: JSON.stringify(existingConfig),
+                    },
+                  });
+                }}
+              >
+                保存修改
               </button>
             </div>
           </div>
@@ -860,7 +1122,10 @@ export const Cloud: React.FC = () => {
                 className={styles.select}
                 style={{ flex: 1 }}
                 value={selectedCredForDiscover}
-                onChange={(e) => setSelectedCredForDiscover(e.target.value)}
+                onChange={(e) => {
+                  setSelectedCredForDiscover(e.target.value);
+                  setDiscoveredList([]);
+                }}
               >
                 <option value="">选择凭据以扫描...</option>
                 {credentials.map((c) => (
@@ -878,35 +1143,114 @@ export const Cloud: React.FC = () => {
               </button>
             </div>
 
-            {discoveredList.length > 0 ? (
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>实例名称</th>
-                      <th>区域</th>
-                      <th>状态</th>
-                      <th>公网 IP</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {discoveredList.map((d) => (
-                      <tr key={d.ref}>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{d.name || d.ref}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{d.ref}</div>
-                        </td>
-                        <td>{d.region}</td>
-                        <td>{d.status}</td>
-                        <td>{d.public_ips?.join(', ') || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {selectedCredForDiscover && (
+              <div className={styles.formGroup}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className={styles.formLabel} style={{ marginBottom: 0 }}>
+                    扫描范围 ({discoverRegions.length === 0 ? '扫描全部区域' : `已指定 ${discoverRegions.length} 个区域`})
+                  </label>
+                  <div style={{ fontSize: '12px' }}>
+                    <button
+                      type="button"
+                      className="btn mini ghost"
+                      onClick={() => {
+                        if (discoverRegions.length === candidateRegionsForDiscover.length) {
+                          setDiscoverRegions([]);
+                        } else {
+                          setDiscoverRegions(candidateRegionsForDiscover.map((r) => r.region_id));
+                        }
+                      }}
+                    >
+                      {discoverRegions.length === candidateRegionsForDiscover.length ? '清空 (全扫)' : '全选'}
+                    </button>
+                  </div>
+                </div>
+
+                {discoverRegions.length === 0 && candidateRegionsForDiscover.length > 0 && (
+                  <div className={styles.notice}>
+                    🛡️ 提示：未勾选特定区域将扫描全部可用区域（共 {candidateRegionsForDiscover.length} 个区域，约需 {candidateRegionsForDiscover.length} 次 API 调用）
+                  </div>
+                )}
+
+                <div className={styles.regionGrid} style={{ maxHeight: '140px' }}>
+                  {candidateRegionsForDiscover.map((r) => {
+                    const checked = discoverRegions.includes(r.region_id);
+                    return (
+                      <label key={r.region_id} className={styles.regionItem}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setDiscoverRegions([...discoverRegions, r.region_id]);
+                            } else {
+                              setDiscoverRegions(discoverRegions.filter((id) => id !== r.region_id));
+                            }
+                          }}
+                        />
+                        <span>
+                          {r.local_name} <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>({r.region_id})</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
+            )}
+
+            {discoveredList.length > 0 ? (
+              <>
+                <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>实例名称</th>
+                        <th>区域</th>
+                        <th>状态</th>
+                        <th>公网 IP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {discoveredList.map((d) => (
+                        <tr key={d.ref}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{d.name || d.ref}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{d.ref}</div>
+                          </td>
+                          <td>{d.region}</td>
+                          <td>{d.status}</td>
+                          <td>{d.public_ips?.join(', ') || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 区域实例分布总结 */}
+                {(() => {
+                  const scannedRegions = discoverRegions.length > 0
+                    ? discoverRegions
+                    : candidateRegionsForDiscover.map((r) => r.region_id);
+                  const activeRegions = Array.from(new Set(discoveredList.map((d) => d.region)));
+                  const emptyRegions = scannedRegions.filter((r) => !activeRegions.includes(r));
+
+                  return (
+                    <div className={styles.regionSummaryBox}>
+                      <div style={{ color: 'var(--ok)', fontWeight: 600, marginBottom: '4px' }}>
+                        ✅ 发现 {discoveredList.length} 台实例，分布在 {activeRegions.length} 个区域：{activeRegions.join(', ')}
+                      </div>
+                      {emptyRegions.length > 0 && (
+                        <div style={{ color: 'var(--text-dim)' }}>
+                          ℹ️ 空区域 ({emptyRegions.length} 个，无实例): {emptyRegions.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </>
             ) : (
               <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)' }}>
-                {isDiscovering ? '正在扫描阿里云主流区域（杭州、香港、新加坡等）...' : '请选择凭据并点击「开始扫描」'}
+                {isDiscovering ? '正在扫描区域...' : '请选择凭据并点击「开始扫描」'}
               </div>
             )}
 

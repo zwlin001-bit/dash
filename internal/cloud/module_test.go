@@ -249,3 +249,36 @@ func TestCloudAccountsAndSyncAPI(t *testing.T) {
 		t.Fatalf("expected succeeded, got %+v", actResp)
 	}
 }
+
+func TestListRegionsAPI(t *testing.T) {
+	a, _, mock := setupTestApp(t)
+
+	mock.ListRegionsFunc = func(ctx context.Context, cred map[string]string) ([]provider.Region, error) {
+		return []provider.Region{
+			{RegionID: "cn-hangzhou", LocalName: "华东1（杭州）"},
+			{RegionID: "eu-central-1", LocalName: "欧洲中部 1 (法兰克福)"},
+		}, nil
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/cloud-accounts/regions", nil)
+	rec := httptest.NewRecorder()
+	a.Mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Items []provider.Region `json:"items"`
+		Total int               `json:"total"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if resp.Total != 2 || len(resp.Items) != 2 {
+		t.Fatalf("expected 2 regions, got %d", resp.Total)
+	}
+	if resp.Items[0].RegionID != "cn-hangzhou" || resp.Items[1].RegionID != "eu-central-1" {
+		t.Errorf("unexpected items: %+v", resp.Items)
+	}
+}

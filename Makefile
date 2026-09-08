@@ -1,4 +1,4 @@
-.PHONY: all build build-dashd build-agent build-provider-aliyun build-agent-all test test-db-up test-db-down lint lint-dist lint-css-tokens lint-fixtures lint-skips fixtures migrate clean verify-agent-matrix
+.PHONY: all build build-dashd build-agent build-provider-aliyun build-agent-all test test-db-up test-db-down lint lint-dist lint-css-tokens lint-fixtures lint-skips lint-region-literals fixtures migrate clean verify-agent-matrix
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || cat VERSION 2>/dev/null || echo dev)
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -54,10 +54,13 @@ lint-fixtures:
 lint-skips:
 	@./scripts/lint-skips.sh
 
+lint-region-literals:
+	@./scripts/lint-region-literals.sh
+
 fixtures:
 	go run ./cmd/gen-fixtures
 
-lint: lint-dist lint-css-tokens lint-fixtures lint-skips
+lint: lint-dist lint-css-tokens lint-fixtures lint-skips lint-region-literals
 	@./scripts/lint-imports.sh
 	@go vet ./...
 	@if [ -f scripts/lint-sql.sh ]; then ./scripts/lint-sql.sh; fi

@@ -594,6 +594,11 @@ func (s *fakeCloudSvc) GetSyncStatus(jobID string) (*cloud.SyncJobStatus, error)
 func (s *fakeCloudSvc) DiscoverAccount(ctx context.Context, credID string, regions []string, site string) ([]provider.NormalizedResource, error) {
 	return nil, nil
 }
+func (s *fakeCloudSvc) ListRegions(ctx context.Context, credID string) ([]provider.Region, error) {
+	return []provider.Region{
+		{RegionID: "cn-hangzhou", LocalName: "华东1（杭州）"},
+	}, nil
+}
 
 func (s *fakeCloudSvc) ListResources(ctx context.Context, accountID, providerCode, resKind, region, status string) ([]cloud.CloudResource, error) {
 	if s.empty {
