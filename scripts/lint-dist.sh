@@ -11,10 +11,16 @@ cd "$PROJECT_ROOT"
 DIST_DIR="internal/api/dist"
 FP_FILE="$DIST_DIR/.build-fingerprint"
 
+# ★ 全程锁定 LC_ALL=C：sort 的排序规则依赖 locale，
+#   同一份代码在 zh_CN.UTF-8 与 C 两台机器上会算出不同指纹，导致守卫误报。
+#   （实测：同一棵树 zh_CN.UTF-8 得 6d2289319cb0a690，C 得 7a50404c8a1d48a1）
 compute_fingerprint() {
-  find web/src web/index.html web/vite.config.ts web/tsconfig.json \
+  LC_ALL=C find web/src web/index.html web/vite.config.ts web/tsconfig.json \
        web/package.json web/package-lock.json -type f 2>/dev/null \
-    | sort | xargs sha256sum | sha256sum | cut -c1-16
+    | LC_ALL=C sort \
+    | tr '\n' '\0' \
+    | LC_ALL=C xargs -0 -r sha256sum \
+    | LC_ALL=C sha256sum | cut -c1-16
 }
 
 if [[ "${1:-}" == "--write" || "${1:-}" == "-w" || "${1:-}" == "--update" ]]; then
