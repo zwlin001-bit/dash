@@ -163,3 +163,92 @@ BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 - 不引入 CI 系统，只把本机流程理顺
 - 不做交叉编译分发（`build-agent-all` 保持现状）
 - 不改前端构建工具链本身（仍是 vite）
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-08 · ✅ 通过
+
+分支 `agy/p2-06-setup-build`，提交 `0c555de`。
+
+§0 列的六个缺口**逐条修掉**：
+
+| 缺口 | 实测 |
+|---|---|
+| ❶ 没人构建前端 | ✅ 新增 `setup.sh build` 子命令，install/upgrade 都调它 |
+| ❷ upgrade 不管 provider | ✅ 备份、替换、回滚三处都成对处理 |
+| ❸ exec_path 相对路径 | ✅ 见下 |
+| ❹ 版本永远是 dev | ✅ 见下 |
+| ❺ node_modules 未引导 | ✅ `setup.sh:570` 与 `Makefile:57` 都判断 `! -d node_modules \|\| package-lock.json -nt node_modules` |
+| ❻ 必须用 npm ci | ✅ `setup.sh:572` 与 `Makefile:58` 都是 `npm ci` |
+
+### ❸ exec_path 三处都动了
+
+- 种子值改 `/usr/local/bin/dash-provider-aliyun`
+- ★ **老机器自愈**：`UPDATE providers SET exec_path=? WHERE provider_code=? AND (exec_path='bin/...' OR exec_path NOT LIKE '/%')`，幂等，每次启动都会纠正
+- ★ `ResolveExecPath()` 三级解析：绝对路径存在则用 → 否则按**本进程可执行文件所在目录** → 再退回 `PATH`。
+  开发机从仓库根目录跑、生产机 systemd 从 `/` 跑，两种都能起来
+- `getProviderClient()` 从库里读 `exec_path` 再传给 manager，不再写死
+
+### ❹ 版本注入实测
+
+```
+$ ./setup.sh build
+--> 目标版本: 0c555de (commit: 0c555de, buildTime: 2026-09-08T04:15:46Z)
+$ ./bin/dashd -version
+dashd 0c555de (commit: 0c555de, built: 2026-09-08T04:15:46Z)
+$ ./bin/dash-provider-aliyun -version
+dash-provider-aliyun 0c555de (commit: 0c555de, built: 2026-09-08T04:15:46Z)
+$ git describe --tags --always --dirty
+0c555de
+```
+
+三个二进制版本一致且与 `git describe` 相符。`status` 里还加了
+**dashd 与 provider 版本不一致的告警**（`setup.sh:1386`）——
+这正是「升级漏了 provider」最直接的暴露方式。
+
+### [验收3] 无 npm 降级 · 在验收机上实跑
+
+验收机没有 node/npm，是这条最理想的验证环境：
+
+```
+场景 A（产物与源码一致）
+  ⚠️ 未检测到 Node.js / npm ...
+  ✅ 前端内嵌产物与源码一致，跳过前端构建，继续使用现有产物。
+  ✅ 构建完成！                                          RC=0  ✅
+
+场景 B（改一行 web/src/App.tsx）
+  ❌ 错误: 本机未安装 Node.js / npm，且前端内嵌产物与源码不一致！
+     解决建议: 请在有 Node.js 环境的机器上执行 make build-web ...  RC=1  ✅
+```
+
+★ **`--skip-web` 也躲不过 [3/4] 的守卫校验** —— 试过了，仍然中止。这是对的。
+
+### [验收8] 幂等
+
+连跑三次 `./setup.sh build` 全部 RC=0，**工作区零污染**（`git status` 干净）。
+
+### [验收9] 回滚
+
+`rollback_upgrade()` 里 dashd 与 provider 成对回滚。
+★ 还处理了「老机器本来没有 provider」的情况：`HAD_OLD_PROVIDER=0` 时
+**删除新装的 provider** 而不是去恢复一个不存在的备份。这个边界考虑到了。
+
+### 其他
+
+- `bash -n setup.sh` 语法通过
+- 合并后 34 个 Go 包全绿，`go vet`、SQL 方言、import 纪律、CSS token 四道 lint 全过
+- 新增 `internal/provider/manager_test.go`、`internal/cloud/service_test.go` 覆盖解析与自愈逻辑
+
+### 未能在验收机验证
+
+验收项 1（干净机器一条命令装完）、4（upgrade 后 provider sha256 变化）、
+6（★ **provider 真的能起来**）、7（老机器 exec_path 自愈）——
+都需要真实部署环境。
+
+★ **验收项 6 是本任务的核心价值**，请务必在 VPS 上确认：
+重启 dashd 后点一次云账号同步，`ps aux | grep dash-provider` 能看到进程，
+日志里没有 `no such file or directory`。
+
+**任务 P2-06 通过。**
