@@ -13,6 +13,8 @@ CREATE TABLE credentials (
     CONSTRAINT pk_credentials PRIMARY KEY (id)
 );
 
+CREATE UNIQUE INDEX ux_credentials_name ON credentials (name);
+
 CREATE TABLE notify_channels (
     id VARCHAR2(26) NOT NULL,
     name VARCHAR2(64 CHAR) NOT NULL,

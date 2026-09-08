@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS credentials (
     enc_nonce VARCHAR(64) NOT NULL,
     created_at_ms BIGINT NOT NULL,
     updated_at_ms BIGINT NOT NULL,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    UNIQUE KEY ux_credentials_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE IF NOT EXISTS notify_channels (

@@ -1,20 +1,6 @@
 -- 0005_cloud_provider.oracle.sql
 -- 凭据与云资产表 (dash P2-02 / 02-database.md §3, §4.1)
 
-CREATE TABLE credentials (
-    id VARCHAR2(26) NOT NULL,
-    name VARCHAR2(64 CHAR) NOT NULL,
-    cred_kind VARCHAR2(32 CHAR) NOT NULL,
-    enc_payload BLOB NOT NULL,
-    enc_key_id VARCHAR2(32 CHAR) NOT NULL,
-    enc_nonce VARCHAR2(64 CHAR) NOT NULL,
-    created_at_ms NUMBER(19) NOT NULL,
-    updated_at_ms NUMBER(19) NOT NULL,
-    CONSTRAINT pk_credentials PRIMARY KEY (id)
-);
-
-CREATE UNIQUE INDEX ux_credentials_name ON credentials (name);
-
 CREATE TABLE providers (
     provider_code VARCHAR2(32 CHAR) NOT NULL,
     display_name VARCHAR2(64 CHAR) NOT NULL,
