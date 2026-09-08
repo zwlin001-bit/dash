@@ -541,3 +541,251 @@
 .actionTagNoop {
   color: var(--text-dim);
 }
+
+/* ====== aliyun-guard 风格仪表盘骨架 ====== */
+.statBand {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-4);
+}
+
+@media (max-width: 900px) {
+  .statBand {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .statBand {
+    grid-template-columns: 1fr;
+  }
+}
+
+.statCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  box-shadow: var(--card-shadow);
+}
+
+.statCardHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.statIcon {
+  font-size: 16px;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.statValue {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+
+.instances {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-4);
+}
+
+@media (max-width: 768px) {
+  .instances {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.cardHeadLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cardHeadRight {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.instanceSub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-2);
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+@media (max-width: 480px) {
+  .metricGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.metricCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metricLabel {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.metricValue {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trafficRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.trafficRowValue {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.progress {
+  height: 8px;
+  width: 100%;
+  background: var(--bg-hover);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.nextLine, .resultLine {
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.ruleToggleBtn {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ruleToggleBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+  border-color: var(--border-main);
+}
+
+/* 骨架屏 */
+.skCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  box-shadow: var(--card-shadow);
+}
+
+.skHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.skTitle {
+  width: 140px;
+  height: 20px;
+  background: var(--bg-card-sub);
+  border-radius: var(--radius-xs);
+  animation: skPulse 1.6s infinite ease-in-out;
+}
+
+.skBadge {
+  width: 64px;
+  height: 20px;
+  background: var(--bg-card-sub);
+  border-radius: var(--radius-full);
+  animation: skPulse 1.6s infinite ease-in-out;
+}
+
+.skGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-2);
+}
+
+.skMetric {
+  height: 38px;
+  background: var(--bg-card-sub);
+  border-radius: var(--radius-xs);
+  animation: skPulse 1.6s infinite ease-in-out;
+}
+
+.skProgress {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-card-sub);
+  border-radius: var(--radius-full);
+  animation: skPulse 1.6s infinite ease-in-out;
+}
+
+.skChart {
+  width: 100%;
+  height: 80px;
+  background: var(--bg-card-sub);
+  border-radius: var(--radius-sm);
+  animation: skPulse 1.6s infinite ease-in-out;
+}
+
+@keyframes skPulse {
+  0%, 100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}

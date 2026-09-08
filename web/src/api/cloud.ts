@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { TimeSeriesSpan } from './types';
 
 export interface CredentialSummary {
   id: string;
