@@ -21,6 +21,19 @@ import {
   UpdateTagParams,
 } from './types';
 
+/**
+ * 列表端点统一返回分页信封 {items,total,page,page_size}（docs/12-api-spec.md §3 分页）。
+ * 这里对「裸数组」与「信封」都兼容，并保证任何情况下都返回数组：
+ * 上游一旦返回 null 或信封对象，页面上的 .map 会让整页崩掉（P1-27 F1）。
+ */
+function toItems<T>(res: unknown): T[] {
+  if (Array.isArray(res)) {
+    return res as T[];
+  }
+  const items = (res as { items?: unknown } | null | undefined)?.items;
+  return Array.isArray(items) ? (items as T[]) : [];
+}
+
 export interface ListNodesParams {
   group_id?: string;
   tag_id?: string;
@@ -38,7 +51,7 @@ export async function getNodes(params?: ListNodesParams | unknown): Promise<Node
     ? (params as ListNodesParams)
     : undefined;
   const res = await getNodesPaged(filter);
-  return res.items;
+  return toItems<NodeItem>(res);
 }
 
 export async function getNodesPaged(params?: ListNodesParams): Promise<PageResult<NodeItem>> {
@@ -98,7 +111,7 @@ export async function checkHealth(): Promise<HealthResponse> {
 // 分组管理
 export async function getGroups(): Promise<NodeGroup[]> {
   try {
-    return await apiFetch<NodeGroup[]>('/api/v1/node-groups');
+    return toItems<NodeGroup>(await apiFetch<unknown>('/api/v1/node-groups'));
   } catch {
     return [];
   }
@@ -129,7 +142,7 @@ export async function deleteGroup(id: string): Promise<{ ok: boolean }> {
 // 标签管理
 export async function getTags(): Promise<NodeTag[]> {
   try {
-    return await apiFetch<NodeTag[]>('/api/v1/tags');
+    return toItems<NodeTag>(await apiFetch<unknown>('/api/v1/tags'));
   } catch {
     return [];
   }
@@ -155,8 +168,8 @@ export async function deleteTag(id: string): Promise<{ ok: boolean }> {
   });
 }
 
-export async function replaceNodeTags(id: string, tagIds: string[]): Promise<NodeTag[]> {
-  return await apiFetch<NodeTag[]>(`/api/v1/nodes/${id}/tags`, {
+export async function replaceNodeTags(id: string, tagIds: string[]): Promise<{ ok: boolean }> {
+  return await apiFetch<{ ok: boolean }>(`/api/v1/nodes/${id}/tags`, {
     method: 'POST',
     body: JSON.stringify({ tag_ids: tagIds }),
   });

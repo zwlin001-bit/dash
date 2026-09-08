@@ -901,6 +901,15 @@ cmd_upgrade() {
         elif [ -f "./bin/dashd" ]; then
             NEW_BIN="./bin/dashd"
         elif command -v go >/dev/null 2>&1 && [ -d "$SCRIPT_DIR/cmd/dashd" ]; then
+            # ★ 前端产物一致性守卫（P1-25）：自行编译时绝不能绕过，
+            #   否则 web/src 改了但 internal/api/dist 是旧的，照样能编译部署上去 —— 这正是 P1-25 要防的坑。
+            if [ -x "$SCRIPT_DIR/scripts/lint-dist.sh" ]; then
+                if ! (cd "$SCRIPT_DIR" && ./scripts/lint-dist.sh); then
+                    echo "❌ 前端内嵌产物与源码不一致，已中止升级。" >&2
+                    echo "   请先在有 Node 的机器上执行 make build-web 并提交产物，再重新升级。" >&2
+                    exit 1
+                fi
+            fi
             echo "--> 正在编译新版 dashd 二进制..."
             (cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -o bin/dashd ./cmd/dashd)
             NEW_BIN="$SCRIPT_DIR/bin/dashd"
