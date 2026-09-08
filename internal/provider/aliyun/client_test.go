@@ -1,0 +1,365 @@
+package aliyun_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
+
+	"dash/internal/provider"
+	"dash/internal/provider/aliyun"
+)
+
+func createMockSDKClient(serverURL string) (*sdk.Client, error) {
+	u, err := url.Parse(serverURL)
+	if err != nil {
+		return nil, err
+	}
+	client, err := sdk.NewClientWithAccessKey("cn-hangzhou", "test-ak", "test-sk")
+	if err != nil {
+		return nil, err
+	}
+	client.GetConfig().Scheme = "http"
+	client.GetConfig().AutoRetry = false
+	client.GetConfig().MaxRetryTime = 0
+	client.Domain = u.Host
+	return client, nil
+}
+
+func TestCDTTrafficSumAndCache(t *testing.T) {
+	var cdtCalls int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&cdtCalls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"TrafficDetails": {
+				"TrafficDetail": [
+					{ "Traffic": 1000000, "ProductType": "ECS" },
+					{ "Traffic": 2500000, "ProductType": "SLB" }
+				]
+			}
+		}`))
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	p := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return createMockSDKClient(ts.URL)
+		}),
+		aliyun.WithCustomDomain("ListCdtInternetTraffic", u.Host),
+	)
+
+	ctx := context.Background()
+	cred := map[string]string{
+		"access_key_id":     "LTAI5test123",
+		"access_key_secret": "secret999",
+	}
+
+	// First query
+	res1, err := p.GetCDTTraffic(ctx, cred)
+	if err != nil {
+		t.Fatalf("GetCDTTraffic 1 failed: %v", err)
+	}
+	if res1.TrafficBytes != 3500000 {
+		t.Fatalf("expected sum 3500000 bytes, got %d", res1.TrafficBytes)
+	}
+	if atomic.LoadInt32(&cdtCalls) != 1 {
+		t.Fatalf("expected 1 call, got %d", atomic.LoadInt32(&cdtCalls))
+	}
+
+	// Second query within cache TTL: MUST be cached and NOT call remote API again
+	res2, err := p.GetCDTTraffic(ctx, cred)
+	if err != nil {
+		t.Fatalf("GetCDTTraffic 2 failed: %v", err)
+	}
+	if res2.TrafficBytes != 3500000 {
+		t.Fatalf("cached traffic bytes mismatch: got %d", res2.TrafficBytes)
+	}
+	if atomic.LoadInt32(&cdtCalls) != 1 {
+		t.Fatalf("expected CDT traffic to be cached, but API called %d times", atomic.LoadInt32(&cdtCalls))
+	}
+}
+
+func TestBSSFailureIsolation(t *testing.T) {
+	// ECS succeeds, BSS returns 403 NoPermission
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := r.URL.Query().Get("Action")
+		if body == "" {
+			_ = r.ParseForm()
+			body = r.Form.Get("Action")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if body == "DescribeInstanceBill" {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"Code":"NoPermission","Message":"You are not authorized"}`))
+			return
+		}
+
+		// ECS DescribeInstances response
+		_, _ = w.Write([]byte(`{
+			"Instances": {
+				"Instance": [
+					{
+						"InstanceId": "i-inst123",
+						"InstanceName": "hk-proxy-01",
+						"Status": "Running",
+						"RegionId": "cn-hongkong",
+						"Cpu": 2,
+						"Memory": 2048,
+						"PublicIpAddress": { "IpAddress": ["8.8.8.8"] },
+						"VpcAttributes": { "PrivateIpAddress": { "IpAddress": ["172.16.0.1"] } }
+					}
+				]
+			}
+		}`))
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	p := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return createMockSDKClient(ts.URL)
+		}),
+		aliyun.WithCustomDomain("DescribeInstances", u.Host),
+		aliyun.WithCustomDomain("DescribeInstanceBill", u.Host),
+		aliyun.WithRetryDelays([]time.Duration{1 * time.Millisecond, 2 * time.Millisecond, 3 * time.Millisecond}),
+	)
+
+	ctx := context.Background()
+	cred := map[string]string{
+		"access_key_id":     "LTAI5test123",
+		"access_key_secret": "secret999",
+	}
+
+	resources, err := p.ListResources(ctx, cred, "cn-hongkong", "instance", "china")
+	if err != nil {
+		t.Fatalf("ListResources should succeed even when BSS fails, but got: %v", err)
+	}
+
+	if len(resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(resources))
+	}
+	r := resources[0]
+	if r.Ref != "i-inst123" {
+		t.Fatalf("expected ref i-inst123, got %s", r.Ref)
+	}
+	if r.BillError == "" {
+		t.Fatal("expected BillError to be populated with BSS error message")
+	}
+	if r.Status != "running" {
+		t.Fatalf("expected normalized status 'running', got %s", r.Status)
+	}
+}
+
+func TestRetryBehaviorAndNoSecretInError(t *testing.T) {
+	var attempts int32
+	secretToHide := "SuperSecretKey999XYZ"
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		// Return 500 server error to trigger retry
+		http.Error(w, "internal gateway timeout with secret="+secretToHide, http.StatusBadGateway)
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	p := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return createMockSDKClient(ts.URL)
+		}),
+		aliyun.WithCustomDomain("DescribeRegions", u.Host),
+		aliyun.WithRetryDelays([]time.Duration{5 * time.Millisecond, 10 * time.Millisecond, 15 * time.Millisecond}),
+	)
+
+	ctx := context.Background()
+	cred := map[string]string{
+		"access_key_id":     "LTAI5testAK",
+		"access_key_secret": secretToHide,
+	}
+
+	res, err := p.Healthcheck(ctx, cred, "cn-hangzhou")
+	if err != nil {
+		t.Fatalf("healthcheck returned error instead of result: %v", err)
+	}
+	if res.OK {
+		t.Fatal("expected healthcheck OK=false")
+	}
+
+	// Verify retry count: initial try + 3 retries = 4 total attempts
+	if atomic.LoadInt32(&attempts) != 4 {
+		t.Fatalf("expected 4 attempts (1 initial + 3 retries), got %d", atomic.LoadInt32(&attempts))
+	}
+
+	// Verify no secret leak in error message
+	if strings.Contains(res.Message, secretToHide) {
+		t.Fatalf("secret leaked in error message: %s", res.Message)
+	}
+}
+
+func TestInstanceStartStopAction(t *testing.T) {
+	var requestedAction string
+	var requestedInstance string
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		requestedAction = r.Form.Get("Action")
+		requestedInstance = r.Form.Get("InstanceId")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"RequestId":"req-123"}`))
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	p := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return createMockSDKClient(ts.URL)
+		}),
+		aliyun.WithCustomDomain("StartInstance", u.Host),
+		aliyun.WithCustomDomain("StopInstance", u.Host),
+	)
+
+	ctx := context.Background()
+	cred := map[string]string{"access_key_id": "ak", "access_key_secret": "sk"}
+
+	// 1. Start action
+	resp, err := p.Action(ctx, provider.ActionParams{
+		Credential: cred,
+		Region:     "cn-hongkong",
+		Kind:       "instance",
+		Ref:        "i-target999",
+		Action:     "start",
+	})
+	if err != nil {
+		t.Fatalf("start action failed: %v", err)
+	}
+	if resp.Status != "succeeded" {
+		t.Fatalf("expected succeeded, got %s", resp.Status)
+	}
+	if requestedAction != "StartInstance" || requestedInstance != "i-target999" {
+		t.Fatalf("unexpected request: action=%s, instance=%s", requestedAction, requestedInstance)
+	}
+
+	// 2. Stop action
+	resp, err = p.Action(ctx, provider.ActionParams{
+		Credential: cred,
+		Region:     "cn-hongkong",
+		Kind:       "instance",
+		Ref:        "i-target999",
+		Action:     "stop",
+	})
+	if err != nil {
+		t.Fatalf("stop action failed: %v", err)
+	}
+	if resp.Status != "succeeded" {
+		t.Fatalf("expected succeeded, got %s", resp.Status)
+	}
+	if requestedAction != "StopInstance" || requestedInstance != "i-target999" {
+		t.Fatalf("unexpected request: action=%s, instance=%s", requestedAction, requestedInstance)
+	}
+}
+
+func TestGroupingCallsDescribeAndCDT(t *testing.T) {
+	var describeCalls int32
+	var cdtCalls int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		action := r.Form.Get("Action")
+		if action == "" {
+			action = r.URL.Query().Get("Action")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "DescribeInstances":
+			atomic.AddInt32(&describeCalls, 1)
+			reg := r.Form.Get("RegionId")
+			// Return multiple instances per region
+			var insts []map[string]any
+			for i := 0; i < 7; i++ {
+				insts = append(insts, map[string]any{
+					"InstanceId":   fmt.Sprintf("i-%s-%d", reg, i),
+					"InstanceName": fmt.Sprintf("name-%s-%d", reg, i),
+					"Status":       "Running",
+					"RegionId":     reg,
+				})
+			}
+			data, _ := json.Marshal(map[string]any{
+				"Instances": map[string]any{
+					"Instance": insts,
+				},
+			})
+			_, _ = w.Write(data)
+
+		case "ListCdtInternetTraffic":
+			atomic.AddInt32(&cdtCalls, 1)
+			_, _ = w.Write([]byte(`{
+				"TrafficDetails": {
+					"TrafficDetail": [
+						{ "Traffic": 88888888, "ProductType": "ECS" }
+					]
+				}
+			}`))
+
+		case "DescribeInstanceBill":
+			_, _ = w.Write([]byte(`{"Data":{"Items":{"Item":[]}}}`))
+
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	u, _ := url.Parse(ts.URL)
+	p := aliyun.NewProvider(
+		aliyun.WithClientHook(func(region, ak, sk string) (*sdk.Client, error) {
+			return createMockSDKClient(ts.URL)
+		}),
+		aliyun.WithCustomDomain("DescribeInstances", u.Host),
+		aliyun.WithCustomDomain("ListCdtInternetTraffic", u.Host),
+		aliyun.WithCustomDomain("DescribeInstanceBill", u.Host),
+	)
+
+	ctx := context.Background()
+	cred := map[string]string{"access_key_id": "ak", "access_key_secret": "sk"}
+	regions := []string{"cn-hangzhou", "cn-shanghai", "cn-hongkong"}
+
+	// 1. Discover 3 regions
+	resources, err := p.Discover(ctx, cred, regions, "china")
+	if err != nil {
+		t.Fatalf("Discover failed: %v", err)
+	}
+
+	if len(resources) != 21 {
+		t.Fatalf("expected 21 instances across 3 regions, got %d", len(resources))
+	}
+
+	// 2. Query CDT traffic
+	cdt, err := p.GetCDTTraffic(ctx, cred)
+	if err != nil {
+		t.Fatalf("GetCDTTraffic failed: %v", err)
+	}
+	if cdt.TrafficBytes != 88888888 {
+		t.Fatalf("unexpected traffic: %d", cdt.TrafficBytes)
+	}
+
+	// Criterion 10: 20+ instances across 3 regions -> DescribeInstances calls = 3, CDT calls = 1
+	if atomic.LoadInt32(&describeCalls) != 3 {
+		t.Fatalf("expected DescribeInstances calls = 3, got %d", atomic.LoadInt32(&describeCalls))
+	}
+	if atomic.LoadInt32(&cdtCalls) != 1 {
+		t.Fatalf("expected CDT calls = 1, got %d", atomic.LoadInt32(&cdtCalls))
+	}
+}
+

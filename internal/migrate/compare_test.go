@@ -37,6 +37,10 @@ var expectedTables = []string{
 	"sample_dim_1d",
 	"event_types",
 	"events",
+	"credentials",
+	"providers",
+	"cloud_accounts",
+	"cloud_resources",
 }
 
 func getMySQLDB(t *testing.T) *db.DB {
@@ -234,7 +238,12 @@ func TestMigrateIdempotency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status query failed: %v", err)
 	}
-	if len(statusList) != 2 || !statusList[0].Applied || !statusList[1].Applied {
-		t.Fatalf("unexpected migration status: %+v", statusList)
+	if len(statusList) == 0 {
+		t.Fatalf("expected migrations, got 0")
+	}
+	for _, s := range statusList {
+		if !s.Applied {
+			t.Fatalf("migration %s (v%d) not applied: %+v", s.Name, s.Version, s)
+		}
 	}
 }

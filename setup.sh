@@ -740,6 +740,22 @@ CFG_EOF
     chmod 0755 /usr/local/bin/dashd
     chown root:root /usr/local/bin/dashd
 
+    # 安装 dash-provider-aliyun (P2-02)
+    PROVIDER_BIN=""
+    if [ -f "$SCRIPT_DIR/bin/dash-provider-aliyun" ]; then
+        PROVIDER_BIN="$SCRIPT_DIR/bin/dash-provider-aliyun"
+    elif [ -f "./bin/dash-provider-aliyun" ]; then
+        PROVIDER_BIN="./bin/dash-provider-aliyun"
+    elif command -v go >/dev/null 2>&1 && [ -d "$SCRIPT_DIR/cmd/dash-provider-aliyun" ]; then
+        (cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -o bin/dash-provider-aliyun ./cmd/dash-provider-aliyun)
+        PROVIDER_BIN="$SCRIPT_DIR/bin/dash-provider-aliyun"
+    fi
+    if [ -n "$PROVIDER_BIN" ] && [ -f "$PROVIDER_BIN" ]; then
+        cp -f "$PROVIDER_BIN" /usr/local/bin/dash-provider-aliyun
+        chmod 0755 /usr/local/bin/dash-provider-aliyun
+        chown root:root /usr/local/bin/dash-provider-aliyun
+    fi
+
     if command -v setcap >/dev/null 2>&1; then
         setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
     fi
@@ -1049,8 +1065,8 @@ cmd_uninstall() {
     rm -f /etc/cron.d/certbot-dash /etc/periodic/daily/certbot-dash
     nginx -s reload 2>/dev/null || true
 
-    echo "--> 删除 dashd 二进制文件..."
-    rm -f /usr/local/bin/dashd /usr/local/bin/dashd.bak
+    echo "--> 删除 dashd 与 provider 二进制文件..."
+    rm -f /usr/local/bin/dashd /usr/local/bin/dashd.bak /usr/local/bin/dash-provider-aliyun
 
     if [ "$PURGE" -eq 1 ]; then
         echo "--> 清除配置与本地数据目录..."

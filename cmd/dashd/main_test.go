@@ -79,6 +79,7 @@ func TestRegisterModules_Order(t *testing.T) {
 		"metrics",
 		"events",
 		"settings",
+		"cloud",
 		"web",
 	}
 
