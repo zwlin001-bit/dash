@@ -48,6 +48,9 @@ var expectedTables = []string{
 	"cloud_resources",
 	"guard_rules",
 	"guard_cycles",
+	"alert_rules",
+	"alert_rule_channels",
+	"alert_events",
 }
 
 func getMySQLDB(t *testing.T) *db.DB {

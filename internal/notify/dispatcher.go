@@ -96,6 +96,87 @@ func (d *Dispatcher) Dispatch(e events.Event) {
 	go d.processEvent(e)
 }
 
+// DispatchToChannels delivers an event directly to a list of specified notification channels.
+func (d *Dispatcher) DispatchToChannels(ctx context.Context, e events.Event, channelIDs []string, ruleID string) {
+	if len(channelIDs) == 0 {
+		return
+	}
+	go d.processDirectDelivery(e, channelIDs, ruleID)
+}
+
+func (d *Dispatcher) processDirectDelivery(e events.Event, channelIDs []string, ruleID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	now := time.Now().UTC()
+	severity, _ := events.GetPolicy(e.Type)
+	if s, ok := e.Payload["Severity"].(string); ok && s != "" {
+		severity = s
+	}
+
+	eventID := e.DedupKey
+	if eventID == "" {
+		eventID = ulid.New()
+	}
+
+	renderData := make(map[string]any)
+	for k, v := range e.Payload {
+		renderData[k] = v
+	}
+	renderData["EventType"] = e.Type
+	renderData["Severity"] = severity
+	renderData["Source"] = e.Source
+	renderData["TargetKind"] = e.TargetKind
+	renderData["TargetId"] = e.TargetID
+	renderData["Title"] = e.Title
+	if e.OccurredAt > 0 {
+		renderData["OccurredAtMs"] = e.OccurredAt
+	} else {
+		renderData["OccurredAtMs"] = now.UnixMilli()
+	}
+	renderData["SiteDomain"] = d.siteDomain
+
+	renderedText, renderErr := d.engine.Render(e.Type, "", renderData)
+	if renderErr != nil {
+		logx.Warn(fmt.Sprintf("notify: template render failed for %s, degraded to fallback: %v", e.Type, renderErr))
+	}
+
+	for _, channelID := range channelIDs {
+		if channelID == "" {
+			continue
+		}
+		deliveryID := ulid.New()
+		err := d.store.CreateDelivery(ctx, &Delivery{
+			ID:           deliveryID,
+			EventID:      eventID,
+			ChannelID:    channelID,
+			RuleID:       ruleID,
+			State:        "pending",
+			Attempt:      0,
+			RenderedText: renderedText,
+			CreatedAtMs:  now.UnixMilli(),
+		})
+		if err != nil {
+			logx.Error(fmt.Sprintf("notify: failed to record pending delivery: %v", err))
+			continue
+		}
+
+		task := DispatchTask{
+			DeliveryID:   deliveryID,
+			ChannelID:    channelID,
+			RenderedText: renderedText,
+			Attempt:      0,
+		}
+
+		select {
+		case d.queue <- task:
+		default:
+			logx.Warn(fmt.Sprintf("notify: delivery queue full, dropping delivery %s for channel %s", deliveryID, channelID))
+			_ = d.store.UpdateDeliveryState(ctx, deliveryID, "failed", 0, "delivery queue buffer full", nil)
+		}
+	}
+}
+
 func (d *Dispatcher) processEvent(e events.Event) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

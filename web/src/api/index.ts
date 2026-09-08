@@ -15,3 +15,4 @@ export * from './notify';
 export * from './cloud';
 export * from './jobs';
 export * from './guard';
+export * from './alerts';

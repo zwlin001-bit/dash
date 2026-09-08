@@ -1,0 +1,7 @@
+🔥 告警触发: {{if .RuleName}}{{.RuleName}}{{else}}{{.Title}}{{end}}
+级别: {{.Severity}}
+节点: {{if .NodeName}}{{.NodeName}}{{else}}{{.TargetId}}{{end}}
+当前值: {{.Value}} (阈值: {{.Threshold}})
+触发时间: {{fmtTime .OccurredAtMs}}
+{{if .Detail}}详情: {{.Detail}}
+{{end}}

@@ -103,6 +103,15 @@ export const Layout: React.FC = () => {
               <span>任务中心</span>
             </NavLink>
             <NavLink
+              to="/alerts"
+              className={({ isActive }) =>
+                `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
+              }
+            >
+              <span className={styles.icon}>🚨</span>
+              <span>告警中心</span>
+            </NavLink>
+            <NavLink
               to="/events"
               className={({ isActive }) =>
                 `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
