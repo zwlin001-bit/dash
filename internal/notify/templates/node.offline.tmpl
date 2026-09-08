@@ -1,0 +1,6 @@
+🔴 节点离线: {{if .NodeName}}{{.NodeName}}{{else}}{{.Title}}{{end}}
+{{if .GroupName}}分组: {{.GroupName}}
+{{end}}{{if .PublicIP}}IP: {{.PublicIP}}
+{{end}}{{if .LastSeenAtMs}}最后在线: {{fmtTime .LastSeenAtMs}}
+{{end}}{{if .OfflineSeconds}}已离线: {{fmtDur .OfflineSeconds}}
+{{end}}

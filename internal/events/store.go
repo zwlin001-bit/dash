@@ -100,13 +100,19 @@ type MarkReadRequest struct {
 	All      bool     `json:"all,omitempty"`
 }
 
+// NotifyHook defines the callback interface for store+notify events.
+type NotifyHook interface {
+	Dispatch(e Event)
+}
+
 // Store handles async event persistence, event retrieval and event type management.
 type Store struct {
-	db   *db.DB
-	ch   chan Event
-	stop chan struct{}
-	wg   sync.WaitGroup
-	mu   sync.RWMutex
+	db         *db.DB
+	ch         chan Event
+	stop       chan struct{}
+	wg         sync.WaitGroup
+	mu         sync.RWMutex
+	notifyHook NotifyHook
 }
 
 // NewStore initializes a new event store with a bounded channel.
@@ -120,6 +126,19 @@ func NewStore(database *db.DB, bufferSize int) *Store {
 		stop: make(chan struct{}),
 	}
 	return s
+}
+
+// SetNotifyHook registers a callback for store+notify events.
+func (s *Store) SetNotifyHook(h NotifyHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.notifyHook = h
+}
+
+func (s *Store) getNotifyHook() NotifyHook {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.notifyHook
 }
 
 // Start launches the background consumer worker.
@@ -254,6 +273,13 @@ func (s *Store) processEvent(e Event) {
 	if err != nil {
 		// Non-blocking log per P1-20: 事件写不进去只能打日志，绝不允许让业务失败
 		logx.Error(fmt.Sprintf("events: failed to write event %s (%s) to database: %v", e.Type, id, err))
+	}
+
+	// 4. Trigger external notification if disposition is store+notify (P2-01)
+	if disposition == "store+notify" {
+		if hook := s.getNotifyHook(); hook != nil {
+			hook.Dispatch(e)
+		}
 	}
 }
 

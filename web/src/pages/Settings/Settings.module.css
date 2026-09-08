@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
-  max-width: 900px;
+  max-width: 1000px;
   margin: 0 auto;
 }
 
@@ -25,19 +25,56 @@
   margin: 0;
 }
 
+.tabs {
+  display: flex;
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: 2px;
+  margin-bottom: var(--sp-2);
+}
+
+.tab {
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.tab:hover {
+  color: var(--text-main);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
 .section {
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
 }
 
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
 .sectionTitle {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-main);
-  border-bottom: 1px solid var(--border-dim);
-  padding-bottom: var(--sp-2);
-  margin-bottom: var(--sp-3);
+  margin: 0;
 }
 
 .formGrid {
@@ -58,7 +95,7 @@
   color: var(--text-dim);
 }
 
-.input {
+.input, .select, .textarea {
   padding: 8px 12px;
   background: var(--bg-app);
   border: 1px solid var(--border-main);
@@ -69,7 +106,7 @@
   transition: border-color 0.15s ease;
 }
 
-.input:focus {
+.input:focus, .select:focus, .textarea:focus {
   border-color: var(--accent);
 }
 
@@ -77,6 +114,13 @@
   opacity: 0.6;
   cursor: not-allowed;
   background: var(--bg-hover);
+}
+
+.textarea {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  resize: vertical;
+  min-height: 80px;
 }
 
 .hint {
@@ -102,6 +146,98 @@
   align-items: center;
 }
 
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.table th {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-dim);
+  background: var(--bg-hover);
+}
+
+.table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-dim);
+  color: var(--text-main);
+  vertical-align: middle;
+}
+
+.table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.cellActions {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.badgeSent {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.badgeFailed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.badgePending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.badgeThrottled {
+  background: rgba(107, 114, 128, 0.15);
+  color: #9ca3af;
+}
+
+.badgeQuietHeld {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+}
+
+.badgeKind {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  font-family: var(--font-mono);
+}
+
+.badgeSeverityInfo {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.badgeSeverityWarning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.badgeSeverityCritical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
 .notice {
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--radius-sm);
@@ -118,4 +254,46 @@
   background-color: var(--err-bg);
   color: var(--err);
   border: 1px solid var(--err-border);
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.modalTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: var(--sp-2);
+}
+
+.emptyTip {
+  padding: var(--sp-4);
+  text-align: center;
+  color: var(--text-mute);
+  font-size: 13px;
 }

@@ -1,0 +1,5 @@
+🔥 数据库不可达: {{.Title}}
+{{if .ErrorMsg}}错误详情: {{.ErrorMsg}}
+{{end}}{{if .FailedSeconds}}中断时长: {{fmtDur .FailedSeconds}}
+{{end}}{{if .DroppedBatches}}丢弃批次: {{.DroppedBatches}}
+{{end}}时间: {{fmtTime .OccurredAtMs}}
