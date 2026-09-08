@@ -189,3 +189,45 @@ guard_cycles(id, cloud_account_id, started_at_ms ts, duration_ms i32,
 - 不做实例创建 / 销毁
 - 不做按小时的复杂日程（每日一组开关机时间即可）
 - 不接管 `node_billing` 的到期提醒（那是 `07-monitoring.md` 的事）
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-08 · ✅ 通过（5 项待有库环境补跑）
+
+分支 `agy/p2-04-ecs-guard`，提交 `077c03b`。该分支已自行合入 P2-01/02/03。
+
+| 验收项 | 实测 |
+|---|---|
+| 12 禁用组件 grep | ✅ `sing-box`/`vless`/`vmess`/`trojan`/`telegram_proxy` **只出现在任务书自身的排除清单里，代码 0 命中** |
+| 安全性质 1 计划关机不受 CDT 失败影响 | ✅ `TestSafetyProperties_CDTFailureIsolation` 断言 CDT 报错时 `ProposedAction == ActionStop` |
+| 安全性质 2 读不到流量不许启动 | ✅ 同一测试断言两条路径（日程启动、保活启动）都必须是 `ActionNoop` |
+| 安全性质 3 过渡态不动手 | ✅ `TestSafetyProperty3_TransitionalStatus` |
+| 决策优先级 | ✅ `TestDecideInstance_PriorityAndRules` |
+| 10 80% 预警 | ✅ `evaluator.go:160` `ratio >= 0.8 && ratio < 1.0` |
+| 6 默认不动手 | ✅ 迁移里 `actions_enabled` 两种方言都是 `DEFAULT 0` |
+| 事件类型 | ✅ 六个 `cloud.guard.*` 全部注册（`engine.go:83-118`） |
+| dedup_key | ✅ 严格照 `guard:<rule_id>:<event_type>:<月份键>` |
+| 11 二次确认 + 审计 | ✅ `types.go:97` `Confirm` 标志；`engine.go:417,484` 写 `audit_log` |
+| 迁移编号 | ✅ `0006_guard`，不与 0003/0004/0005 冲突 |
+| 构建与测试 | ✅ 合并后 33 个包全绿，`go vet`、SQL 方言、import 纪律 lint 全过 |
+
+### 待补跑：5 项验收测试需要 MySQL
+
+`TestAcceptance3/4/7/8/9` 依赖 `127.0.0.1:33306` 上的 MySQL，验收机没有，全部 SKIP：
+
+```
+guard_test.go:27: skipping test, MySQL 33306 not available: connection refused
+```
+
+覆盖的是：**3 只监控不动手、4 演练模式、7 月初重置补检、8 批量调用次数、9 通知去重**。
+★ **测试代码本身写得对，但从未被观察到真的跑过。**
+请在有 MySQL 的机器上起一个 33306 实例补跑一次，再关任务。
+
+### 只能在真账号上做的验收
+
+1（真实 ECS 停机）、2（拉起）、5（日程到点停机）——需要阿里云凭据。
+★ **第一次实跑请用一台不重要的测试实例，验收项会真的关机。**
+
+**任务 P2-04 通过，两块待补验。**

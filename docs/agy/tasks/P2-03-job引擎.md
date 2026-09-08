@@ -91,3 +91,38 @@ job_steps(id, job_id, step_index i32, name str(64),
 
 - 不做 cron 式定时 job（保活自己有循环，见 P2-04）
 - 不做跨节点分布式调度，单 dashd 进程即可
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-08 · ✅ 通过
+
+分支 `agy/p2-03-jobs`，提交 `093e03f`。
+
+八条验收项**每条都有同名测试**（`TestAcceptance1_…` ~ `TestAcceptance8_…`），全部实跑通过。
+抽查了断言强度，不是走过场：
+
+| 验收项 | 实测 |
+|---|---|
+| 1 三步进度 | ✅ |
+| 2 断点重试 | ✅ **断言的是 `Steps[0].FinishedAtMs` 前后不变** —— 真验了第 1 步没重跑，不是只看最终状态 |
+| 3 崩溃恢复 | ✅ `TestAcceptance3_CrashRecovery` |
+| 4 同 target 不并发 | ✅ 断言 `errors.Is(err2, jobs.ErrTargetBusy)`，且覆盖了 RejectIfBusy 与排队两种模式 |
+| 5 总超时 | ✅ |
+| 6 取消 | ✅ |
+| 7 事件与审计 | ✅ `engine.go:90,97` 发 `job.succeeded`/`job.failed`；`engine.go:177,256` 写 `audit_log` |
+| 8 worker 池上限 | ✅ 并发提交 50 个，断言 `maxObs > 4` 失败**且** `maxObs` 必须 > 1（防止「串行跑完也算过」） |
+
+其他：
+- 迁移用 `0004_jobs`，与 P2-01 的 `0003`、P2-02 的 `0005` 正好错开
+- SQL 方言 lint、import 纪律 lint、`go vet` 全过
+- 前端 `Jobs.tsx` 对 `jobs`/`steps` 都做了空值守卫，不会重演 P1-27 的崩页
+
+### 次要 · 列表信封形状
+
+`GET /api/v1/jobs` 返回 `{jobs, total}`，`12-api-spec.md` §3 要求 `{items, total, page, page_size}`。
+`ListJobs` 在 `total == 0` 时提前返回 `[]*Job{}`，前端也有 `!jobsData?.jobs` 守卫，
+**不会崩**，但形状与规格不一致。与 P2-01 的同类偏差**一并并入 P1-27 的对账**。
+
+**任务 P2-03 关闭。**
