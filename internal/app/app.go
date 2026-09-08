@@ -32,6 +32,7 @@ type App struct {
 	JobEngine       any    // 供各业务模块调用的通用 Job 引擎 (P2-03)
 	CloudService    any    // 供各业务模块调用的云资产服务 (P2-02)
 	GuardEngine     any    // 供各业务模块调用的 ECS 保活与流量守卫引擎 (P2-04)
+	AlertEngine     any    // 供各业务模块调用的告警引擎 (P2-08)
 	Version         string // 服务端当前运行版本
 	DistFingerprint string // 前端内嵌静态产物内容指纹 (P1-27)
 
