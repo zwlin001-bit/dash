@@ -95,3 +95,40 @@ fixture 一旦与真实响应脱节，测试会**绿着骗人**，比没有测�
 - 不引入 OpenAPI / 代码生成框架
 - 不改 P1-27 已建立的对账表格式与 `toItems()` 收口方式
 - 不动 events 的 `limit/offset` 分页（历史差异，`12-api-spec.md` 已标注）
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-08 · ✅ 通过（合并时修掉 1 处）
+
+分支 `agy/p2-07-contract-gen`，提交 `5fdd897`。
+
+| 验收项 | 实测 |
+|---|---|
+| 1 对账表覆盖 | ✅ notify 12 / cloud 11 / jobs 7 / guard 6 行全部补齐（billing 属 P2-09，当时未合并） |
+| 2 两处形状不符 | ✅ `notify/channels`、`notify/rules`、`jobs` 都改成返回 `items` |
+| 3 `make fixtures` 可重现 | ✅ **连跑两次字节一致** |
+| 5 空列表 fixture | ✅ **13 份 `*_empty.json`，`items` 全是 `[]` 不是 `null`** |
+| 8 `03-rules.md` 登记义务 | ✅ 写了两条义务 + 一条提交前检查清单项 |
+| Go 测试 | ✅ 34 个包全绿 |
+
+★ **`cmd/gen-fixtures` 生成器真做出来了**，这是 P1-27 缺的那一半 ——
+fixture 从此由服务端真实 handler 产出，不再是手写的。
+
+### F1 · 交付时提交的 fixture 不是生成器产物（合并时已修）
+
+`lint-fixtures.sh` 在**提交状态下直接失败**，14 份对不上：
+
+```
+❌ 服务端响应变了，请跑 make fixtures ... (不匹配: tags_empty.json)
+❌ ... (不匹配: enroll_tokens.json / events.json / event_types.json ...)
+```
+
+差异是 P1-27 手写残留没被覆盖，例如 `tags_empty.json` 里空列表却写着
+`"total": 7, "page": 9999`，生成器产出的是正确的 `"total": 0, "page": 1`。
+
+★ **守卫本身是有效的 —— 它正确抓到了这次漂移**，问题只是交付时忘了把
+生成结果提交进去。合并时已跑 `make fixtures` 重新生成 14 份并提交，现在 `lint-fixtures` 通过。
+
+**任务 P2-07 通过。**
