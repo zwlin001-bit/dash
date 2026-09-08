@@ -95,3 +95,19 @@ type FactsParams struct {
 	BootAtMs   int64  `json:"boot_at_ms,omitempty"`
 	FactsHash  string `json:"facts_hash"`
 }
+
+// ---- agent.result（notification）----
+// 指令执行结果回传，见 04-protocol.md §2.4 与 98.md §2.2
+
+type AgentResultParams struct {
+	RequestID   string `json:"request_id"`
+	OK          bool   `json:"ok"`
+	ExitCode    int    `json:"exit_code"`
+	Stdout      string `json:"stdout"`
+	Stderr      string `json:"stderr"`
+	Truncated   bool   `json:"truncated"`
+	StartedAtMs int64  `json:"started_at_ms"`
+	EndedAtMs   int64  `json:"ended_at_ms"`
+}
+
+type ResultParams = AgentResultParams

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"dash/agent/exec"
 	"dash/agent/transport"
 	"dash/internal/protocol"
 )
@@ -400,6 +401,99 @@ func TestRuntime_ConfigPrecedence(t *testing.T) {
 	// 5. CollectConns: 来自 File (false)
 	if cfg.CollectConns != false {
 		t.Fatalf("expected File collect_conns false, got %v", cfg.CollectConns)
+	}
+}
+
+// TestRuntime_ServerExecDispatchAndResultReporting 验证 Runtime 下的 server.exec 调度与 agent.result 回传。
+func TestRuntime_ServerExecDispatchAndResultReporting(t *testing.T) {
+	mockTr := newMockTransport()
+	cfg := &Config{
+		IntervalFastS:     10,
+		IntervalSlowS:     60,
+		FactsMaxIntervalS: 1800,
+	}
+
+	rt, err := New(cfg, "test-version", WithTransport(mockTr))
+	if err != nil {
+		t.Fatalf("create runtime error: %v", err)
+	}
+
+	// 1. 注册白名单动作
+	err = rt.Registry().Register("test.hello", func(ctx context.Context, args map[string]interface{}) (*exec.ActionResult, error) {
+		name, _ := args["name"].(string)
+		return &exec.ActionResult{
+			ExitCode:  0,
+			Stdout:    "Hello, " + name,
+			Stderr:    "",
+			Truncated: false,
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("register test action error: %v", err)
+	}
+
+	// 2. 下发白名单动作请求
+	execPayload := `{
+		"request_id": "req-rt-001",
+		"action": "test.hello",
+		"args": {"name": "Antigravity"},
+		"timeout_s": 5
+	}`
+	res, err := mockTr.dispatchDownstream(protocol.MethodServerExec, json.RawMessage(execPayload))
+	if err != nil {
+		t.Fatalf("dispatch server.exec error: %v", err)
+	}
+	if res == nil {
+		t.Fatalf("expected non-nil response for server.exec")
+	}
+
+	// 验证 agent.result 已通过 transport.Send 回传
+	sent := mockTr.getSent()
+	var resultMsg *protocol.AgentResultParams
+	for _, m := range sent {
+		if m.Method == protocol.MethodAgentResult {
+			if r, ok := m.Params.(*protocol.AgentResultParams); ok {
+				resultMsg = r
+				break
+			}
+		}
+	}
+	if resultMsg == nil {
+		t.Fatalf("expected agent.result to be sent via transport, sent: %+v", sent)
+	}
+	if resultMsg.RequestID != "req-rt-001" || !resultMsg.OK || resultMsg.Stdout != "Hello, Antigravity" {
+		t.Fatalf("agent.result fields mismatch: %+v", resultMsg)
+	}
+
+	// 3. 下发表外动作：必须返回 -32602
+	unsupportedPayload := `{
+		"request_id": "req-rt-002",
+		"action": "unsupported.action",
+		"args": {}
+	}`
+	_, err = mockTr.dispatchDownstream(protocol.MethodServerExec, json.RawMessage(unsupportedPayload))
+	if err == nil {
+		t.Fatalf("expected error for unsupported action, got nil")
+	}
+	rpcErr, ok := err.(*protocol.RPCError)
+	if !ok || rpcErr.Code != protocol.ErrCodeInvalidParams {
+		t.Fatalf("expected -32602 error, got %v", err)
+	}
+
+	// 4. 下发带 mode 字段：必须返回 -32602
+	modePayload := `{
+		"request_id": "req-rt-003",
+		"mode": "shell",
+		"action": "test.hello",
+		"args": {}
+	}`
+	_, err = mockTr.dispatchDownstream(protocol.MethodServerExec, json.RawMessage(modePayload))
+	if err == nil {
+		t.Fatalf("expected error for request with mode, got nil")
+	}
+	rpcErr, ok = err.(*protocol.RPCError)
+	if !ok || rpcErr.Code != protocol.ErrCodeInvalidParams {
+		t.Fatalf("expected -32602 error, got %v", err)
 	}
 }
 

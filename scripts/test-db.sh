@@ -29,7 +29,7 @@ else
 NOEOF
   exit 1
 fi
-docker() { "$RUNTIME" "$@"; }
+docker() { command "$RUNTIME" "$@"; }
 
 check_ready() {
   local max_tries=60

@@ -133,9 +133,10 @@ type wsTransport struct {
 	pending   map[int64]chan *protocol.Response
 	nextReqID int64
 
-	fbMu     sync.Mutex
-	fbBatch  []*protocol.Request
-	fbClient *HTTPFallbackClient
+	fbMu        sync.Mutex
+	fbBatch     []*protocol.Request
+	pendingCmds []protocol.Request
+	fbClient    *HTTPFallbackClient
 
 	backoff   *Backoff
 	failCount int
@@ -769,6 +770,32 @@ func (t *wsTransport) runFallbackHTTP() (stopped bool) {
 }
 
 func (t *wsTransport) flushFallbackBatch() error {
+	return t.flushFallbackBatchWithLimit(true)
+}
+
+func (t *wsTransport) flushFallbackBatchWithLimit(allowSupplementary bool) error {
+	t.fbMu.Lock()
+	var pending []protocol.Request
+	if allowSupplementary && len(t.pendingCmds) > 0 {
+		pending = t.pendingCmds
+		t.pendingCmds = nil
+	}
+	t.fbMu.Unlock()
+
+	// 处理上一轮留存的指令（若有）
+	if len(pending) > 0 {
+		t.handlerMu.RLock()
+		h := t.handler
+		t.handlerMu.RUnlock()
+		if h != nil {
+			for _, cmd := range pending {
+				if _, err := h(cmd.Method, cmd.Params); err != nil {
+					t.logf("[transport] pending command handler error (%s): %v", cmd.Method, err)
+				}
+			}
+		}
+	}
+
 	t.fbMu.Lock()
 	if len(t.fbBatch) == 0 {
 		t.fbMu.Unlock()
@@ -789,16 +816,36 @@ func (t *wsTransport) flushFallbackBatch() error {
 		return err
 	}
 
-	// 顺序处理下行 commands
-	t.handlerMu.RLock()
-	h := t.handler
-	t.handlerMu.RUnlock()
+	// 处理下行 commands
+	if len(resp.Commands) > 0 {
+		if !allowSupplementary {
+			// ★ 老的防循环约束：在补充同步中收到的新任务，留到下一轮（剩下的等下一轮）
+			t.fbMu.Lock()
+			t.pendingCmds = append(t.pendingCmds, resp.Commands...)
+			t.fbMu.Unlock()
+		} else {
+			t.handlerMu.RLock()
+			h := t.handler
+			t.handlerMu.RUnlock()
 
-	if h != nil && len(resp.Commands) > 0 {
-		for _, cmd := range resp.Commands {
-			if _, err := h(cmd.Method, cmd.Params); err != nil {
-				t.logf("[transport] fallback command handler error (%s): %v", cmd.Method, err)
+			if h != nil {
+				for _, cmd := range resp.Commands {
+					if _, err := h(cmd.Method, cmd.Params); err != nil {
+						t.logf("[transport] fallback command handler error (%s): %v", cmd.Method, err)
+					}
+				}
 			}
+		}
+	}
+
+	// ★ 补充同步：若执行产生了新回传（如 agent.result），且当前是主轮次，立刻补一次同步。
+	// 每轮最多补一次（传入 allowSupplementary = false，杜绝活 A 产出活 B 变成死循环）
+	if allowSupplementary {
+		t.fbMu.Lock()
+		hasResults := len(t.fbBatch) > 0
+		t.fbMu.Unlock()
+		if hasResults {
+			_ = t.flushFallbackBatchWithLimit(false)
 		}
 	}
 
