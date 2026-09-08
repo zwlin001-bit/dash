@@ -10,6 +10,7 @@ import {
   triggerAlertEval,
   AlertRule,
   fetchNotifyChannels,
+  NotifyChannel,
 } from '../../api';
 import styles from './Alerts.module.css';
 
