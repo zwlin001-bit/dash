@@ -1,0 +1,2 @@
+node	region	latency_ms	loss_pct	status
+alpine1	eu-central	25.4	0.0	up

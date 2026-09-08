@@ -1,0 +1,4 @@
+node	region	latency_ms	loss_pct	status
+amd2	us-west	132.5	0.0	up
+cf2	ap-east	45.2	0.0	up
+jp1	ap-northeast	78.1	0.1	degraded

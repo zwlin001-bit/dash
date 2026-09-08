@@ -14,24 +14,49 @@ type nicVal struct {
 	down int64
 }
 
+// ListenEntry 表示单个监听端口及关联进程名。
+type ListenEntry struct {
+	Local string `json:"local"`
+	Proc  string `json:"proc"`
+}
+
+// ListenPayload 表示 listen 采集器产出的 payload 形状。
+type ListenPayload struct {
+	Listen []ListenEntry `json:"listen"`
+}
+
+// GiascanPayload 表示 giascan 采集器产出的 payload 形状。
+type GiascanPayload struct {
+	Exists bool    `json:"exists"`
+	Size   *int64  `json:"size,omitempty"`
+	Text   *string `json:"text,omitempty"`
+	Mtime  *int64  `json:"mtime,omitempty"`
+	Error  *string `json:"_error,omitempty"`
+}
+
 // Sample 保存单轮或多轮采集聚合的结果。
 // 内部预先分配存储，避免每轮采集创建大量临时指针对象。
 type Sample struct {
 	TsMs int64
 
 	// Fast 档字段（指针为 nil 表示未采集或采集失败，不填 0）
-	CPUPct   *float64
-	MemUsed  *int64
-	SwapUsed *int64
-	Load     *[3]float64
-	Net      *protocol.NetReport
-	UptimeS  *int64
+	CPUPct   *float64            `json:"cpu_pct,omitempty"`
+	MemUsed  *int64              `json:"mem_used,omitempty"`
+	SwapUsed *int64              `json:"swap_used,omitempty"`
+	Load     *[3]float64         `json:"load,omitempty"`
+	Net      *protocol.NetReport `json:"net,omitempty"`
+	UptimeS  *int64              `json:"uptime_s,omitempty"`
 
 	// Slow 档字段
-	Slow *protocol.SlowReport
+	Slow *protocol.SlowReport `json:"slow,omitempty"`
 
 	// Facts 档字段
-	Facts *protocol.FactsParams
+	Facts *protocol.FactsParams `json:"facts,omitempty"`
+
+	// TierSlow 采集器 payload（指针或 map 为 nil 表示未采集或采集失败，JSON 序列化时省略）
+	Listen    *ListenPayload               `json:"listen,omitempty"`
+	ToolParam map[string]map[string]string `json:"tool_param,omitempty"`
+	Giascan   *GiascanPayload              `json:"giascan,omitempty"`
 
 	// 内部复用的值存储区（避免每轮分配）
 	cpuPctVal   float64
@@ -81,10 +106,28 @@ func (s *Sample) Reset(tier Tier) {
 		s.Slow = nil
 		s.diskEntries = s.diskEntries[:0]
 		s.nicEntries = s.nicEntries[:0]
+		s.Listen = nil
+		s.ToolParam = nil
+		s.Giascan = nil
 	}
 	if tier == TierFacts || tier == 0 {
 		s.Facts = nil
 	}
+}
+
+// SetListen 设置监听端口清单快照。
+func (s *Sample) SetListen(p *ListenPayload) {
+	s.Listen = p
+}
+
+// SetToolParam 设置工具配置参数快照。
+func (s *Sample) SetToolParam(p map[string]map[string]string) {
+	s.ToolParam = p
+}
+
+// SetGiascan 设置 giascan 可用节点快照。
+func (s *Sample) SetGiascan(p *GiascanPayload) {
+	s.Giascan = p
 }
 
 // SetCPUPct 设置 CPU 使用率百分比。
