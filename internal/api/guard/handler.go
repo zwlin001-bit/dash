@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,29 +10,73 @@ import (
 	"strings"
 	"time"
 
+	"dash/internal/app"
 	"dash/internal/audit"
 	"dash/internal/auth"
 	"dash/internal/cloud"
+	"dash/internal/db"
 	"dash/internal/guard"
 	"dash/internal/jobs"
 	"dash/internal/logx"
 	"dash/internal/ulid"
 )
 
-type Handler struct {
-	guardEngine *guard.Engine
-	store       *guard.Store
-	cloudSvc    *cloud.Service
-	jobEngine   *jobs.Engine
+type Store interface {
+	DB() *db.DB
+	ListRules(ctx context.Context) (map[string]*guard.GuardRule, error)
+	ListRecentCycles(ctx context.Context, limit, offset int) ([]guard.GuardCycle, int, error)
+	GetRuleByResourceID(ctx context.Context, resourceID string) (*guard.GuardRule, error)
+	UpsertRule(ctx context.Context, rule *guard.GuardRule) error
 }
 
-func NewHandler(ge *guard.Engine, store *guard.Store, cloudSvc *cloud.Service, je *jobs.Engine) *Handler {
+type CloudService interface {
+	ListAccounts(ctx context.Context) ([]cloud.CloudAccount, error)
+	ListResources(ctx context.Context, accountID, providerCode, resKind, region, status string) ([]cloud.CloudResource, error)
+	GetResource(ctx context.Context, id string) (*cloud.CloudResource, error)
+	GetAccount(ctx context.Context, id string) (*cloud.CloudAccount, error)
+}
+
+type Engine interface {
+	EvaluateOnce(ctx context.Context, isDryRun bool) (*guard.EvaluateResult, error)
+}
+
+type Handler struct {
+	guardEngine Engine
+	store       Store
+	cloudSvc    CloudService
+	jobEngine   *jobs.Engine
+	NowFunc     func() time.Time
+}
+
+func (h *Handler) now() time.Time {
+	if h.NowFunc != nil {
+		return h.NowFunc()
+	}
+	return time.Now()
+}
+
+func NewHandler(ge Engine, store Store, cloudSvc CloudService, je *jobs.Engine) *Handler {
 	return &Handler{
 		guardEngine: ge,
 		store:       store,
 		cloudSvc:    cloudSvc,
 		jobEngine:   je,
 	}
+}
+
+func (h *Handler) RegisterAppRoutes(a *app.App) {
+	a.HandleAuthed("GET /api/v1/guard/overview", h.HandleOverview)
+	a.HandleAuthed("POST /api/v1/guard/dry-run", h.HandleDryRun)
+	a.HandleAuthed("POST /api/v1/guard/evaluate", h.HandleEvaluate)
+	a.HandleAuthed("GET /api/v1/guard/cycles", h.HandleListCycles)
+	a.HandleAuthed("PUT /api/v1/guard/rules/", h.HandleUpdateRule)
+	a.HandleAuthed("POST /api/v1/guard/instances/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/force-start") {
+			h.HandleForceStart(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 }
 
 // HandleOverview handles GET /api/v1/guard/overview.
@@ -49,7 +94,7 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 		rulesMap = make(map[string]*guard.GuardRule)
 	}
 
-	now := time.Now()
+	now := h.now()
 	nowMs := now.UnixMilli()
 
 	var accountOverviews []guard.AccountOverview
@@ -348,6 +393,10 @@ func (h *Handler) HandleListCycles(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+
+	if cycles == nil {
+		cycles = []guard.GuardCycle{}
 	}
 
 	page := (offset / limit) + 1

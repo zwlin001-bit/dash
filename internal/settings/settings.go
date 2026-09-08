@@ -32,8 +32,9 @@ type SystemSettings struct {
 }
 
 type Service struct {
-	db       *db.DB
-	registry *control.Registry
+	db            *db.DB
+	registry      *control.Registry
+	GetSettingsFn func(ctx context.Context) (*SystemSettings, error)
 }
 
 func NewService(database *db.DB, registry *control.Registry) *Service {
@@ -45,6 +46,9 @@ func NewService(database *db.DB, registry *control.Registry) *Service {
 
 // GetSettings 从 settings 表读取配置，缺失项填充合理默认值。
 func (s *Service) GetSettings(ctx context.Context) (*SystemSettings, error) {
+	if s.GetSettingsFn != nil {
+		return s.GetSettingsFn(ctx)
+	}
 	st := &SystemSettings{
 		SiteDomain:           "dash.example.com",
 		RetentionRawDays:     3,

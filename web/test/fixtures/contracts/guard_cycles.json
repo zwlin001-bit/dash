@@ -1,0 +1,18 @@
+{
+  "items": [
+    {
+      "acted": 0,
+      "cdt_used_gb": 12.5,
+      "cloud_account_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "created_at_ms": 1757222400000,
+      "duration_ms": 320,
+      "evaluated": 1,
+      "failed": 0,
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "started_at_ms": 1757222400000
+    }
+  ],
+  "page": 1,
+  "page_size": 20,
+  "total": 1
+}

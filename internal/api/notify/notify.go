@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -9,21 +10,36 @@ import (
 	"dash/internal/notify"
 )
 
+// Store defines the storage operations required by Handler.
+type Store interface {
+	ListChannels(ctx context.Context) ([]*notify.Channel, error)
+	CreateChannel(ctx context.Context, name, kind, secret, configJSON string) (*notify.Channel, error)
+	GetChannel(ctx context.Context, id string) (*notify.Channel, error)
+	UpdateChannel(ctx context.Context, id, name string, isEnabled bool, secret, configJSON string) (*notify.Channel, error)
+	DeleteChannel(ctx context.Context, id string) error
+	ListRules(ctx context.Context) ([]*notify.Rule, error)
+	CreateRule(ctx context.Context, rule *notify.Rule) (*notify.Rule, error)
+	GetRule(ctx context.Context, id string) (*notify.Rule, error)
+	UpdateRule(ctx context.Context, rule *notify.Rule) (*notify.Rule, error)
+	DeleteRule(ctx context.Context, id string) error
+	ListDeliveries(ctx context.Context, filter notify.DeliveryFilter) ([]*notify.Delivery, int, error)
+}
+
 // Handler handles HTTP API requests for notification channels, rules and deliveries.
 type Handler struct {
-	store      *notify.Store
+	store      Store
 	dispatcher *notify.Dispatcher
 }
 
 // NewHandler creates an API Handler.
-func NewHandler(s *notify.Store, d *notify.Dispatcher) *Handler {
+func NewHandler(s Store, d *notify.Dispatcher) *Handler {
 	return &Handler{
 		store:      s,
 		dispatcher: d,
 	}
 }
 
-func (h *Handler) getStore() *notify.Store {
+func (h *Handler) getStore() Store {
 	if h.store != nil {
 		return h.store
 	}
@@ -38,7 +54,7 @@ func (h *Handler) getDispatcher() *notify.Dispatcher {
 }
 
 // RegisterAppRoutes registers notification APIs to App with authentication.
-func RegisterAppRoutes(a *app.App, s *notify.Store, d *notify.Dispatcher) {
+func RegisterAppRoutes(a *app.App, s Store, d *notify.Dispatcher) {
 	h := NewHandler(s, d)
 
 	// Channels
@@ -61,7 +77,7 @@ func RegisterAppRoutes(a *app.App, s *notify.Store, d *notify.Dispatcher) {
 }
 
 // RegisterRoutes registers routes directly to an http.ServeMux (useful for testing).
-func RegisterRoutes(mux *http.ServeMux, s *notify.Store, d *notify.Dispatcher) {
+func RegisterRoutes(mux *http.ServeMux, s Store, d *notify.Dispatcher) {
 	h := NewHandler(s, d)
 
 	// Channels
@@ -112,7 +128,10 @@ func (h *Handler) handleListChannels(w http.ResponseWriter, r *http.Request) {
 		items = []*notify.Channel{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": items,
+		"items":     items,
+		"total":     len(items),
+		"page":      1,
+		"page_size": len(items),
 	})
 }
 
@@ -244,7 +263,10 @@ func (h *Handler) handleListRules(w http.ResponseWriter, r *http.Request) {
 		items = []*notify.Rule{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": items,
+		"items":     items,
+		"total":     len(items),
+		"page":      1,
+		"page_size": len(items),
 	})
 }
 

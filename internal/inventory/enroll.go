@@ -40,7 +40,8 @@ type CreateEnrollTokenResponse struct {
 }
 
 type EnrollService struct {
-	db *db.DB
+	db           *db.DB
+	ListTokensFn func(ctx context.Context, page, pageSize int) (*PageResult, error)
 }
 
 func NewEnrollService(database *db.DB) *EnrollService {
@@ -143,6 +144,9 @@ func (s *EnrollService) getSystemDomain(ctx context.Context) string {
 
 // ListTokens 列出注册令牌。
 func (s *EnrollService) ListTokens(ctx context.Context, page, pageSize int) (*PageResult, error) {
+	if s.ListTokensFn != nil {
+		return s.ListTokensFn(ctx, page, pageSize)
+	}
 	var total int64
 	err := s.db.QueryRow(ctx, `SELECT count(1) FROM enroll_tokens`).Scan(&total)
 	if err != nil {

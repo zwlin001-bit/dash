@@ -27,7 +27,8 @@ type NodeGroup struct {
 
 // GroupService 负责分组的业务逻辑。
 type GroupService struct {
-	db *db.DB
+	db           *db.DB
+	ListGroupsFn func(ctx context.Context, page, pageSize int) (*PageResult, error)
 }
 
 func NewGroupService(database *db.DB) *GroupService {
@@ -36,6 +37,9 @@ func NewGroupService(database *db.DB) *GroupService {
 
 // ListGroups 列出所有分组（支持分页与节点数量统计）。
 func (s *GroupService) ListGroups(ctx context.Context, page, pageSize int) (*PageResult, error) {
+	if s.ListGroupsFn != nil {
+		return s.ListGroupsFn(ctx, page, pageSize)
+	}
 	var total int64
 	err := s.db.QueryRow(ctx, `SELECT count(1) FROM node_groups`).Scan(&total)
 	if err != nil {

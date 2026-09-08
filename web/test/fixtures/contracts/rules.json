@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "created_at_ms": 1757222400000,
+      "display_order": 0,
+      "event_pattern": "node.*",
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "is_enabled": true,
+      "min_severity": "warning",
+      "name": "Critical Alert Routing",
+      "notify_channel_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "quiet_end_min": 420,
+      "quiet_start_min": 1380,
+      "throttle_s": 300,
+      "updated_at_ms": 1757222400000
+    }
+  ],
+  "page": 1,
+  "page_size": 1,
+  "total": 1
+}

@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,18 +9,67 @@ import (
 	"strconv"
 	"time"
 
+	"dash/internal/app"
 	"dash/internal/jobs"
 	"dash/internal/logx"
 )
 
+// Store defines the storage methods needed by Handler.
+type Store interface {
+	ListJobs(ctx context.Context, f jobs.Filter) ([]*jobs.Job, int, error)
+	GetJob(ctx context.Context, id string) (*jobs.Job, error)
+}
+
+// Registry defines the registry methods needed by Handler.
+type Registry interface {
+	List() []jobs.JobDefinition
+}
+
 // Handler 提供 Job 相关的 HTTP API 处理器。
 type Handler struct {
-	engine *jobs.Engine
+	engine   *jobs.Engine
+	store    Store
+	registry Registry
 }
 
 // NewHandler 创建 Handler 实例。
 func NewHandler(engine *jobs.Engine) *Handler {
 	return &Handler{engine: engine}
+}
+
+// NewHandlerWithStore 创建带独立 Store 与 Registry 的 Handler 实例（供测试与 Fixture 生成）。
+func NewHandlerWithStore(store Store, registry Registry) *Handler {
+	return &Handler{store: store, registry: registry}
+}
+
+func (h *Handler) RegisterAppRoutes(a *app.App) {
+	a.HandleAuthed("GET /api/v1/jobs", h.HandleListJobs)
+	a.HandleAuthed("POST /api/v1/jobs", h.HandleSubmitJob)
+	a.HandleAuthed("GET /api/v1/jobs/kinds", h.HandleListKinds)
+	a.HandleAuthed("GET /api/v1/jobs/{id}", h.HandleGetJob)
+	a.HandleAuthed("POST /api/v1/jobs/{id}/cancel", h.HandleCancelJob)
+	a.HandleAuthed("POST /api/v1/jobs/{id}/retry", h.HandleRetryJob)
+	a.HandleAuthed("GET /api/v1/jobs/{id}/stream", h.HandleStream)
+}
+
+func (h *Handler) getStore() Store {
+	if h.store != nil {
+		return h.store
+	}
+	if h.engine != nil {
+		return h.engine.Store()
+	}
+	return nil
+}
+
+func (h *Handler) getRegistry() Registry {
+	if h.registry != nil {
+		return h.registry
+	}
+	if h.engine != nil {
+		return h.engine.Registry()
+	}
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -36,6 +86,12 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 // HandleListJobs GET /api/v1/jobs
 func (h *Handler) HandleListJobs(w http.ResponseWriter, r *http.Request) {
+	st := h.getStore()
+	if st == nil {
+		writeError(w, http.StatusServiceUnavailable, "jobs store not ready")
+		return
+	}
+
 	q := r.URL.Query()
 	filter := jobs.Filter{
 		Kind:       q.Get("kind"),
@@ -54,16 +110,40 @@ func (h *Handler) HandleListJobs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items, total, err := h.engine.Store().ListJobs(r.Context(), filter)
+	items, total, err := st.ListJobs(r.Context(), filter)
 	if err != nil {
 		logx.Error("failed to list jobs", "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to query jobs")
 		return
 	}
 
+	if items == nil {
+		items = []*jobs.Job{}
+	}
+
+	page := 1
+	pageSize := filter.Limit
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	if pStr := q.Get("page"); pStr != "" {
+		if p, err := strconv.Atoi(pStr); err == nil && p > 0 {
+			page = p
+		}
+	} else if filter.Offset > 0 && pageSize > 0 {
+		page = (filter.Offset / pageSize) + 1
+	}
+	if psStr := q.Get("page_size"); psStr != "" {
+		if ps, err := strconv.Atoi(psStr); err == nil && ps > 0 {
+			pageSize = ps
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"jobs":  items,
-		"total": total,
+		"items":     items,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
 	})
 }
 
@@ -101,7 +181,12 @@ func (h *Handler) HandleSubmitJob(w http.ResponseWriter, r *http.Request) {
 
 // HandleListKinds GET /api/v1/jobs/kinds
 func (h *Handler) HandleListKinds(w http.ResponseWriter, r *http.Request) {
-	defs := h.engine.Registry().List()
+	reg := h.getRegistry()
+	if reg == nil {
+		writeError(w, http.StatusServiceUnavailable, "jobs registry not ready")
+		return
+	}
+	defs := reg.List()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"kinds": defs,
 	})
@@ -115,7 +200,13 @@ func (h *Handler) HandleGetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job, err := h.engine.Store().GetJob(r.Context(), id)
+	st := h.getStore()
+	if st == nil {
+		writeError(w, http.StatusServiceUnavailable, "jobs store not ready")
+		return
+	}
+
+	job, err := st.GetJob(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, jobs.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "job not found")

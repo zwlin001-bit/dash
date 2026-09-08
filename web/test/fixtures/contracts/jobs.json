@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "attempt": 1,
+      "created_at_ms": 1757222400000,
+      "finished_at_ms": 1757222405000,
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "job_kind": "guard.ecs_stop",
+      "job_state": "succeeded",
+      "max_attempt": 3,
+      "params_json": "{\"action\":\"stop\",\"reason\":\"schedule\"}",
+      "result_json": "{\"status\":\"success\"}",
+      "scheduled_at_ms": 1757222400000,
+      "started_at_ms": 1757222400000,
+      "target_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "target_kind": "cloud_resource",
+      "updated_at_ms": 1757222405000
+    }
+  ],
+  "page": 1,
+  "page_size": 50,
+  "total": 1
+}

@@ -45,14 +45,12 @@ func (m *InventoryModule) Register(a *app.App) error {
 
 func (m *InventoryModule) Init(database *db.DB) {
 	m.db = database
-	if database != nil {
-		m.groups = NewGroupService(database)
-		m.tags = NewTagService(database)
-		m.facts = NewFactsService(database)
-		m.billing = NewBillingService(database)
-		m.enroll = NewEnrollService(database)
-		m.nodes = NewNodeService(database, m.tags, m.facts, m.billing)
-	}
+	m.groups = NewGroupService(database)
+	m.tags = NewTagService(database)
+	m.facts = NewFactsService(database)
+	m.billing = NewBillingService(database)
+	m.enroll = NewEnrollService(database)
+	m.nodes = NewNodeService(database, m.tags, m.facts, m.billing)
 }
 
 func (m *InventoryModule) NodeService() *NodeService       { return m.nodes }

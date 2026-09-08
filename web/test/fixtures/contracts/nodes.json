@@ -1,180 +1,56 @@
 {
   "items": [
     {
-      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
-      "name": "node-01M1ZA",
-      "node_group_id": "01M1ZA80A53NBT8REFQXVA3H8F",
-      "display_order": 0,
-      "is_hidden": false,
-      "conn_state": "offline",
-      "last_seen_at_ms": 1788831072581,
-      "created_at_ms": 1788831072581,
-      "updated_at_ms": 1788831171337,
-      "group": {
-        "id": "01M1ZA80A53NBT8REFQXVA3H8F",
-        "name": "grp-01M1ZA"
-      },
-      "tags": []
-    },
-    {
-      "id": "01M1ZA90PEHNMDXKC1ZCST7J8H",
-      "name": "node-01M1ZA90Q0Z67TX15FNWXGHQXG",
-      "node_group_id": "01M1ZA90PEFKJW1BAMR9NHJQ1M",
-      "display_order": 0,
-      "is_hidden": false,
-      "conn_state": "offline",
-      "last_seen_at_ms": 1788831105742,
-      "created_at_ms": 1788831105742,
-      "updated_at_ms": 1788831201338,
-      "group": {
-        "id": "01M1ZA90PEFKJW1BAMR9NHJQ1M",
-        "name": "grp-01M1ZA90PR19GGT3HMFF16RJ77"
-      },
-      "tags": [
-        {
-          "id": "01M1ZA90PE9W90K26TVG96Q1AA",
-          "name": "tag-01M1ZA90PW7066NASKHV2JRCKD",
-          "color": "#3b82f6",
-          "created_at_ms": 1788831105742,
-          "updated_at_ms": 1788831105742
-        }
-      ]
-    },
-    {
-      "id": "01M1ZB1H4HECQ9SZ7CYKSN0YAY",
-      "name": "node-01M1ZB1H59SFBQ6J77XZ3C8SBY",
-      "node_group_id": "01M1ZB1H4H38ERBZ03N8CZ38BF",
+      "id": "01M1ZPX7688RE3NW9PWJXBPA68",
+      "name": "node-01M1ZPX782E3HRZ72WT700SV57",
+      "node_group_id": "01M1ZPX768H805GD1DXPM21MMA",
       "display_order": 0,
       "is_hidden": false,
       "conn_state": "online",
-      "last_seen_at_ms": 1788831909009,
-      "created_at_ms": 1788831909009,
-      "updated_at_ms": 1788831909009,
+      "last_seen_at_ms": 1788844350664,
+      "created_at_ms": 1788844350664,
+      "updated_at_ms": 1788844350664,
       "group": {
-        "id": "01M1ZB1H4H38ERBZ03N8CZ38BF",
-        "name": "grp-01M1ZB1H50Q8DTNRC4ZEGBEA5D"
+        "id": "01M1ZPX768H805GD1DXPM21MMA",
+        "name": "grp-01M1ZPX77QTFHYDA2SF9HMHW49"
       },
       "tags": [
         {
-          "id": "01M1ZB1H4H7GFXNN4G1J3K92SJ",
-          "name": "tag-01M1ZB1H54FT0RSN9DYNBHWDWB",
+          "id": "01M1ZPX768MQPWB5NSP7JWP0CK",
+          "name": "tag-01M1ZPX77X5547H7VGQQ6VHBB4",
           "color": "#3b82f6",
-          "created_at_ms": 1788831909009,
-          "updated_at_ms": 1788831909009
+          "created_at_ms": 1788844350664,
+          "updated_at_ms": 1788844350664
         }
       ]
     },
     {
-      "id": "01M1ZB2CNDDRV8JWN48YH7GF65",
-      "name": "node-01M1ZB2CP31XZMZGDT2XPE07QR",
-      "node_group_id": "01M1ZB2CND8QKV7WNP5E1J27VN",
-      "display_order": 0,
-      "is_hidden": false,
-      "conn_state": "online",
-      "last_seen_at_ms": 1788831937197,
-      "created_at_ms": 1788831937197,
-      "updated_at_ms": 1788831937197,
-      "group": {
-        "id": "01M1ZB2CND8QKV7WNP5E1J27VN",
-        "name": "grp-01M1ZB2CNTY9NAPK5NWKX36FWR"
-      },
-      "tags": [
-        {
-          "id": "01M1ZB2CNDN6GAXZ9NKF7R0YAQ",
-          "name": "tag-01M1ZB2CNXPEXPR0QBVK9386N7",
-          "color": "#3b82f6",
-          "created_at_ms": 1788831937197,
-          "updated_at_ms": 1788831937197
-        }
-      ]
-    },
-    {
-      "id": "01M1ZB2TJ5EHMDS45G48T0DDZZ",
-      "name": "node-01M1ZB2TK00CSVQXX0C6M77WHP",
-      "node_group_id": "01M1ZB2TJ5RG62N875M7WRRDAS",
-      "display_order": 0,
-      "is_hidden": false,
-      "conn_state": "online",
-      "last_seen_at_ms": 1788831951429,
-      "created_at_ms": 1788831951429,
-      "updated_at_ms": 1788831951429,
-      "group": {
-        "id": "01M1ZB2TJ5RG62N875M7WRRDAS",
-        "name": "grp-01M1ZB2TJN7YC8ZWDF5NMEGMSM"
-      },
-      "tags": [
-        {
-          "id": "01M1ZB2TJ5DE572E5DTBPS6FMZ",
-          "name": "tag-01M1ZB2TJVBVZ0QK1ZR2FSP6W3",
-          "color": "#3b82f6",
-          "created_at_ms": 1788831951429,
-          "updated_at_ms": 1788831951429
-        }
-      ]
-    },
-    {
-      "id": "01M1ZB3411JN0WW1TRPYGFDM9Z",
-      "name": "node-01M1ZB341N4DQNY21VXMZ3RNHA",
-      "node_group_id": "01M1ZB34115KJ1775HK5PD7WPY",
-      "display_order": 0,
-      "is_hidden": false,
-      "conn_state": "online",
-      "last_seen_at_ms": 1788831961121,
-      "created_at_ms": 1788831961121,
-      "updated_at_ms": 1788831961121,
-      "group": {
-        "id": "01M1ZB34115KJ1775HK5PD7WPY",
-        "name": "grp-01M1ZB341GHMRHEM03Y8KZFVAG"
-      },
-      "tags": [
-        {
-          "id": "01M1ZB3411J1W16GYVH0CV7E4G",
-          "name": "tag-01M1ZB341KYCZSRQFN6W5ZS3T9",
-          "color": "#3b82f6",
-          "created_at_ms": 1788831961121,
-          "updated_at_ms": 1788831961121
-        }
-      ]
-    },
-    {
-      "id": "01M1Z9ZGBN55D76VTRH3F0AJS9",
+      "id": "01M1ZNJJCGAST2J1G9CTFBFF00",
       "name": "test-node-config",
       "display_order": 0,
       "is_hidden": false,
       "agent_version": "",
       "conn_state": "offline",
-      "last_seen_at_ms": 1788830794132,
-      "created_at_ms": 1788830794098,
-      "updated_at_ms": 1788830886339,
+      "last_seen_at_ms": 1788842953147,
+      "created_at_ms": 1788842953101,
+      "updated_at_ms": 1788843050572,
       "tags": []
     },
     {
-      "id": "01M1ZB22Z53T0PGV8K025EF7PW",
-      "name": "test-node-config",
-      "display_order": 0,
-      "is_hidden": false,
-      "agent_version": "",
-      "conn_state": "online",
-      "last_seen_at_ms": 1788831927285,
-      "created_at_ms": 1788831927268,
-      "updated_at_ms": 1788831927285,
-      "tags": []
-    },
-    {
-      "id": "01M1Z9Z8PCW7CEHZD1PBQ60YR8",
+      "id": "01M1ZNHFGE1YQ8YQF2P8JDH4S8",
       "name": "test-vps-1",
       "display_order": 0,
       "is_hidden": false,
       "agent_version": "0.1.0",
       "conn_state": "offline",
-      "last_seen_at_ms": 1788830786285,
+      "last_seen_at_ms": 1788842917439,
       "clock_skew_ms": -600000,
-      "created_at_ms": 1788830786249,
-      "updated_at_ms": 1788830886339,
+      "created_at_ms": 1788842917387,
+      "updated_at_ms": 1788843020575,
       "tags": []
     }
   ],
-  "total": 9,
+  "total": 3,
   "page": 1,
   "page_size": 50
 }

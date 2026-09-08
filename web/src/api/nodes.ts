@@ -9,13 +9,6 @@ import {
   HealthResponse,
 } from './types';
 
-// 导出子域模块，维持从 'api/nodes' 导入的向后兼容性
-export * from './envelope';
-export * from './groups';
-export * from './tags';
-export * from './billing';
-export * from './tokens';
-export * from './settings';
 
 export interface ListNodesParams {
   group_id?: string;

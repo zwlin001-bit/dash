@@ -1,0 +1,24 @@
+{
+  "items": [
+    {
+      "cloud_account_id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "created_at_ms": 1757222400000,
+      "id": "01M1ZA80A5J7VCHRZTZ09MR0QE",
+      "is_deleted": false,
+      "name": "web-app-01",
+      "private_ips": "[\"172.16.0.10\"]",
+      "provider_code": "aliyun",
+      "public_ips": "[\"120.76.1.2\"]",
+      "region": "cn-hangzhou",
+      "res_kind": "ecs",
+      "res_ref": "i-bp1abcdef123456",
+      "specs_json": "{\"vcpu\":2,\"mem_mb\":4096}",
+      "status": "Running",
+      "synced_at_ms": 0,
+      "updated_at_ms": 1757222400000
+    }
+  ],
+  "page": 1,
+  "page_size": 1,
+  "total": 1
+}

@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -9,18 +10,34 @@ import (
 	"dash/internal/events"
 )
 
+// Store defines the storage methods needed by Handler.
+type Store interface {
+	ListEvents(ctx context.Context, f events.Filter) ([]events.EventRecord, int, error)
+	MarkRead(ctx context.Context, req events.MarkReadRequest) (int64, error)
+	GetUnreadCount(ctx context.Context) (int64, error)
+	ListEventTypes(ctx context.Context) ([]events.TypeDef, error)
+	UpdateEventType(ctx context.Context, eventType, severity, disposition string) (*events.TypeDef, error)
+}
+
 // Handler 封装事件相关的 HTTP API 处理器。
 type Handler struct {
-	store *events.Store
+	store Store
 }
 
 // NewHandler 创建事件 API Handler。
-func NewHandler(s *events.Store) *Handler {
+func NewHandler(s Store) *Handler {
 	return &Handler{store: s}
 }
 
+func (h *Handler) getStore() Store {
+	if h.store != nil {
+		return h.store
+	}
+	return events.GetDefaultStore()
+}
+
 // RegisterAppRoutes 注册事件相关 API 到 App（以鉴权方式注册）。
-func RegisterAppRoutes(a *app.App, s *events.Store) {
+func RegisterAppRoutes(a *app.App, s Store) {
 	h := NewHandler(s)
 
 	a.HandleAuthed("GET /api/v1/events", h.handleListEvents)
@@ -31,7 +48,7 @@ func RegisterAppRoutes(a *app.App, s *events.Store) {
 }
 
 // RegisterRoutes 注册事件相关 API 到 http.ServeMux (12-api-spec.md §7)。
-func RegisterRoutes(mux *http.ServeMux, s *events.Store) {
+func RegisterRoutes(mux *http.ServeMux, s Store) {
 	h := NewHandler(s)
 
 	mux.HandleFunc("GET /api/v1/events", h.handleListEvents)
@@ -55,10 +72,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 // handleListEvents: GET /api/v1/events
 func (h *Handler) handleListEvents(w http.ResponseWriter, r *http.Request) {
-	st := h.store
-	if st == nil {
-		st = events.GetDefaultStore()
-	}
+	st := h.getStore()
 	if st == nil {
 		writeError(w, http.StatusServiceUnavailable, "events store not ready")
 		return
@@ -123,10 +137,7 @@ func (h *Handler) handleListEvents(w http.ResponseWriter, r *http.Request) {
 
 // handleMarkRead: POST /api/v1/events/read
 func (h *Handler) handleMarkRead(w http.ResponseWriter, r *http.Request) {
-	st := h.store
-	if st == nil {
-		st = events.GetDefaultStore()
-	}
+	st := h.getStore()
 	if st == nil {
 		writeError(w, http.StatusServiceUnavailable, "events store not ready")
 		return
@@ -150,10 +161,7 @@ func (h *Handler) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 
 // handleUnreadCount: GET /api/v1/events/unread-count
 func (h *Handler) handleUnreadCount(w http.ResponseWriter, r *http.Request) {
-	st := h.store
-	if st == nil {
-		st = events.GetDefaultStore()
-	}
+	st := h.getStore()
 	if st == nil {
 		writeError(w, http.StatusServiceUnavailable, "events store not ready")
 		return
@@ -172,10 +180,7 @@ func (h *Handler) handleUnreadCount(w http.ResponseWriter, r *http.Request) {
 
 // handleListTypes: GET /api/v1/event-types
 func (h *Handler) handleListTypes(w http.ResponseWriter, r *http.Request) {
-	st := h.store
-	if st == nil {
-		st = events.GetDefaultStore()
-	}
+	st := h.getStore()
 	if st == nil {
 		writeError(w, http.StatusServiceUnavailable, "events store not ready")
 		return
@@ -198,10 +203,7 @@ func (h *Handler) handleListTypes(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateType: PATCH /api/v1/event-types/{event_type}
 func (h *Handler) handleUpdateType(w http.ResponseWriter, r *http.Request) {
-	st := h.store
-	if st == nil {
-		st = events.GetDefaultStore()
-	}
+	st := h.getStore()
 	if st == nil {
 		writeError(w, http.StatusServiceUnavailable, "events store not ready")
 		return

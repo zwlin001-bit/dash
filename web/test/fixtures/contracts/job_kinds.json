@@ -1,0 +1,28 @@
+{
+  "kinds": [
+    {
+      "description": "Stop ECS instance",
+      "kind": "guard.ecs_stop",
+      "max_attempt": 3,
+      "steps": [
+        {
+          "idempotent": true,
+          "name": "call_stop_api"
+        }
+      ],
+      "timeout": 300000000000
+    },
+    {
+      "description": "Start ECS instance",
+      "kind": "guard.ecs_start",
+      "max_attempt": 3,
+      "steps": [
+        {
+          "idempotent": true,
+          "name": "call_start_api"
+        }
+      ],
+      "timeout": 300000000000
+    }
+  ]
+}

@@ -126,10 +126,10 @@ func TestJobsHTTPAPI(t *testing.T) {
 		t.Fatalf("GET /api/v1/jobs status: %d", rec.Code)
 	}
 	var listRes struct {
-		Jobs  []*jobs.Job `json:"jobs"`
+		Items []*jobs.Job `json:"items"`
 		Total int         `json:"total"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &listRes); err != nil || listRes.Total == 0 {
+	if err := json.Unmarshal(rec.Body.Bytes(), &listRes); err != nil || listRes.Total == 0 || len(listRes.Items) == 0 {
 		t.Fatalf("expected jobs list, got %v", rec.Body.String())
 	}
 

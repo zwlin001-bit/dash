@@ -1,55 +1,15 @@
 {
   "items": [
     {
-      "id": "01M1ZA80A53NBT8REFQXVA3H8F",
-      "name": "grp-01M1ZA",
+      "id": "01M1ZPX768H805GD1DXPM21MMA",
+      "name": "grp-01M1ZPX77QTFHYDA2SF9HMHW49",
       "display_order": 10,
-      "created_at_ms": 1788831072581,
-      "updated_at_ms": 1788831072581,
-      "node_count": 1
-    },
-    {
-      "id": "01M1ZA90PEFKJW1BAMR9NHJQ1M",
-      "name": "grp-01M1ZA90PR19GGT3HMFF16RJ77",
-      "display_order": 10,
-      "created_at_ms": 1788831105742,
-      "updated_at_ms": 1788831105742,
-      "node_count": 1
-    },
-    {
-      "id": "01M1ZB1H4H38ERBZ03N8CZ38BF",
-      "name": "grp-01M1ZB1H50Q8DTNRC4ZEGBEA5D",
-      "display_order": 10,
-      "created_at_ms": 1788831909009,
-      "updated_at_ms": 1788831909009,
-      "node_count": 1
-    },
-    {
-      "id": "01M1ZB2CND8QKV7WNP5E1J27VN",
-      "name": "grp-01M1ZB2CNTY9NAPK5NWKX36FWR",
-      "display_order": 10,
-      "created_at_ms": 1788831937197,
-      "updated_at_ms": 1788831937197,
-      "node_count": 1
-    },
-    {
-      "id": "01M1ZB2TJ5RG62N875M7WRRDAS",
-      "name": "grp-01M1ZB2TJN7YC8ZWDF5NMEGMSM",
-      "display_order": 10,
-      "created_at_ms": 1788831951429,
-      "updated_at_ms": 1788831951429,
-      "node_count": 1
-    },
-    {
-      "id": "01M1ZB34115KJ1775HK5PD7WPY",
-      "name": "grp-01M1ZB341GHMRHEM03Y8KZFVAG",
-      "display_order": 10,
-      "created_at_ms": 1788831961121,
-      "updated_at_ms": 1788831961121,
+      "created_at_ms": 1788844350664,
+      "updated_at_ms": 1788844350664,
       "node_count": 1
     }
   ],
-  "total": 6,
+  "total": 1,
   "page": 1,
   "page_size": 50
 }

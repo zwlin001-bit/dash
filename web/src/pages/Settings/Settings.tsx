@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getSettings, updateSettings } from '../../api/nodes';
+import { getSettings, updateSettings } from '../../api';
 import { changePassword } from '../../api/auth';
 import {
   fetchNotifyChannels,
@@ -310,7 +310,7 @@ export const Settings: React.FC = () => {
   };
 
   const handleOpenRuleModal = (rule?: NotifyRule) => {
-    const channels = channelsData?.items || [];
+    const channels = channelsData || [];
     if (rule) {
       setEditingRule(rule);
       setRuleName(rule.name);
@@ -643,7 +643,7 @@ export const Settings: React.FC = () => {
 
             {channelsLoading ? (
               <div className={styles.emptyTip}>正在加载渠道列表...</div>
-            ) : channelsData?.items && channelsData.items.length > 0 ? (
+            ) : channelsData && channelsData.length > 0 ? (
               <div className={styles.tableWrapper}>
                 <table className={styles.table}>
                   <thead>
@@ -657,7 +657,7 @@ export const Settings: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {channelsData.items.map((ch) => (
+                    {channelsData.map((ch) => (
                       <tr key={ch.id}>
                         <td><strong>{ch.name}</strong></td>
                         <td>
@@ -742,7 +742,7 @@ export const Settings: React.FC = () => {
 
             {rulesLoading ? (
               <div className={styles.emptyTip}>正在加载路由规则...</div>
-            ) : rulesData?.items && rulesData.items.length > 0 ? (
+            ) : rulesData && rulesData.length > 0 ? (
               <div className={styles.tableWrapper}>
                 <table className={styles.table}>
                   <thead>
@@ -758,8 +758,8 @@ export const Settings: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {rulesData.items.map((r) => {
-                      const ch = channelsData?.items.find((c) => c.id === r.notify_channel_id);
+                    {rulesData.map((r) => {
+                      const ch = channelsData?.find((c) => c.id === r.notify_channel_id);
                       return (
                         <tr key={r.id}>
                           <td><strong>{r.name}</strong></td>
@@ -851,7 +851,7 @@ export const Settings: React.FC = () => {
 
             {deliveriesLoading ? (
               <div className={styles.emptyTip}>正在加载投递历史...</div>
-            ) : deliveriesData?.items && deliveriesData.items.length > 0 ? (
+            ) : deliveriesData?.deliveries && deliveriesData.deliveries.length > 0 ? (
               <div className={styles.tableWrapper}>
                 <table className={styles.table}>
                   <thead>
@@ -866,7 +866,7 @@ export const Settings: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {deliveriesData.items.map((d) => (
+                    {deliveriesData.deliveries.map((d) => (
                       <tr key={d.id}>
                         <td>
                           <span className={`${styles.badge} ${
@@ -1066,7 +1066,7 @@ export const Settings: React.FC = () => {
                     value={ruleChannelId}
                     onChange={(e) => setRuleChannelId(e.target.value)}
                   >
-                    {channelsData?.items.map((ch) => (
+                    {channelsData?.map((ch) => (
                       <option key={ch.id} value={ch.id}>
                         {ch.name} ({ch.channel_kind})
                       </option>

@@ -509,8 +509,8 @@ export const CloudGuard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {cyclesData?.items?.length ? (
-                cyclesData.items.map((c) => (
+              {cyclesData?.cycles?.length ? (
+                cyclesData.cycles.map((c) => (
                   <tr key={c.id}>
                     <td className="cell-mono">{c.id.slice(0, 10)}...</td>
                     <td>{new Date(c.started_at_ms).toLocaleTimeString()}</td>
@@ -569,19 +569,19 @@ export const CloudGuard: React.FC = () => {
                 </div>
                 <div className={styles.summaryCard}>
                   <div className={styles.summaryNum} style={{ color: 'var(--err)' }}>
-                    {dryRunResult.items.filter((i) => i.proposed_action === 'stop').length}
+                    {dryRunResult.actions.filter((i) => i.proposed_action === 'stop').length}
                   </div>
                   <div className={styles.summaryLabel}>拟关机</div>
                 </div>
                 <div className={styles.summaryCard}>
                   <div className={styles.summaryNum} style={{ color: 'var(--ok)' }}>
-                    {dryRunResult.items.filter((i) => i.proposed_action === 'start').length}
+                    {dryRunResult.actions.filter((i) => i.proposed_action === 'start').length}
                   </div>
                   <div className={styles.summaryLabel}>拟开机</div>
                 </div>
                 <div className={styles.summaryCard}>
                   <div className={styles.summaryNum}>
-                    {dryRunResult.items.filter((i) => i.proposed_action === 'noop').length}
+                    {dryRunResult.actions.filter((i) => i.proposed_action === 'noop').length}
                   </div>
                   <div className={styles.summaryLabel}>保持不变</div>
                 </div>
@@ -600,7 +600,7 @@ export const CloudGuard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {dryRunResult.items.map((item) => {
+                    {dryRunResult.actions.map((item) => {
                       let tagClass = styles.actionTagNoop;
                       let actionText = '保持';
                       if (item.proposed_action === 'stop') {
