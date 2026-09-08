@@ -9,7 +9,7 @@ import {
 } from 'react-router-dom';
 import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Layout } from './components/Layout';
-import { Login, Overview, NodeDetail, Machines, Settings, Events, Cloud } from './pages';
+import { Login, Overview, NodeDetail, Machines, Settings, Events, Cloud, Jobs } from './pages';
 import { queryClient, useCurrentUser, setUnauthorizedNavigator, checkHealth } from './api';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -87,6 +87,7 @@ export const AppRoutes: React.FC = () => {
           <Route path="nodes/:id" element={<NodeDetail />} />
           <Route path="machines" element={<Machines />} />
           <Route path="cloud" element={<Cloud />} />
+          <Route path="jobs" element={<Jobs />} />
           <Route path="events" element={<Events />} />
           <Route path="settings" element={<Settings />} />
         </Route>

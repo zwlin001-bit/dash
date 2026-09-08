@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"dash/internal/api"
+	jobsApi "dash/internal/api/jobs"
 	"dash/internal/api/metrics"
 	"dash/internal/app"
 	"dash/internal/auth"
@@ -47,16 +48,18 @@ type Module = app.Module
 
 // modules 为所有需要装配进 dashd 的模块列表。
 // 模块注册顺序有依赖，严格保持并加注释：
-// auth → inventory → ingest → control → metrics → events → settings → api
+// auth → inventory → ingest → control → metrics → events → jobs → settings → api
 // 1. auth: 用户认证与当前用户接口 (GET /api/v1/me, POST /api/v1/login 等)
 // 2. inventory: 机器资产管理、标签、分组及注册令牌 CRUD
 // 3. ingest: 指标接收落库服务（★ 必须在 control 之前：control 依赖 app.Ingester）
 // 4. control: Agent 长连接、RPC 调用与在线状态维护 (依赖 Ingester 落库指标)
 // 5. metrics: 指标时序查询与 SSE 实时广播 (监听 Ingester 最新值推送)
 // 6. events: 事件发布与订阅总线
-// 7. notify: 消息通知投递、渠道与路由 (依赖 events 总线)
-// 8. settings: 系统全局配置管理
-// 9. api: 静态资源与 SPA 路由（★ 必须最后：挂 "/" 作为 SPA 兜底路由）
+// 7. jobs: 异步任务调度与执行引擎
+// 8. notify: 消息通知投递、渠道与路由 (依赖 events 总线)
+// 9. settings: 系统全局配置管理
+// 10. cloud: 云资产与 Provider 管理
+// 11. api: 静态资源与 SPA 路由（★ 必须最后：挂 "/" 作为 SPA 兜底路由）
 var modules = []Module{
 	auth.NewModule(),
 	inventory.NewModule(),
@@ -64,6 +67,7 @@ var modules = []Module{
 	control.NewModule(),
 	metrics.NewModule(),
 	events.NewModule(),
+	jobsApi.NewModule(),
 	notify.NewModule(),
 	settings.NewModule(),
 	cloud.NewModule(),
@@ -378,9 +382,12 @@ func runServe(args []string) {
 	a.FlushIngest()
 	logx.Info("ingest flush completed")
 
-	// c. 关闭注册表长连接会话与事件总线
+	// c. 关闭注册表长连接会话、事件总线与 Job 引擎
 	if reg, ok := a.Registry.(interface{ Stop() }); ok && reg != nil {
 		reg.Stop()
+	}
+	if jobEngine, ok := a.JobEngine.(interface{ Stop() }); ok && jobEngine != nil {
+		jobEngine.Stop()
 	}
 	if eventsStore := events.GetDefaultStore(); eventsStore != nil {
 		eventsStore.Stop()
