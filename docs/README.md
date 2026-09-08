@@ -19,6 +19,8 @@
 | [`12-api-spec.md`](12-api-spec.md) | **接口规格**：端点、参数、返回、状态码 |
 | [`13-ui-spec.md`](13-ui-spec.md) | **界面规格**：设计 token、双主题、布局、组件类名 |
 | [`14-dual-domain-deploy.md`](14-dual-domain-deploy.md) | **双域名部署架构**：内网控制台 + 公网 agent 接入、nginx、证书。取代 05 的单域名方案 |
+| [`15-cloud-billing.md`](15-cloud-billing.md) | **云账单聚合**：账单落库、按维度汇总、预算告警 ·第二期 |
+| [`16-cloud-metrics.md`](16-cloud-metrics.md) | **云侧监控指标**：补 agent 拿不到的停机实例、无 agent 资源、CDT 流量历史 ·第二期 |
 | `adr/` | 关键决策记录 |
 | [`agy/`](agy/README.md) | **给 AGY（反重力）的实施说明**。第一期任务清单：[`agy/tasks/`](agy/tasks/README.md) |
 
