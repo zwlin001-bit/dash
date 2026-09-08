@@ -691,9 +691,141 @@ VALUES (?, ?, 'aliyun', 'ecs', 'i-dedup-01', 'inst-dedup', 'cn-hangzhou', 'Runni
 		res, err := engine.EvaluateOnce(ctx, false)
 		if err != nil {
 			t.Fatalf("cycle %d failed: %v", i, err)
-		}
+			}
 		if len(res.Items) != 1 || res.Items[0].ProposedAction != guard.ActionStop {
 			t.Fatalf("cycle %d: expected stop action", i)
 		}
+	}
+}
+
+// 验收 P2-11: 逐字段继承与覆盖逻辑
+// 1. 只配账号级策略、设备全部 inherit_account=1 → 行为与账号设置一致
+// 2. 某台设备设自定义阈值 → 只有它按自己的阈值走，decided_by 标注 resource
+// 3. 账号级 actions_enabled=false 时，即使设备 actions_enabled=true 也绝不动手
+// 4. 账号级 is_enabled=false 时，整个账号跳过，云 API 调用为 0
+func TestAcceptance_P211_AccountPolicyInheritance(t *testing.T) {
+	loc := guard.LoadLocationWithFallback("Asia/Shanghai")
+	noon := time.Date(2026, 9, 8, 12, 0, 0, 0, loc)
+
+	acctLimit := 100.0
+	resLimit := 30.0
+	acctStart := "09:00"
+	acctStop := "18:00"
+
+	acctPolicy := &guard.GuardAccountPolicy{
+		CloudAccountID:  "acc-test",
+		IsEnabled:       true,
+		ActionsEnabled:  true,
+		TrafficLimitGB:  &acctLimit,
+		ScheduleEnabled: true,
+		ScheduleStart:   &acctStart,
+		ScheduleStop:    &acctStop,
+		ScheduleTZ:      "Asia/Shanghai",
+	}
+
+	resStopped := cloud.CloudResource{ID: "res-1", Status: "Stopped"}
+	resRunning := cloud.CloudResource{ID: "res-2", Status: "Running"}
+
+	// Case 1: 设备 inherit_account=true，未单独填阈值 → 继承账号 100GB
+	ruleInherit := &guard.GuardRule{
+		IsEnabled:      true,
+		ActionsEnabled: true,
+		InheritAccount: true,
+	}
+	// 40GB 在 100GB 阈值下未超标，处于运行时段，Stopped 实例应启动
+	d1 := guard.DecideInstance(resStopped, ruleInherit, acctPolicy, 40.0, nil, noon)
+	if d1.ProposedAction != guard.ActionStart {
+		t.Fatalf("expected ActionStart inheriting account, got %s", d1.ProposedAction)
+	}
+	if d1.DecidedBy != "account" {
+		t.Fatalf("expected DecidedBy account, got %s", d1.DecidedBy)
+	}
+	if !d1.WouldExecute {
+		t.Fatalf("expected WouldExecute=true when both account and rule actions_enabled are true")
+	}
+
+	// Case 2: 设备自定义覆盖阈值 30GB，当前流量 50GB > 30GB (但 < 账号 100GB)
+	ruleOverride := &guard.GuardRule{
+		IsEnabled:      true,
+		ActionsEnabled: true,
+		InheritAccount: true,
+		TrafficLimitGB: &resLimit,
+	}
+	d2 := guard.DecideInstance(resRunning, ruleOverride, acctPolicy, 50.0, nil, noon)
+	if d2.ProposedAction != guard.ActionStop {
+		t.Fatalf("expected ActionStop by device override limit, got %s", d2.ProposedAction)
+	}
+	if d2.DecidedBy != "resource" {
+		t.Fatalf("expected DecidedBy resource, got %s", d2.DecidedBy)
+	}
+
+	// Case 3: 账号 actions_enabled=false 急停总闸，设备 actions_enabled=true
+	acctPolicyLocked := &guard.GuardAccountPolicy{
+		CloudAccountID: "acc-test",
+		IsEnabled:      true,
+		ActionsEnabled: false, // 总闸锁死
+		TrafficLimitGB: &acctLimit,
+	}
+	d3 := guard.DecideInstance(resRunning, ruleOverride, acctPolicyLocked, 50.0, nil, noon)
+	if d3.ProposedAction != guard.ActionStop {
+		t.Fatalf("expected ActionStop evaluated, got %s", d3.ProposedAction)
+	}
+	if d3.WouldExecute {
+		t.Fatalf("expected WouldExecute=false when account actions_enabled is false!")
+	}
+}
+
+func TestAcceptance_P211_AccountDisabled_ZeroCalls(t *testing.T) {
+	d := setupTestDB(t)
+	defer d.Close()
+
+	ctx := context.Background()
+	now := time.Now().UnixMilli()
+	masterKey := make([]byte, 32)
+	credStore := credentials.NewStore(d, masterKey)
+	cred, _ := credStore.Create(ctx, "test-cred-skip", "aliyun_ak", []byte(`{"access_key_id":"ak","access_key_secret":"sk"}`))
+
+	accID := ulid.New()
+	_, _ = d.Exec(ctx, `INSERT INTO cloud_accounts (id, provider_code, name, credential_id, is_enabled, created_at_ms, updated_at_ms)
+VALUES (?, 'aliyun', 'Disabled Account', ?, 1, ?, ?)`, accID, cred.ID, now, now)
+
+	resID := ulid.New()
+	_, _ = d.Exec(ctx, `INSERT INTO cloud_resources (id, cloud_account_id, provider_code, res_kind, res_ref, name, region, status, synced_at_ms, is_deleted, created_at_ms, updated_at_ms)
+VALUES (?, ?, 'aliyun', 'ecs', 'i-skip-01', 'inst-skip', 'cn-hangzhou', 'Running', ?, 0, ?, ?)`, resID, accID, now, now, now)
+
+	store := guard.NewStore(d)
+	// 账号策略 is_enabled = false
+	_ = store.UpsertAccountPolicy(ctx, &guard.GuardAccountPolicy{
+		CloudAccountID: accID,
+		IsEnabled:      false,
+		ActionsEnabled: true,
+	})
+
+	mockClient := &mockProviderClient{
+		cdtTrafficBytes: 100 * 1024 * 1024 * 1024,
+		instances: map[string][]provider.NormalizedResource{
+			"cn-hangzhou": {
+				{Ref: "i-skip-01", Status: "Running"},
+			},
+		},
+	}
+	pm := provider.NewManager(t.TempDir(), "bin", "")
+	pm.RegisterMock("aliyun", mockClient)
+
+	engine := guard.NewEngine(d, store, credStore, pm, nil, guard.Config{Interval: time.Minute})
+
+	res, err := engine.EvaluateOnce(ctx, false)
+	if err != nil {
+		t.Fatalf("EvaluateOnce failed: %v", err)
+	}
+
+	if len(res.Items) != 0 {
+		t.Fatalf("expected 0 evaluated items when account is_enabled=false, got %d", len(res.Items))
+	}
+	if mockClient.cdtCalls != 0 {
+		t.Fatalf("expected 0 CDT calls when account is_enabled=false, got %d", mockClient.cdtCalls)
+	}
+	if mockClient.describeCalls != 0 {
+		t.Fatalf("expected 0 DescribeCalls when account is_enabled=false, got %d", mockClient.describeCalls)
 	}
 }
