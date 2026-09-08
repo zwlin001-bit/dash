@@ -1,6 +1,28 @@
 {
   "items": [
     {
+      "event_type": "alert.firing",
+      "display_name": "告警触发",
+      "default_severity": "warning",
+      "severity": "warning",
+      "default_disposition": "store",
+      "disposition": "store",
+      "description": "监控告警规则被触发进入 firing 状态",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "alert.resolved",
+      "display_name": "告警恢复",
+      "default_severity": "info",
+      "severity": "info",
+      "default_disposition": "store",
+      "disposition": "store",
+      "description": "监控告警规则恢复正常进入 resolved 状态",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
       "event_type": "auth.login_failed",
       "display_name": "登录失败",
       "default_severity": "warning",
@@ -9,7 +31,128 @@
       "disposition": "store",
       "description": "控制台用户凭据错误或认证失败",
       "is_builtin": true,
-      "updated_at_ms": 1788831960751
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "billing.budget_exceeded",
+      "display_name": "云账单超出预算",
+      "default_severity": "critical",
+      "severity": "critical",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "当月云账单用量已超出设定预算",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "billing.budget_warning",
+      "display_name": "云账单预算预警",
+      "default_severity": "warning",
+      "severity": "warning",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "当月云账单用量达到预算预警阈值",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "billing.sync_failed",
+      "display_name": "云账单同步失败",
+      "default_severity": "error",
+      "severity": "error",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "云厂商账单数据同步失败",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "cloud.guard.action_failed",
+      "display_name": "ECS守卫动作执行失败",
+      "default_severity": "critical",
+      "severity": "critical",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "ECS 启停操作在云 API 调用或状态确认阶段发生错误",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "cloud.guard.cycle_error",
+      "display_name": "守卫评估周期异常",
+      "default_severity": "critical",
+      "severity": "critical",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "CDT 流量查询失败或云资源拉取失败，本轮已暂停启动以保障安全",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "cloud.guard.instance_started",
+      "display_name": "ECS实例已自动启动",
+      "default_severity": "info",
+      "severity": "info",
+      "default_disposition": "store+ui",
+      "disposition": "store+ui",
+      "description": "ECS 实例因保活策略或计划日程被自动开机",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "cloud.guard.instance_stopped",
+      "display_name": "ECS实例已自动停止",
+      "default_severity": "warning",
+      "severity": "warning",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "ECS 实例因流量超额或计划日程被自动关机",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "cloud.guard.traffic_reset",
+      "display_name": "CDT流量月初重置",
+      "default_severity": "info",
+      "severity": "info",
+      "default_disposition": "store+ui",
+      "disposition": "store+ui",
+      "description": "新月份开始，CDT 流量已清零并完成受控实例补检",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "cloud.guard.traffic_warning",
+      "display_name": "CDT流量超额预警",
+      "default_severity": "warning",
+      "severity": "warning",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "阿里云账号 CDT 流量用量达到阈值的 80% 预警线",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "job.failed",
+      "display_name": "任务执行失败",
+      "default_severity": "critical",
+      "severity": "critical",
+      "default_disposition": "store+notify",
+      "disposition": "store+notify",
+      "description": "后台异步任务执行失败或超时",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
+    },
+    {
+      "event_type": "job.succeeded",
+      "display_name": "任务执行成功",
+      "default_severity": "info",
+      "severity": "info",
+      "default_disposition": "store",
+      "disposition": "store",
+      "description": "后台异步任务顺利完成所有步骤",
+      "is_builtin": true,
+      "updated_at_ms": 1788844640205
     },
     {
       "event_type": "node.enrolled",
@@ -20,7 +163,7 @@
       "disposition": "store",
       "description": "新节点使用 enrollment token 完成初始认证接入",
       "is_builtin": true,
-      "updated_at_ms": 1788831960751
+      "updated_at_ms": 1788844640205
     },
     {
       "event_type": "node.offline",
@@ -31,7 +174,7 @@
       "disposition": "store+notify",
       "description": "节点心跳超时或非正常断开连接",
       "is_builtin": true,
-      "updated_at_ms": 1788831960751
+      "updated_at_ms": 1788844640205
     },
     {
       "event_type": "node.online",
@@ -42,7 +185,7 @@
       "disposition": "store",
       "description": "节点建立连接并恢复心跳通信",
       "is_builtin": true,
-      "updated_at_ms": 1788831960751
+      "updated_at_ms": 1788844640205
     },
     {
       "event_type": "node.removed",
@@ -53,7 +196,7 @@
       "disposition": "store",
       "description": "节点从平台中被管理员主动移除",
       "is_builtin": true,
-      "updated_at_ms": 1788831960751
+      "updated_at_ms": 1788844640205
     },
     {
       "event_type": "system.db_unreachable",
@@ -64,7 +207,7 @@
       "disposition": "store+notify",
       "description": "服务端数据库连接中断或数据批量落库失败",
       "is_builtin": true,
-      "updated_at_ms": 1788831960751
+      "updated_at_ms": 1788844640205
     }
   ]
 }

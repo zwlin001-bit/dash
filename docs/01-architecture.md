@@ -110,6 +110,7 @@ dash 管理个人 VPS，覆盖四件事：
 | `resource.delete` | dashd → provider | 销毁资源，异步 |
 | `resource.action` | dashd → provider | 启停 / 重启 / 改配等动作，异步 |
 | `job.poll` | dashd → provider | 轮询异步操作状态 |
+| `bill.list` | dashd → provider | 给定账期，返回归一化账单 |
 | `event.log` | provider → dashd | provider 主动上报日志 / 进度 |
 
 归一化资源对象（provider 必须映射到这个形状）：

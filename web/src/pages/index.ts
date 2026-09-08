@@ -8,3 +8,4 @@ export * from './Cloud';
 export * from './Jobs';
 export * from './CloudGuard';
 export * from './Alerts';
+export * from './Billing';

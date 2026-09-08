@@ -22,6 +22,7 @@ type ProviderClient interface {
 	GetCDTTraffic(ctx context.Context, cred map[string]string) (*CDTTrafficResult, error)
 	Action(ctx context.Context, req ActionParams) (*ActionResponse, error)
 	PollJob(ctx context.Context, jobHandle string) (*PollJobResponse, error)
+	ListBills(ctx context.Context, cred map[string]string, period, accountSite string) (*BillListResult, error)
 	Close() error
 }
 
@@ -234,6 +235,15 @@ func (c *RPCClient) PollJob(ctx context.Context, jobHandle string) (*PollJobResp
 	return &res, nil
 }
 
+func (c *RPCClient) ListBills(ctx context.Context, cred map[string]string, period, accountSite string) (*BillListResult, error) {
+	var res BillListResult
+	params := BillListParams{Credential: cred, Period: period, AccountSite: accountSite}
+	if err := c.call(ctx, "bill.list", params, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 var _ ProviderClient = (*RPCClient)(nil)
 
 // MockClient is an in-memory client implementation useful for testing
@@ -246,6 +256,7 @@ type MockClient struct {
 	GetCDTTrafficFunc func(ctx context.Context, cred map[string]string) (*CDTTrafficResult, error)
 	ActionFunc        func(ctx context.Context, req ActionParams) (*ActionResponse, error)
 	PollJobFunc       func(ctx context.Context, jobHandle string) (*PollJobResponse, error)
+	ListBillsFunc     func(ctx context.Context, cred map[string]string, period, accountSite string) (*BillListResult, error)
 }
 
 func (m *MockClient) Describe(ctx context.Context) (*ProviderDescription, error) {
@@ -302,6 +313,13 @@ func (m *MockClient) PollJob(ctx context.Context, jobHandle string) (*PollJobRes
 		return m.PollJobFunc(ctx, jobHandle)
 	}
 	return &PollJobResponse{JobHandle: jobHandle, Status: "succeeded"}, nil
+}
+
+func (m *MockClient) ListBills(ctx context.Context, cred map[string]string, period, accountSite string) (*BillListResult, error) {
+	if m.ListBillsFunc != nil {
+		return m.ListBillsFunc(ctx, cred, period, accountSite)
+	}
+	return &BillListResult{Period: period, Currency: "CNY", Items: []BillItem{}}, nil
 }
 
 func (m *MockClient) Close() error {

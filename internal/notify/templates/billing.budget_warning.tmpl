@@ -1,0 +1,7 @@
+⚠️ [云账单预算预警] {{if .BudgetName}}{{.BudgetName}}{{else}}{{.Title}}{{end}}
+币种: {{.Currency}}
+当月已用: {{.CurrentSpent}} {{.Currency}}
+设定预算: {{.Amount}} {{.Currency}}
+进度: {{.ProgressPct}}%
+时间: {{fmtTime .OccurredAtMs}}
+{{if .SiteDomain}}控制台: https://{{.SiteDomain}}/billing{{end}}

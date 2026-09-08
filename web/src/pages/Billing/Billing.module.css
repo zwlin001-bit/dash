@@ -1,0 +1,464 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* 顶部栏 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.titleArea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+/* 顶部汇总卡片 */
+.overviewCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--sp-4);
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cardTitle {
+  font-size: 13px;
+  color: var(--text-mute);
+  font-weight: 500;
+}
+
+.currencyBadge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.cardValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.cardValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+}
+
+.momText {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.momUp {
+  color: var(--color-red);
+}
+
+.momDown {
+  color: var(--ok);
+}
+
+.momFlat {
+  color: var(--text-mute);
+}
+
+.budgetRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.budgetLabelRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.progressBarBg {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.progressOk {
+  background: var(--ok);
+}
+
+.progressWarn {
+  background: var(--warn);
+}
+
+.progressExceeded {
+  background: var(--color-red);
+}
+
+/* 趋势图部分 */
+.chartSection {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.chartHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: var(--sp-4);
+}
+
+.chartCard {
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.chartTitle {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.barChart {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  height: 140px;
+  padding-top: var(--sp-3);
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.barCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+
+.barFill {
+  width: 100%;
+  max-width: 24px;
+  background: var(--color-blue);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  min-height: 2px;
+  transition: height 0.3s ease;
+}
+
+.barLabel {
+  font-size: 11px;
+  color: var(--text-mute);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.barAmt {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* 明细表部分 */
+.itemsSection {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.itemsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.filterGroup {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.segmentedControl {
+  display: flex;
+  background: var(--bg-hover);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-dim);
+}
+
+.segmentBtn {
+  background: transparent;
+  border: none;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.segmentBtnActive {
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-weight: 500;
+  box-shadow: var(--card-shadow);
+}
+
+/* 表格样式 */
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--text-mute);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-main);
+  font-size: 12px;
+}
+
+.table td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border-dim);
+  color: var(--text-main);
+}
+
+.table tr:hover td {
+  background: var(--bg-hover);
+}
+
+.groupRow {
+  background: var(--bg-card-sub);
+  font-weight: 600;
+}
+
+.groupRow td {
+  border-top: 1px solid var(--border-main);
+}
+
+.unlinkedBadge {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.tagBadge {
+  background: var(--bg-hover);
+  color: var(--accent);
+  border: 1px solid var(--border-light);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  margin-right: var(--sp-1);
+}
+
+.emptyState {
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--text-mute);
+  font-size: 14px;
+}
+
+/* 模态框 */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--sp-4);
+}
+
+.modalContent {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  padding: var(--sp-5);
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--text-mute);
+  cursor: pointer;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.formLabel {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.formInput, .formSelect {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  color: var(--text-main);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.formInput:focus, .formSelect:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.budgetList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.budgetItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+}
+
+.budgetDesc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.budgetSub {
+  font-size: 11px;
+  color: var(--text-mute);
+}

@@ -107,6 +107,10 @@ func (m *mockProviderClient) PollJob(ctx context.Context, jobHandle string) (*pr
 	return &provider.PollJobResponse{JobHandle: jobHandle, Status: "succeeded"}, nil
 }
 
+func (m *mockProviderClient) ListBills(ctx context.Context, cred map[string]string, period, accountSite string) (*provider.BillListResult, error) {
+	return &provider.BillListResult{Period: period, Currency: "CNY"}, nil
+}
+
 func (m *mockProviderClient) Close() error {
 	return nil
 }

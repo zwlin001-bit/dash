@@ -85,6 +85,15 @@ export const Layout: React.FC = () => {
               <span>云资产</span>
             </NavLink>
             <NavLink
+              to="/billing"
+              className={({ isActive }) =>
+                `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
+              }
+            >
+              <span className={styles.icon}>💰</span>
+              <span>云账单</span>
+            </NavLink>
+            <NavLink
               to="/guard"
               className={({ isActive }) =>
                 `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`

@@ -1,6 +1,5 @@
 {
   "site.domain": "custom.domain.org",
-  "site.console_domain": "dash.us.workbench.work",
   "retention.raw_days": 3,
   "retention.1m_days": 30,
   "retention.1h_days": 365,

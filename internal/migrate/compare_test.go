@@ -51,6 +51,9 @@ var expectedTables = []string{
 	"alert_rules",
 	"alert_rule_channels",
 	"alert_events",
+	"bill_periods",
+	"bill_items",
+	"bill_budgets",
 }
 
 func getMySQLDB(t *testing.T) *db.DB {
@@ -162,8 +165,8 @@ func TestSchemaEquivalence(t *testing.T) {
 	}
 
 	// 1. Verify table counts
-	if len(expectedTables) != 28 {
-		t.Fatalf("expected 28 tables defined, got %d", len(expectedTables))
+	if len(expectedTables) != 40 {
+		t.Fatalf("expected 40 tables defined, got %d", len(expectedTables))
 	}
 
 	for _, tbl := range expectedTables {

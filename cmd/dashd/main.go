@@ -15,6 +15,7 @@ import (
 
 	"dash/internal/api"
 	alertApi "dash/internal/api/alert"
+	billingApi "dash/internal/api/billing"
 	guardApi "dash/internal/api/guard"
 	jobsApi "dash/internal/api/jobs"
 	"dash/internal/api/metrics"
@@ -75,6 +76,7 @@ var modules = []Module{
 	cloud.NewModule(),
 	guardApi.NewModule(),
 	alertApi.NewModule(),
+	billingApi.NewModule(),
 	api.NewModule(), // ★ 必须最后：它挂 "/" 作为 SPA 兜底路由
 }
 
