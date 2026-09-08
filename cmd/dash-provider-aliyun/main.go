@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -41,6 +42,11 @@ func main() {
 	if socketPath == "" {
 		fmt.Fprintf(os.Stderr, "Usage: dash-provider-aliyun -socket <socket_path>\n")
 		os.Exit(1)
+	}
+
+	// Ensure socket directory exists
+	if dir := filepath.Dir(socketPath); dir != "" {
+		_ = os.MkdirAll(dir, 0755)
 	}
 
 	// Remove stale socket if exists

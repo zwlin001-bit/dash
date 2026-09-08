@@ -193,6 +193,8 @@ func setupFullTestDB(t *testing.T) *db.DB {
 		t.Fatalf("migration up failed: %v", err)
 	}
 
+	_, _ = d.Exec(ctx, "DELETE FROM job_steps")
+	_, _ = d.Exec(ctx, "DELETE FROM jobs")
 	_, _ = d.Exec(ctx, "DELETE FROM user_sessions")
 	_, _ = d.Exec(ctx, "DELETE FROM account_users")
 

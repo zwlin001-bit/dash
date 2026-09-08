@@ -954,7 +954,10 @@ OPENRC_EOF
     # 健康检查轮询 (30 秒)
     CHECK_URL="http://127.0.0.1/healthz"
     if [ -n "$SERVER_LISTEN" ]; then
-        CHECK_URL="http://${SERVER_LISTEN}/healthz"
+        case "$SERVER_LISTEN" in
+            :*) CHECK_URL="http://127.0.0.1${SERVER_LISTEN}/healthz" ;;
+            *)  CHECK_URL="http://${SERVER_LISTEN}/healthz" ;;
+        esac
     fi
 
     MAX_WAIT=30
@@ -1164,7 +1167,10 @@ cmd_upgrade() {
     if [ -f /etc/dash/config.toml ]; then
         LISTEN_CFG=$(grep '^[[:space:]]*listen[[:space:]]*=' /etc/dash/config.toml | head -n 1 | sed 's/.*=[[:space:]]*"\([^"]*\)".*/\1/')
         if [ -n "$LISTEN_CFG" ]; then
-            CHECK_URL="http://${LISTEN_CFG}/healthz"
+            case "$LISTEN_CFG" in
+                :*) CHECK_URL="http://127.0.0.1${LISTEN_CFG}/healthz" ;;
+                *)  CHECK_URL="http://${LISTEN_CFG}/healthz" ;;
+            esac
         fi
     fi
 
@@ -1269,7 +1275,17 @@ cmd_status() {
 
     # 3. 查询 /healthz
     HEALTH_JSON=""
-    for url in "http://127.0.0.1:8080/healthz" "http://127.0.0.1/healthz" "https://127.0.0.1/healthz"; do
+    HEALTH_URLS="http://127.0.0.1:8080/healthz http://127.0.0.1:8443/healthz http://127.0.0.1/healthz https://127.0.0.1/healthz"
+    if [ -f /etc/dash/config.toml ]; then
+        CFG_LISTEN=$(grep '^[[:space:]]*listen[[:space:]]*=' /etc/dash/config.toml | head -n 1 | sed 's/.*=[[:space:]]*"\([^"]*\)".*/\1/')
+        if [ -n "$CFG_LISTEN" ]; then
+            case "$CFG_LISTEN" in
+                :*) HEALTH_URLS="http://127.0.0.1${CFG_LISTEN}/healthz $HEALTH_URLS" ;;
+                *)  HEALTH_URLS="http://${CFG_LISTEN}/healthz $HEALTH_URLS" ;;
+            esac
+        fi
+    fi
+    for url in $HEALTH_URLS; do
         HEALTH_JSON=$(curl -k -s -m 2 "$url" 2>/dev/null || true)
         if [ -n "$HEALTH_JSON" ] && printf '%s' "$HEALTH_JSON" | grep -q '"status"'; then
             break
@@ -1292,7 +1308,8 @@ cmd_status() {
 
     if [ -z "$VER" ]; then
         if [ -f /usr/local/bin/dashd ]; then
-            VER=$(/usr/local/bin/dashd -v 2>/dev/null || echo "installed")
+            VER=$(/usr/local/bin/dashd -v 2>/dev/null | awk '{print $2}' || echo "installed")
+            [ -z "$VER" ] && VER="installed"
         else
             VER="not installed"
         fi

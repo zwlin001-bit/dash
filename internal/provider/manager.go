@@ -35,8 +35,9 @@ type Manager struct {
 // NewManager creates a provider process manager.
 func NewManager(runtimeDir string, searchDirs ...string) *Manager {
 	if runtimeDir == "" {
-		runtimeDir = os.TempDir()
+		runtimeDir = filepath.Join(os.TempDir(), "dash-runtime")
 	}
+	_ = os.MkdirAll(runtimeDir, 0755)
 	if len(searchDirs) == 0 {
 		searchDirs = []string{"bin", "/usr/local/bin"}
 	}
@@ -147,6 +148,7 @@ func (m *Manager) GetClient(ctx context.Context, providerCode string, optExecPat
 		}
 	}
 
+	_ = os.MkdirAll(m.runtimeDir, 0755)
 	socketPath := filepath.Join(m.runtimeDir, fmt.Sprintf("dash-provider-%s-%d.sock", providerCode, os.Getpid()))
 	_ = os.Remove(socketPath)
 

@@ -48,18 +48,19 @@ func (m *Module) Register(a *app.App) error {
 		}
 	}
 
-	credStore := credentials.NewStore(a.DB, masterKey)
-	pm := provider.NewManager(filepath.Join(os.TempDir(), "dash-runtime"), "bin", "/usr/local/bin")
-	cloudSvc := cloud.NewService(a.DB, credStore, pm)
+	var cloudSvc *cloud.Service
+	if cs, ok := a.CloudService.(*cloud.Service); ok && cs != nil {
+		cloudSvc = cs
+	} else {
+		credStore := credentials.NewStore(a.DB, masterKey)
+		pm := provider.NewManager(filepath.Join(os.TempDir(), "dash-runtime"), "bin", "/usr/local/bin")
+		cloudSvc = cloud.NewService(a.DB, credStore, pm)
+		a.CloudService = cloudSvc
+	}
 
 	var jobEng *jobs.Engine
 	if je, ok := a.JobEngine.(*jobs.Engine); ok {
 		jobEng = je
-	}
-
-	// 注册 ECS 启停 Job 规格
-	if jobEng != nil {
-		guard.RegisterGuardJobs(jobEng.Registry(), a.DB, credStore, pm)
 	}
 
 	m.store = guard.NewStore(a.DB)
@@ -75,8 +76,17 @@ func (m *Module) Register(a *app.App) error {
 		DefaultTimezone: "Asia/Shanghai",
 	}
 
-	m.engine = guard.NewEngine(a.DB, m.store, credStore, pm, jobEng, guardCfg)
-	a.GuardEngine = m.engine
+	if ge, ok := a.GuardEngine.(*guard.Engine); ok && ge != nil {
+		m.engine = ge
+	} else {
+		credStore := credentials.NewStore(a.DB, masterKey)
+		pm := provider.NewManager(filepath.Join(os.TempDir(), "dash-runtime"), "bin", "/usr/local/bin")
+		if jobEng != nil {
+			guard.RegisterGuardJobs(jobEng.Registry(), a.DB, credStore, pm)
+		}
+		m.engine = guard.NewEngine(a.DB, m.store, credStore, pm, jobEng, guardCfg)
+		a.GuardEngine = m.engine
+	}
 
 	// 仅在真实运行阶段启动后台主循环 (单测时显式调用 EvaluateOnce)
 	if flag.Lookup("test.v") == nil {

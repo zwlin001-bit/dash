@@ -113,6 +113,7 @@ VALUES (?, ?, 'aliyun', 'ecs', 'i-test-ecs', 'test-ecs', 'cn-hangzhou', 'Stopped
 	}
 
 	pm := provider.NewManager(t.TempDir(), "bin", "")
+	defer pm.Close()
 	mockClient := &mockProviderClient{cdtTrafficBytes: 15 * 1024 * 1024 * 1024}
 	pm.RegisterMock("aliyun", mockClient)
 
