@@ -13,6 +13,8 @@ import (
 type Config struct {
 	Endpoint           string   `json:"endpoint"`
 	Token              string   `json:"token"`
+	NodeID             string   `json:"node_id,omitempty"`
+	Transport          string   `json:"transport,omitempty"`
 	ConfigFile         string   `json:"config,omitempty"`
 	StateFile          string   `json:"state_file,omitempty"`
 	IntervalFastS      int      `json:"interval_fast_s"`
@@ -35,6 +37,8 @@ func DefaultConfig() *Config {
 	return &Config{
 		Endpoint:           "",
 		Token:              "",
+		NodeID:             "",
+		Transport:          "auto",
 		ConfigFile:         "/etc/dash-agent/config.json",
 		StateFile:          "/var/lib/dash-agent/state.json",
 		IntervalFastS:      5,
@@ -57,6 +61,9 @@ func DefaultConfig() *Config {
 type rawConfigFile struct {
 	Endpoint           *string `json:"endpoint"`
 	Token              *string `json:"token"`
+	NodeID             *string `json:"node_id"`
+	Node               *string `json:"node"`
+	Transport          *string `json:"transport"`
 	ConfigFile         *string `json:"config"`
 	StateFile          *string `json:"state_file"`
 	IntervalFastS      *int    `json:"interval_fast_s"`
@@ -144,6 +151,10 @@ func LoadConfig(flagOverrides *Config, setFlags map[string]bool) (*Config, error
 		applyFlagOverrides(cfg, flagOverrides, setFlags)
 	}
 
+	if cfg.Transport == "" {
+		cfg.Transport = "auto"
+	}
+
 	return cfg, nil
 }
 
@@ -183,6 +194,14 @@ func applyFileConfig(cfg *Config, raw *rawConfigFile) {
 	}
 	if raw.MemIncludeCache != nil {
 		cfg.MemIncludeCache = *raw.MemIncludeCache
+	}
+	if raw.NodeID != nil {
+		cfg.NodeID = *raw.NodeID
+	} else if raw.Node != nil {
+		cfg.NodeID = *raw.Node
+	}
+	if raw.Transport != nil {
+		cfg.Transport = *raw.Transport
 	}
 	if raw.ExecMode != nil {
 		cfg.ExecMode = *raw.ExecMode
@@ -261,6 +280,14 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("DASH_AGENT_PREFER_IP_VERSION"); v != "" {
 		cfg.PreferIPVersion = v
 	}
+	if v := os.Getenv("DASH_AGENT_NODE_ID"); v != "" {
+		cfg.NodeID = v
+	} else if v := os.Getenv("DASH_AGENT_NODE"); v != "" {
+		cfg.NodeID = v
+	}
+	if v := os.Getenv("DASH_AGENT_TRANSPORT"); v != "" {
+		cfg.Transport = v
+	}
 }
 
 func applyFlagOverrides(cfg *Config, flagOverrides *Config, setFlags map[string]bool) {
@@ -269,6 +296,12 @@ func applyFlagOverrides(cfg *Config, flagOverrides *Config, setFlags map[string]
 	}
 	if setFlags["token"] {
 		cfg.Token = flagOverrides.Token
+	}
+	if setFlags["node-id"] || setFlags["node"] {
+		cfg.NodeID = flagOverrides.NodeID
+	}
+	if setFlags["transport"] {
+		cfg.Transport = flagOverrides.Transport
 	}
 	if setFlags["state-file"] {
 		cfg.StateFile = flagOverrides.StateFile

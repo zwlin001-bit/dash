@@ -13,12 +13,15 @@ import (
 
 func TestHTTPFallbackPost_Success(t *testing.T) {
 	expectedToken := "test-agent-token-xyz"
+	expectedNode := "test-node-01"
 	var receivedBody []byte
 	var receivedAuth string
+	var receivedNode string
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedAuth = r.Header.Get("Authorization")
-		if r.URL.Path != "/api/agent/v1/report" {
+		receivedNode = r.Header.Get("X-Node")
+		if r.URL.Path != "/agent/v1/report" {
 			http.NotFound(w, r)
 			return
 		}
@@ -44,7 +47,7 @@ func TestHTTPFallbackPost_Success(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewHTTPFallbackClient(ts.URL+"/api/agent/v1/report", expectedToken, ts.Client())
+	client := NewHTTPFallbackClient(ts.URL+"/agent/v1/report", expectedToken, ts.Client(), expectedNode)
 
 	metricsReq := &protocol.Request{
 		JSONRPC: protocol.JSONRPCVersion,
@@ -59,6 +62,9 @@ func TestHTTPFallbackPost_Success(t *testing.T) {
 
 	if receivedAuth != "Bearer "+expectedToken {
 		t.Fatalf("expected Authorization Bearer %s, got %s", expectedToken, receivedAuth)
+	}
+	if receivedNode != expectedNode {
+		t.Fatalf("expected X-Node %s, got %s", expectedNode, receivedNode)
 	}
 
 	if resp.ServerTimeMs != 1757222400123 {

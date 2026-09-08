@@ -401,6 +401,95 @@ func TestRuntime_ConfigPrecedence(t *testing.T) {
 	if cfg.CollectConns != false {
 		t.Fatalf("expected File collect_conns false, got %v", cfg.CollectConns)
 	}
+	// 6. Transport 默认值: "auto"
+	if cfg.Transport != "auto" {
+		t.Fatalf("expected default transport auto, got %s", cfg.Transport)
+	}
+}
+
+// TestRuntime_TransportAndNodeConfigPrecedence 严格校验 105.md 判据 5：
+// 三层配置来源（配置文件 / 环境变量 / 命令行 flag）各验一次，优先级（命令行 > 环境变量 > 配置文件 > 默认值）不变。
+func TestRuntime_TransportAndNodeConfigPrecedence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "dash-agent-cfg-precedence-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// --- 阶段 1：零输入，验证默认值 ---
+	cfgDef, err := LoadConfig(nil, nil)
+	if err != nil {
+		t.Fatalf("load default config: %v", err)
+	}
+	if cfgDef.Transport != "auto" {
+		t.Fatalf("expected default Transport 'auto', got %q", cfgDef.Transport)
+	}
+	if cfgDef.NodeID != "" {
+		t.Fatalf("expected default NodeID '', got %q", cfgDef.NodeID)
+	}
+
+	// --- 阶段 2：配置文件覆盖默认值 ---
+	configFile := filepath.Join(tempDir, "config.json")
+	fileJSON := `{
+		"transport": "http",
+		"node_id": "file-node-01"
+	}`
+	if err := os.WriteFile(configFile, []byte(fileJSON), 0600); err != nil {
+		t.Fatalf("write file config: %v", err)
+	}
+
+	setFileFlags := map[string]bool{"config": true}
+	flagConfigFile := &Config{ConfigFile: configFile}
+	cfgFile, err := LoadConfig(flagConfigFile, setFileFlags)
+	if err != nil {
+		t.Fatalf("load file config: %v", err)
+	}
+	if cfgFile.Transport != "http" {
+		t.Fatalf("expected file Transport 'http', got %q", cfgFile.Transport)
+	}
+	if cfgFile.NodeID != "file-node-01" {
+		t.Fatalf("expected file NodeID 'file-node-01', got %q", cfgFile.NodeID)
+	}
+
+	// --- 阶段 3：环境变量覆盖配置文件 ---
+	_ = os.Setenv("DASH_AGENT_CONFIG", configFile)
+	defer os.Unsetenv("DASH_AGENT_CONFIG")
+	_ = os.Setenv("DASH_AGENT_TRANSPORT", "auto")
+	defer os.Unsetenv("DASH_AGENT_TRANSPORT")
+	_ = os.Setenv("DASH_AGENT_NODE_ID", "env-node-02")
+	defer os.Unsetenv("DASH_AGENT_NODE_ID")
+
+	cfgEnv, err := LoadConfig(nil, nil)
+	if err != nil {
+		t.Fatalf("load env config: %v", err)
+	}
+	if cfgEnv.Transport != "auto" {
+		t.Fatalf("expected env Transport 'auto' to override file, got %q", cfgEnv.Transport)
+	}
+	if cfgEnv.NodeID != "env-node-02" {
+		t.Fatalf("expected env NodeID 'env-node-02' to override file, got %q", cfgEnv.NodeID)
+	}
+
+	// --- 阶段 4：命令行 flag 覆盖环境变量与配置文件 ---
+	flagOverrides := &Config{
+		Transport: "http",
+		NodeID:    "cli-node-03",
+	}
+	setFlags := map[string]bool{
+		"transport": true,
+		"node-id":   true,
+	}
+
+	cfgCli, err := LoadConfig(flagOverrides, setFlags)
+	if err != nil {
+		t.Fatalf("load cli config: %v", err)
+	}
+	if cfgCli.Transport != "http" {
+		t.Fatalf("expected cli Transport 'http' to override env, got %q", cfgCli.Transport)
+	}
+	if cfgCli.NodeID != "cli-node-03" {
+		t.Fatalf("expected cli NodeID 'cli-node-03' to override env, got %q", cfgCli.NodeID)
+	}
 }
 
 // TestMetricsEncoder_ZeroAllocations 验证稳态下复用编码器零内存分配。

@@ -29,32 +29,32 @@ func TestResolveEndpoints(t *testing.T) {
 		{
 			input:        "https://demo.dash.dev",
 			expectedWS:   "wss://demo.dash.dev/api/agent/v1/rpc",
-			expectedHTTP: "https://demo.dash.dev/api/agent/v1/report",
+			expectedHTTP: "https://demo.dash.dev/agent/v1/report",
 		},
 		{
 			input:        "http://127.0.0.1:8080",
 			expectedWS:   "ws://127.0.0.1:8080/api/agent/v1/rpc",
-			expectedHTTP: "http://127.0.0.1:8080/api/agent/v1/report",
+			expectedHTTP: "http://127.0.0.1:8080/agent/v1/report",
 		},
 		{
 			input:        "wss://demo.dash.dev",
 			expectedWS:   "wss://demo.dash.dev/api/agent/v1/rpc",
-			expectedHTTP: "https://demo.dash.dev/api/agent/v1/report",
+			expectedHTTP: "https://demo.dash.dev/agent/v1/report",
 		},
 		{
 			input:        "ws://127.0.0.1:8080",
 			expectedWS:   "ws://127.0.0.1:8080/api/agent/v1/rpc",
-			expectedHTTP: "http://127.0.0.1:8080/api/agent/v1/report",
+			expectedHTTP: "http://127.0.0.1:8080/agent/v1/report",
 		},
 		{
 			input:        "demo.dash.dev",
 			expectedWS:   "wss://demo.dash.dev/api/agent/v1/rpc",
-			expectedHTTP: "https://demo.dash.dev/api/agent/v1/report",
+			expectedHTTP: "https://demo.dash.dev/agent/v1/report",
 		},
 		{
 			input:        "http://127.0.0.1:8080/custom",
 			expectedWS:   "ws://127.0.0.1:8080/custom/api/agent/v1/rpc",
-			expectedHTTP: "http://127.0.0.1:8080/custom/api/agent/v1/report",
+			expectedHTTP: "http://127.0.0.1:8080/custom/agent/v1/report",
 		},
 		{
 			input:     "",

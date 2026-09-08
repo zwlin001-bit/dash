@@ -13,11 +13,12 @@ import (
 )
 
 const (
+	ReportEndpointPath     = "/agent/v1/report"
 	defaultHTTPTimeout     = 10 * time.Second
 	maxReportResponseBytes = 64 * 1024 // 64 KB 限制，避免内存异常放大
 )
 
-// ReportResponse 是 POST /api/agent/v1/report 的服务端响应体。
+// ReportResponse 是 POST /agent/v1/report 的服务端响应体。
 // 见 docs/12-api-spec.md §2。
 type ReportResponse struct {
 	ServerTimeMs int64              `json:"server_time_ms"`
@@ -28,21 +29,37 @@ type ReportResponse struct {
 type HTTPFallbackClient struct {
 	endpoint string
 	token    string
+	nodeID   string
 	client   *http.Client
 }
 
 // NewHTTPFallbackClient 创建 HTTP 回退上报客户端。
-func NewHTTPFallbackClient(endpoint, token string, client *http.Client) *HTTPFallbackClient {
+func NewHTTPFallbackClient(endpoint, token string, client *http.Client, nodeID ...string) *HTTPFallbackClient {
 	if client == nil {
 		client = &http.Client{
 			Timeout: defaultHTTPTimeout,
 		}
 	}
+	var node string
+	if len(nodeID) > 0 {
+		node = nodeID[0]
+	}
 	return &HTTPFallbackClient{
 		endpoint: endpoint,
 		token:    token,
+		nodeID:   node,
 		client:   client,
 	}
+}
+
+// NodeID 返回客户端配置的节点标识。
+func (c *HTTPFallbackClient) NodeID() string {
+	return c.nodeID
+}
+
+// SetNodeID 设置节点标识。
+func (c *HTTPFallbackClient) SetNodeID(nodeID string) {
+	c.nodeID = nodeID
 }
 
 // PostReport 发送一批 JSON-RPC notification 数组，并返回服务端响应及回带指令。
@@ -62,6 +79,9 @@ func (c *HTTPFallbackClient) PostReport(ctx context.Context, batch []*protocol.R
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.nodeID != "" {
+		req.Header.Set("X-Node", c.nodeID)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.client.Do(req)

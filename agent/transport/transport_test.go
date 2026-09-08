@@ -446,7 +446,7 @@ func TestAcceptance_4_ThreeFailuresSwitchToFallbackAndRecover(t *testing.T) {
 			}
 		}
 
-		if r.URL.Path == "/api/agent/v1/report" {
+		if r.URL.Path == "/agent/v1/report" {
 			httpPostCount.Add(1)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -606,5 +606,218 @@ func TestAcceptance_5_BackoffJitterObservableInLogs(t *testing.T) {
 	// 确保它不是恰好等于基准值 100ms 或 200ms（或者至少带有小数抖动）
 	if d1 == 100*time.Millisecond && d2 == 200*time.Millisecond {
 		t.Fatalf("expected jitter, but got exact base durations: %v, %v", d1, d2)
+	}
+}
+
+// TestAcceptance_6_TransportHTTPMode 验收 105.md：
+// 1. transport: "http" 下抓包：零次 WS 握手尝试，日志里没有 ws 相关行；
+// 2. 直接进入 StateFallbackHTTP，不定时重试 WS；
+// 3. 请求头里 X-Node 与 Authorization 都在，且值正确；
+// 4. 端点路径是 /agent/v1/report。
+func TestAcceptance_6_TransportHTTPMode(t *testing.T) {
+	var wsHandshakeAttempts atomic.Int32
+	var httpPostCount atomic.Int32
+	var receivedAuth atomic.Pointer[string]
+	var receivedNode atomic.Pointer[string]
+	var receivedPath atomic.Pointer[string]
+	commandHandled := make(chan string, 10)
+
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 监听 WebSocket 握手尝试
+		if strings.HasPrefix(r.URL.Path, "/api/agent/v1/rpc") || strings.Contains(r.Header.Get("Upgrade"), "websocket") {
+			wsHandshakeAttempts.Add(1)
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+			return
+		}
+
+		// 监听 HTTP 回退端点
+		if r.URL.Path == "/agent/v1/report" {
+			auth := r.Header.Get("Authorization")
+			node := r.Header.Get("X-Node")
+			path := r.URL.Path
+			receivedAuth.Store(&auth)
+			receivedNode.Store(&node)
+			receivedPath.Store(&path)
+			httpPostCount.Add(1)
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{
+				"server_time_ms": 1757222400999,
+				"commands": [
+					{"jsonrpc":"2.0","method":"server.config","params":{"interval_fast_s":5}}
+				]
+			}`))
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	logger := &logCollector{}
+	expectedToken := "test-secret-token-456"
+	expectedNode := "tokyo-prod-01"
+
+	tr, err := New(Config{
+		ServerURL:             server.URL,
+		Token:                 expectedToken,
+		NodeID:                expectedNode,
+		Transport:             "http",
+		FastInterval:          30 * time.Millisecond,
+		FallbackRetryInterval: 100 * time.Millisecond,
+		Logger:                logger,
+	})
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer tr.Close()
+
+	tr.OnServerMessage(func(method string, params json.RawMessage) (any, error) {
+		commandHandled <- method
+		return nil, nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := tr.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// 1. 验证启动后直接进入 StateFallbackHTTP（无需等待 3 次 WS 失败）
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for tr.State() != StateFallbackHTTP && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if tr.State() != StateFallbackHTTP {
+		t.Fatalf("expected immediate StateFallbackHTTP in transport:http, got %s", tr.State())
+	}
+
+	// 2. 发送一条指标数据
+	cpuPct := 25.0
+	metricsParams := protocol.MetricsParams{
+		TsMs:   time.Now().UnixMilli(),
+		CPUPct: &cpuPct,
+	}
+	if err := tr.Send(protocol.MethodAgentMetrics, metricsParams); err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	// 3. 等待 HTTP 上报完成
+	deadline = time.Now().Add(2 * time.Second)
+	for httpPostCount.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if httpPostCount.Load() == 0 {
+		t.Fatalf("expected HTTP POST report to be delivered")
+	}
+
+	// 4. 判据 1：零次 WS 握手尝试
+	time.Sleep(150 * time.Millisecond) // 等待超过 FallbackRetryInterval
+	if wsCount := wsHandshakeAttempts.Load(); wsCount != 0 {
+		t.Fatalf("expected 0 WS handshake attempts, got %d", wsCount)
+	}
+
+	// 5. 判据 1：日志里没有 ws 相关行
+	logs := logger.GetAll()
+	for _, line := range logs {
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "ws") || strings.Contains(lower, "websocket") {
+			t.Fatalf("found unexpected ws-related log in transport:http mode: %q", line)
+		}
+	}
+
+	// 6. 判据 3：请求头里 X-Node 与 Authorization 都在，值正确
+	authPtr := receivedAuth.Load()
+	if authPtr == nil || *authPtr != "Bearer "+expectedToken {
+		t.Fatalf("expected Authorization Bearer %s, got %v", expectedToken, authPtr)
+	}
+	nodePtr := receivedNode.Load()
+	if nodePtr == nil || *nodePtr != expectedNode {
+		t.Fatalf("expected X-Node %s, got %v", expectedNode, nodePtr)
+	}
+
+	// 7. 判据 4：端点路径是 /agent/v1/report
+	pathPtr := receivedPath.Load()
+	if pathPtr == nil || *pathPtr != "/agent/v1/report" {
+		t.Fatalf("expected path /agent/v1/report, got %v", pathPtr)
+	}
+
+	// 8. 验证下行指令由 Handler 正确接收
+	select {
+	case cmd := <-commandHandled:
+		if cmd != protocol.MethodServerConfig {
+			t.Fatalf("expected command %s, got %s", protocol.MethodServerConfig, cmd)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("timed out waiting for fallback command")
+	}
+}
+
+// TestAcceptance_7_TransportAutoModeRegression 验收 105.md：
+// transport: "auto" 下行为与改动前完全一致（回归），WS 正常可用时优先连接 WS。
+func TestAcceptance_7_TransportAutoModeRegression(t *testing.T) {
+	var wsConnected atomic.Bool
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/agent/v1/rpc") {
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			wsConnected.Store(true)
+			for {
+				if _, _, err := conn.ReadMessage(); err != nil {
+					return
+				}
+			}
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	tr, err := New(Config{
+		ServerURL:    server.URL,
+		Token:        "auto-token",
+		NodeID:       "auto-node",
+		Transport:    "auto", // 或省略
+		PingInterval: 100 * time.Millisecond,
+		ReadTimeout:  200 * time.Millisecond,
+		DialTimeout:  100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer tr.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := tr.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !wsConnected.Load() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !wsConnected.Load() {
+		t.Fatalf("expected WebSocket connection to succeed in transport:auto mode")
+	}
+	if tr.State() != StateWSConnected {
+		t.Fatalf("expected StateWSConnected, got %s", tr.State())
 	}
 }

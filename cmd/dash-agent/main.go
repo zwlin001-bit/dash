@@ -73,6 +73,8 @@ func main() {
 		enableTerminal     bool
 		insecureSkipVerify bool
 		preferIPVersion    string
+		transportMode      string
+		nodeID             string
 	)
 
 	fs.BoolVar(&showVersion, "version", false, "print version and exit")
@@ -81,6 +83,9 @@ func main() {
 	fs.StringVar(&configFile, "c", "/etc/dash-agent/config.json", "path to config file (shorthand)")
 	fs.StringVar(&endpoint, "endpoint", "", "server endpoint URL (e.g. wss://example.com)")
 	fs.StringVar(&token, "token", "", "agent authentication token")
+	fs.StringVar(&nodeID, "node", "", "node identifier (sent as X-Node header)")
+	fs.StringVar(&nodeID, "node-id", "", "node identifier (sent as X-Node header)")
+	fs.StringVar(&transportMode, "transport", "auto", "transport protocol (auto, http)")
 	fs.StringVar(&stateFile, "state-file", "/var/lib/dash-agent/state.json", "path to state file")
 	fs.IntVar(&intervalFast, "interval-fast", 5, "fast tier interval in seconds")
 	fs.IntVar(&intervalFast, "interval-fast-s", 5, "fast tier interval in seconds")
@@ -119,6 +124,8 @@ func main() {
 		ConfigFile:         configFile,
 		Endpoint:           endpoint,
 		Token:              token,
+		NodeID:             nodeID,
+		Transport:          transportMode,
 		StateFile:          stateFile,
 		IntervalFastS:      intervalFast,
 		IntervalSlowS:      intervalSlow,

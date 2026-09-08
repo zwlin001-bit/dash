@@ -91,6 +91,8 @@ func (l defaultLogger) Printf(format string, v ...any) {
 type Config struct {
 	ServerURL             string        // 服务端地址（如 "wss://example.com" 或 "http://127.0.0.1:8080"）
 	Token                 string        // 认证 Token (Bearer)
+	NodeID                string        // 节点标识（用于 HTTP 回退上报的 X-Node 请求头）
+	Transport             string        // 传输模式："auto"（默认）或 "http"（纯 HTTP 回退，不尝试 WS）
 	PingInterval          time.Duration // 心跳发送间隔，默认 30s
 	ReadTimeout           time.Duration // 心跳与读超时，默认 60s
 	WriteTimeout          time.Duration // 写超时，默认 10s
@@ -155,6 +157,9 @@ func New(cfg Config) (Transport, error) {
 		return nil, fmt.Errorf("resolve transport endpoints: %w", err)
 	}
 
+	if cfg.Transport == "" {
+		cfg.Transport = "auto"
+	}
 	if cfg.PingInterval <= 0 {
 		cfg.PingInterval = 30 * time.Second
 	}
@@ -185,7 +190,7 @@ func New(cfg Config) (Transport, error) {
 		cfg.WSDialer.EnableCompression = true
 	}
 
-	fbClient := NewHTTPFallbackClient(httpURL, cfg.Token, cfg.HTTPClient)
+	fbClient := NewHTTPFallbackClient(httpURL, cfg.Token, cfg.HTTPClient, cfg.NodeID)
 
 	var b *Backoff
 	if len(cfg.BackoffSequence) > 0 {
@@ -388,8 +393,18 @@ func (t *wsTransport) Close() error {
 	return nil
 }
 
+func (t *wsTransport) isHTTPOnly() bool {
+	return strings.ToLower(strings.TrimSpace(t.cfg.Transport)) == "http"
+}
+
 func (t *wsTransport) runLoop() {
 	defer t.wg.Done()
+
+	if t.isHTTPOnly() {
+		t.transitionTo(StateFallbackHTTP)
+		t.runHTTPOnlyLoop()
+		return
+	}
 
 	for {
 		if t.State() == StateStopped {
@@ -768,6 +783,29 @@ func (t *wsTransport) runFallbackHTTP() (stopped bool) {
 	}
 }
 
+func (t *wsTransport) runHTTPOnlyLoop() {
+	flushTicker := time.NewTicker(t.cfg.FastInterval)
+	defer flushTicker.Stop()
+
+	for {
+		if t.State() == StateStopped {
+			return
+		}
+
+		select {
+		case <-t.ctx.Done():
+			return
+
+		case <-flushTicker.C:
+			if err := t.flushFallbackBatch(); err != nil {
+				if t.State() == StateStopped {
+					return
+				}
+			}
+		}
+	}
+}
+
 func (t *wsTransport) flushFallbackBatch() error {
 	t.fbMu.Lock()
 	if len(t.fbBatch) == 0 {
@@ -808,6 +846,9 @@ func (t *wsTransport) flushFallbackBatch() error {
 func (t *wsTransport) dialWS() (*websocket.Conn, *http.Response, error) {
 	header := http.Header{}
 	header.Set("Authorization", "Bearer "+t.cfg.Token)
+	if t.cfg.NodeID != "" {
+		header.Set("X-Node", t.cfg.NodeID)
+	}
 
 	dialer := t.cfg.WSDialer
 	if dialer == nil {
@@ -882,7 +923,7 @@ func resolveEndpoints(rawURL string) (wsURL string, httpURL string, err error) {
 
 	basePath := strings.TrimRight(u.Path, "/")
 	wsPath := basePath + "/api/agent/v1/rpc"
-	httpPath := basePath + "/api/agent/v1/report"
+	httpPath := basePath + ReportEndpointPath
 
 	wsU := *u
 	wsU.Scheme = wsScheme

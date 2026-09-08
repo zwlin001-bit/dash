@@ -205,6 +205,8 @@ func (r *Runtime) buildTransport() (transport.Transport, error) {
 	trCfg := transport.Config{
 		ServerURL:    r.cfg.Endpoint,
 		Token:        r.cfg.Token,
+		NodeID:       r.cfg.NodeID,
+		Transport:    r.cfg.Transport,
 		PingInterval: 30 * time.Second,
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 10 * time.Second,
