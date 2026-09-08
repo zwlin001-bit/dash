@@ -174,7 +174,7 @@
 }
 
 .table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-hover);
 }
 
 .cellActions {
@@ -193,49 +193,49 @@
 }
 
 .badgeSent {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: var(--ok-bg);
+  color: var(--ok);
 }
 
 .badgeFailed {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--err-bg);
+  color: var(--err);
 }
 
 .badgePending {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  background: var(--warn-bg);
+  color: var(--warn);
 }
 
 .badgeThrottled {
-  background: rgba(107, 114, 128, 0.15);
-  color: #9ca3af;
+  background: var(--bg-card-sub);
+  color: var(--text-mute);
 }
 
 .badgeQuietHeld {
-  background: rgba(139, 92, 246, 0.15);
-  color: #8b5cf6;
+  background: var(--bg-card-sub);
+  color: var(--color-purple);
 }
 
 .badgeKind {
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
+  background: var(--accent-bg);
+  color: var(--accent);
   font-family: var(--font-mono);
 }
 
 .badgeSeverityInfo {
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 
 .badgeSeverityWarning {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  background: var(--warn-bg);
+  color: var(--warn);
 }
 
 .badgeSeverityCritical {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--err-bg);
+  color: var(--err);
 }
 
 .notice {
@@ -262,7 +262,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -279,7 +279,7 @@
   max-width: 540px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--modal-shadow);
 }
 
 .modalTitle {

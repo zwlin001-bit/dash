@@ -712,7 +712,7 @@ export const CloudGuard: React.FC = () => {
               <button
                 type="button"
                 className="btn primary"
-                style={{ background: 'var(--err)', borderColor: 'var(--err)', color: '#fff' }}
+                style={{ background: 'var(--err)', borderColor: 'var(--err)', color: 'var(--on-accent)' }}
                 disabled={!forceConfirmed || !forceReason.trim() || forceStartMutation.isPending}
                 onClick={() =>
                   forceStartMutation.mutate({
