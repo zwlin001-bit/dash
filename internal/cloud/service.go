@@ -49,12 +49,23 @@ func (s *Service) EnsureBuiltinProviders(ctx context.Context) error {
 	if count == 0 {
 		insertQ := `INSERT INTO providers (provider_code, display_name, exec_path, is_enabled, created_at_ms, updated_at_ms)
 VALUES (?, ?, ?, ?, ?, ?)`
-		_, err := s.db.Exec(ctx, insertQ, "aliyun", "阿里云", "bin/dash-provider-aliyun", 1, now, now)
+		_, err := s.db.Exec(ctx, insertQ, "aliyun", "阿里云", "/usr/local/bin/dash-provider-aliyun", 1, now, now)
 		if err != nil {
 			return fmt.Errorf("cloud: insert builtin provider failed: %w", err)
 		}
+	} else {
+		updateQ := `UPDATE providers SET exec_path = ?, updated_at_ms = ? WHERE provider_code = ? AND (exec_path = 'bin/dash-provider-aliyun' OR exec_path NOT LIKE '/%')`
+		if _, err := s.db.Exec(ctx, updateQ, "/usr/local/bin/dash-provider-aliyun", now, "aliyun"); err != nil {
+			return fmt.Errorf("cloud: update builtin provider exec_path failed: %w", err)
+		}
 	}
 	return nil
+}
+
+func (s *Service) getProviderClient(ctx context.Context, providerCode string) (provider.ProviderClient, error) {
+	var execPath string
+	_ = s.db.QueryRow(ctx, `SELECT exec_path FROM providers WHERE provider_code = ?`, providerCode).Scan(&execPath)
+	return s.pm.GetClient(ctx, providerCode, execPath)
 }
 
 // CreateAccount registers a new cloud account.
@@ -308,7 +319,7 @@ func (s *Service) ActionResource(ctx context.Context, id, action string) (*provi
 		return nil, fmt.Errorf("cloud: parse credential json: %w", err)
 	}
 
-	client, err := s.pm.GetClient(ctx, r.ProviderCode)
+	client, err := s.getProviderClient(ctx, r.ProviderCode)
 	if err != nil {
 		return nil, fmt.Errorf("cloud: get provider client %s failed: %w", r.ProviderCode, err)
 	}
@@ -334,7 +345,7 @@ func (s *Service) DiscoverAccount(ctx context.Context, credentialID string, regi
 		return nil, fmt.Errorf("cloud: parse credential: %w", err)
 	}
 
-	client, err := s.pm.GetClient(ctx, "aliyun")
+	client, err := s.getProviderClient(ctx, "aliyun")
 	if err != nil {
 		return nil, fmt.Errorf("cloud: get provider client: %w", err)
 	}
@@ -398,7 +409,7 @@ func (s *Service) executeSync(ctx context.Context, jobID, accountID string) {
 		return
 	}
 
-	client, err := s.pm.GetClient(ctx, acc.ProviderCode)
+	client, err := s.getProviderClient(ctx, acc.ProviderCode)
 	if err != nil {
 		s.updateJobFailed(jobID, "get provider client failed: "+err.Error())
 		return

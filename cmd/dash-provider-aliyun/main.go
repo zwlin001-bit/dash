@@ -20,13 +20,23 @@ import (
 var (
 	version   = "dev"
 	gitCommit = "none"
-	buildTime = ""
+	buildTime = "unknown"
 )
 
 func main() {
-	var socketPath string
+	var (
+		socketPath  string
+		showVersion bool
+	)
 	flag.StringVar(&socketPath, "socket", "", "Path to unix domain socket")
+	flag.BoolVar(&showVersion, "v", false, "print version and exit")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("dash-provider-aliyun %s (commit: %s, built: %s)\n", version, gitCommit, buildTime)
+		return
+	}
 
 	if socketPath == "" {
 		fmt.Fprintf(os.Stderr, "Usage: dash-provider-aliyun -socket <socket_path>\n")

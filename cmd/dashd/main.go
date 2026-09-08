@@ -133,6 +133,11 @@ func runMigrate(args []string) {
 		os.Exit(1)
 	}
 
+	// 自愈：若 providers.exec_path 仍是旧的相对路径，更正为绝对路径 (P2-06)
+	nowMs := time.Now().UnixMilli()
+	updateQ := `UPDATE providers SET exec_path = ?, updated_at_ms = ? WHERE provider_code = ? AND (exec_path = 'bin/dash-provider-aliyun' OR exec_path NOT LIKE '/%')`
+	_, _ = database.Exec(ctx, updateQ, "/usr/local/bin/dash-provider-aliyun", nowMs, "aliyun")
+
 	fmt.Println("Database schema migration completed successfully.")
 }
 
@@ -269,6 +274,11 @@ func runInitDB(args []string) {
 		fmt.Printf("Admin user %s created successfully.\n", adminUser)
 		fmt.Printf("ADMIN_PASSWORD: %s\n", pw)
 	}
+
+	// 自愈：若 providers.exec_path 仍是旧的相对路径，更正为绝对路径 (P2-06)
+	nowMs := time.Now().UnixMilli()
+	updateQ := `UPDATE providers SET exec_path = ?, updated_at_ms = ? WHERE provider_code = ? AND (exec_path = 'bin/dash-provider-aliyun' OR exec_path NOT LIKE '/%')`
+	_, _ = database.Exec(ctx, updateQ, "/usr/local/bin/dash-provider-aliyun", nowMs, "aliyun")
 
 	fmt.Println("Database initialization completed successfully.")
 }

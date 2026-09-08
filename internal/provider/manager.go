@@ -55,6 +55,55 @@ func (m *Manager) RegisterMock(providerCode string, client ProviderClient) {
 	m.mockClients[providerCode] = client
 }
 
+// ResolveExecPath resolves the given execPath according to the rules:
+// 1. 绝对路径直接用（若存在则直接使用；若不存在则退回可执行文件所在目录与 PATH 查找）
+// 2. 相对路径先按可执行文件所在目录解析 → 再退回 PATH 查找
+func ResolveExecPath(execPath string) (string, error) {
+	if filepath.IsAbs(execPath) {
+		if fi, err := os.Stat(execPath); err == nil && !fi.IsDir() && fi.Mode()&0111 != 0 {
+			return execPath, nil
+		}
+		// 若指定的绝对路径在磁盘上不存在（如在开发机运行但配置为生产绝对路径），退回本进程所在目录与 PATH 查找
+	}
+
+	baseName := filepath.Base(execPath)
+
+	// 先按可执行文件 (dashd) 所在目录解析
+	if selfExe, err := os.Executable(); err == nil {
+		selfDir := filepath.Dir(selfExe)
+		candidates := []string{
+			filepath.Join(selfDir, execPath),
+			filepath.Join(selfDir, baseName),
+			filepath.Join(filepath.Dir(selfDir), execPath),
+			filepath.Join(filepath.Dir(selfDir), "bin", baseName),
+		}
+		for _, c := range candidates {
+			if fi, err := os.Stat(c); err == nil && !fi.IsDir() && fi.Mode()&0111 != 0 {
+				return c, nil
+			}
+		}
+	}
+
+	// 检查当前工作目录 (CWD)
+	if fi, err := os.Stat(execPath); err == nil && !fi.IsDir() && fi.Mode()&0111 != 0 {
+		return execPath, nil
+	}
+
+	// 再退回 PATH 查找
+	if p, err := exec.LookPath(execPath); err == nil {
+		return p, nil
+	}
+	if p, err := exec.LookPath(baseName); err == nil {
+		return p, nil
+	}
+
+	if filepath.IsAbs(execPath) {
+		return execPath, nil
+	}
+
+	return "", fmt.Errorf("provider: executable %q not found", execPath)
+}
+
 // FindExecutable searches for the provider executable in search directories.
 func (m *Manager) FindExecutable(providerCode string) (string, error) {
 	binName := fmt.Sprintf("dash-provider-%s", providerCode)
@@ -66,16 +115,12 @@ func (m *Manager) FindExecutable(providerCode string) (string, error) {
 		}
 	}
 
-	// Try PATH
-	if p, err := exec.LookPath(binName); err == nil {
-		return p, nil
-	}
-
-	return "", fmt.Errorf("provider: binary %q not found in %v or PATH", binName, m.searchDirs)
+	return ResolveExecPath(binName)
 }
 
 // GetClient returns a connected ProviderClient, launching and supervising the process if needed.
-func (m *Manager) GetClient(ctx context.Context, providerCode string) (ProviderClient, error) {
+// An optional explicit execPath can be passed; if omitted, FindExecutable(providerCode) is used.
+func (m *Manager) GetClient(ctx context.Context, providerCode string, optExecPath ...string) (ProviderClient, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -91,9 +136,15 @@ func (m *Manager) GetClient(ctx context.Context, providerCode string) (ProviderC
 		return inst.client, nil
 	}
 
-	execPath, err := m.FindExecutable(providerCode)
-	if err != nil {
-		return nil, err
+	var execPath string
+	if len(optExecPath) > 0 && optExecPath[0] != "" {
+		execPath = optExecPath[0]
+	} else {
+		var err error
+		execPath, err = m.FindExecutable(providerCode)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	socketPath := filepath.Join(m.runtimeDir, fmt.Sprintf("dash-provider-%s-%d.sock", providerCode, os.Getpid()))
@@ -109,12 +160,17 @@ func (m *Manager) GetClient(ctx context.Context, providerCode string) (ProviderC
 }
 
 func (m *Manager) startProcess(ctx context.Context, providerCode, execPath, socketPath string) (*ProcessInstance, error) {
-	cmd := exec.Command(execPath, "-socket", socketPath)
+	resolvedPath, err := ResolveExecPath(execPath)
+	if err != nil {
+		return nil, fmt.Errorf("provider: resolve %s failed: %w", execPath, err)
+	}
+
+	cmd := exec.Command(resolvedPath, "-socket", socketPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("provider: start %s failed: %w", execPath, err)
+		return nil, fmt.Errorf("provider: start %s failed: %w", resolvedPath, err)
 	}
 
 	// Wait for socket to become active (up to 5 seconds)

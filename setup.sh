@@ -14,10 +14,15 @@ usage() {
 Usage: $0 <command> [options]
 
 Commands:
+  build       Build frontend assets and backend binaries into ./bin/
   install     Install and bootstrap dashd with Nginx dual-domain ingress
   upgrade     Upgrade dashd binary with automatic rollback
   uninstall   Uninstall dashd service, binary, and Nginx configuration
   status      Show current status of dashd, Nginx, and TLS certificates
+
+Options for 'build':
+  --skip-web                  Skip building frontend assets (still checks consistency)
+  --version <ver>             Override version string embedded into binaries
 
 Options for 'install':
   --console-domain <domain>   Domain for internal web console (e.g. console.dash.internal)
@@ -36,7 +41,9 @@ Options for 'install':
   --yes, -y                   Non-interactive mode (use defaults)
 
 Options for 'upgrade':
-  --binary <path>             Path to new dashd binary (default: ./bin/dashd)
+  --binary <path>             Path to new dashd binary (default: auto-build via ./setup.sh build)
+  --skip-web                  Skip building frontend assets during upgrade build
+  --version <ver>             Override version string during upgrade build
 
 Options for 'uninstall':
   --purge                     Also remove /etc/dash and /var/lib/dash (database is NEVER touched)
@@ -507,6 +514,136 @@ extract_json_int() {
     printf '%s' "$1" | sed -n 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p'
 }
 
+cmd_build() {
+    SKIP_WEB=0
+    BUILD_VERSION=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --skip-web)
+                SKIP_WEB=1
+                shift
+                ;;
+            --version)
+                BUILD_VERSION="$2"
+                shift 2
+                ;;
+            --version=*)
+                BUILD_VERSION="${1#*=}"
+                shift
+                ;;
+            *)
+                echo "未知参数: $1" >&2
+                usage
+                ;;
+        esac
+    done
+
+    echo "==> [1/4] 探测构建工具链 (go, node, npm)..."
+    if ! command -v go >/dev/null 2>&1; then
+        echo "❌ 错误: 未检测到 Go 编译器 (go)。" >&2
+        echo "   构建 dashd、dash-agent 和 dash-provider-aliyun 需要 Go 1.22+ 编译环境。" >&2
+        echo "   安装建议: 请安装 Go (例如: apt-get install -y golang 或访问 https://go.dev/doc/install)。" >&2
+        exit 1
+    fi
+
+    HAS_NPM=1
+    if ! command -v npm >/dev/null 2>&1 || ! command -v node >/dev/null 2>&1; then
+        HAS_NPM=0
+    fi
+
+    echo "==> [2/4] 处理前端内嵌产物..."
+    LINT_DIST_OK=0
+    if [ -x "$SCRIPT_DIR/scripts/lint-dist.sh" ]; then
+        if (cd "$SCRIPT_DIR" && ./scripts/lint-dist.sh >/dev/null 2>&1); then
+            LINT_DIST_OK=1
+        fi
+    fi
+
+    if [ "$SKIP_WEB" -eq 1 ]; then
+        echo "--> 跳过前端构建 (--skip-web)。"
+    elif [ "$HAS_NPM" -eq 1 ]; then
+        if [ "$LINT_DIST_OK" -eq 1 ]; then
+            echo "--> 前端内嵌产物与源码已一致，跳过前端构建。"
+        else
+            echo "--> 前端内嵌产物与源码不一致，开始构建前端..."
+            if [ ! -d "$SCRIPT_DIR/web/node_modules" ] || [ "$SCRIPT_DIR/web/package-lock.json" -nt "$SCRIPT_DIR/web/node_modules" ]; then
+                echo "--> 正在安装前端依赖 (npm ci)..."
+                (cd "$SCRIPT_DIR/web" && npm ci) || {
+                    echo "❌ 错误: 前端依赖安装失败 (npm ci)。" >&2
+                    echo "   请检查网络连接或 web/package-lock.json 文件完整性。" >&2
+                    exit 1
+                }
+            fi
+            echo "--> 正在编译前端资产 (npm run build)..."
+            (cd "$SCRIPT_DIR/web" && npm run build) || {
+                echo "❌ 错误: 前端构建失败 (npm run build)。" >&2
+                echo "   请修复前端源码错误后重试。" >&2
+                exit 1
+            }
+            echo "--> 同步前端产物到 internal/api/dist/ 并更新构建指纹..."
+            rm -rf "$SCRIPT_DIR/internal/api/dist"
+            mkdir -p "$SCRIPT_DIR/internal/api/dist"
+            cp -r "$SCRIPT_DIR/web/dist/"* "$SCRIPT_DIR/internal/api/dist/"
+            (cd "$SCRIPT_DIR" && ./scripts/lint-dist.sh --write) || {
+                echo "❌ 错误: 写入前端构建指纹失败。" >&2
+                exit 1
+            }
+        fi
+    else
+        # 无 Node / npm 时的优雅降级
+        if [ "$LINT_DIST_OK" -eq 1 ]; then
+            echo "⚠️ 未检测到 Node.js / npm (可使用 apt install nodejs npm 或通过 nvm 安装)。"
+            echo "✅ 前端内嵌产物与源码一致，跳过前端构建，继续使用现有产物。"
+        else
+            echo "❌ 错误: 本机未安装 Node.js / npm，且前端内嵌产物与源码不一致！" >&2
+            echo "   web/src 源码有更新，但 internal/api/dist/ 仍为旧产物。" >&2
+            echo "   解决建议: 请在有 Node.js 环境的机器上执行 make build-web 并提交产物，" >&2
+            echo "   或者在本机安装 Node.js 与 npm (例如: apt-get install -y nodejs npm) 后重试。" >&2
+            exit 1
+        fi
+    fi
+
+    echo "==> [3/4] 校验前端产物一致性守卫..."
+    if [ -x "$SCRIPT_DIR/scripts/lint-dist.sh" ]; then
+        (cd "$SCRIPT_DIR" && ./scripts/lint-dist.sh) || {
+            echo "❌ 错误: 前端产物一致性校验失败，构建中止。" >&2
+            exit 1
+        }
+    fi
+
+    echo "==> [4/4] 编译全部后端二进制文件..."
+    if [ -z "$BUILD_VERSION" ]; then
+        BUILD_VERSION=$(git describe --tags --always --dirty 2>/dev/null || cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo dev)
+    fi
+    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo none)
+    BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    LDFLAGS="-s -w -X main.version=${BUILD_VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME}"
+
+    echo "--> 目标版本: ${BUILD_VERSION} (commit: ${GIT_COMMIT}, buildTime: ${BUILD_TIME})"
+    mkdir -p "$SCRIPT_DIR/bin"
+
+    echo "  -> 编译 dashd (bin/dashd)..."
+    (cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/dashd ./cmd/dashd) || {
+        echo "❌ 错误: 编译 bin/dashd 失败。" >&2
+        exit 1
+    }
+
+    echo "  -> 编译 dash-agent (bin/dash-agent)..."
+    (cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -tags nethttpomithttp2 -ldflags "$LDFLAGS" -o bin/dash-agent ./cmd/dash-agent) || {
+        echo "❌ 错误: 编译 bin/dash-agent 失败。" >&2
+        exit 1
+    }
+
+    echo "  -> 编译 dash-provider-aliyun (bin/dash-provider-aliyun)..."
+    (cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/dash-provider-aliyun ./cmd/dash-provider-aliyun) || {
+        echo "❌ 错误: 编译 bin/dash-provider-aliyun 失败。" >&2
+        exit 1
+    }
+
+    echo "✅ 构建完成！产物位于: $SCRIPT_DIR/bin/"
+}
+
 cmd_install() {
     check_root
 
@@ -715,45 +852,23 @@ CFG_EOF
         request_agent_acme_cert "$AGENT_DOMAIN" "$ACME_EMAIL"
     fi
 
-    echo "==> [5/8] 准备 dashd 可执行程序..."
-    BIN_SRC=""
-    if [ -f "$SCRIPT_DIR/bin/dashd" ]; then
-        BIN_SRC="$SCRIPT_DIR/bin/dashd"
-    elif [ -f "./bin/dashd" ]; then
-        BIN_SRC="./bin/dashd"
-    elif command -v go >/dev/null 2>&1 && [ -d "$SCRIPT_DIR/cmd/dashd" ]; then
-        echo "--> 正在编译 dashd 二进制..."
-        (cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -o bin/dashd ./cmd/dashd)
-        BIN_SRC="$SCRIPT_DIR/bin/dashd"
-    elif [ -f /usr/local/bin/dashd ]; then
-        BIN_SRC="/usr/local/bin/dashd"
-    fi
+    echo "==> [5/8] 准备 dashd 与 provider 可执行程序..."
+    cmd_build
 
-    if [ -z "$BIN_SRC" ] || [ ! -f "$BIN_SRC" ]; then
-        echo "❌ 错误: 未找到可执行文件 bin/dashd 且无法自动编译。" >&2
+    if [ ! -f "$SCRIPT_DIR/bin/dashd" ]; then
+        echo "❌ 错误: 未找到可执行文件 bin/dashd。" >&2
         exit 1
     fi
 
-    if [ "$BIN_SRC" != "/usr/local/bin/dashd" ]; then
-        cp -f "$BIN_SRC" /usr/local/bin/dashd
-    fi
+    cp -f "$SCRIPT_DIR/bin/dashd" /usr/local/bin/dashd
     chmod 0755 /usr/local/bin/dashd
     chown root:root /usr/local/bin/dashd
 
-    # 安装 dash-provider-aliyun (P2-02)
-    PROVIDER_BIN=""
     if [ -f "$SCRIPT_DIR/bin/dash-provider-aliyun" ]; then
-        PROVIDER_BIN="$SCRIPT_DIR/bin/dash-provider-aliyun"
-    elif [ -f "./bin/dash-provider-aliyun" ]; then
-        PROVIDER_BIN="./bin/dash-provider-aliyun"
-    elif command -v go >/dev/null 2>&1 && [ -d "$SCRIPT_DIR/cmd/dash-provider-aliyun" ]; then
-        (cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -o bin/dash-provider-aliyun ./cmd/dash-provider-aliyun)
-        PROVIDER_BIN="$SCRIPT_DIR/bin/dash-provider-aliyun"
-    fi
-    if [ -n "$PROVIDER_BIN" ] && [ -f "$PROVIDER_BIN" ]; then
-        cp -f "$PROVIDER_BIN" /usr/local/bin/dash-provider-aliyun
+        cp -f "$SCRIPT_DIR/bin/dash-provider-aliyun" /usr/local/bin/dash-provider-aliyun
         chmod 0755 /usr/local/bin/dash-provider-aliyun
         chown root:root /usr/local/bin/dash-provider-aliyun
+        echo "--> 已安装 dash-provider-aliyun"
     fi
 
     if command -v setcap >/dev/null 2>&1; then
@@ -898,11 +1013,26 @@ cmd_upgrade() {
     detect_init
 
     NEW_BIN=""
+    UPGRADE_SKIP_WEB=0
+    UPGRADE_VERSION=""
+
     while [ $# -gt 0 ]; do
         case "$1" in
             --binary)
                 NEW_BIN="$2"
                 shift 2
+                ;;
+            --skip-web)
+                UPGRADE_SKIP_WEB=1
+                shift
+                ;;
+            --version)
+                UPGRADE_VERSION="$2"
+                shift 2
+                ;;
+            --version=*)
+                UPGRADE_VERSION="${1#*=}"
+                shift
                 ;;
             *)
                 NEW_BIN="$1"
@@ -912,28 +1042,18 @@ cmd_upgrade() {
     done
 
     if [ -z "$NEW_BIN" ]; then
-        if [ -f "$SCRIPT_DIR/bin/dashd" ]; then
-            NEW_BIN="$SCRIPT_DIR/bin/dashd"
-        elif [ -f "./bin/dashd" ]; then
-            NEW_BIN="./bin/dashd"
-        elif command -v go >/dev/null 2>&1 && [ -d "$SCRIPT_DIR/cmd/dashd" ]; then
-            # ★ 前端产物一致性守卫（P1-25）：自行编译时绝不能绕过，
-            #   否则 web/src 改了但 internal/api/dist 是旧的，照样能编译部署上去 —— 这正是 P1-25 要防的坑。
-            if [ -x "$SCRIPT_DIR/scripts/lint-dist.sh" ]; then
-                if ! (cd "$SCRIPT_DIR" && ./scripts/lint-dist.sh); then
-                    echo "❌ 前端内嵌产物与源码不一致，已中止升级。" >&2
-                    echo "   请先在有 Node 的机器上执行 make build-web 并提交产物，再重新升级。" >&2
-                    exit 1
-                fi
-            fi
-            echo "--> 正在编译新版 dashd 二进制..."
-            (cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -o bin/dashd ./cmd/dashd)
-            NEW_BIN="$SCRIPT_DIR/bin/dashd"
-        fi
+        echo "--> 未指定二进制文件，开始执行构建流水线..."
+        BUILD_FLAGS=""
+        [ "$UPGRADE_SKIP_WEB" -eq 1 ] && BUILD_FLAGS="$BUILD_FLAGS --skip-web"
+        [ -n "$UPGRADE_VERSION" ] && BUILD_FLAGS="$BUILD_FLAGS --version $UPGRADE_VERSION"
+        # shellcheck disable=SC2086
+        cmd_build $BUILD_FLAGS
+        NEW_BIN="$SCRIPT_DIR/bin/dashd"
     fi
+    NEW_PROVIDER="$SCRIPT_DIR/bin/dash-provider-aliyun"
 
     if [ -z "$NEW_BIN" ] || [ ! -f "$NEW_BIN" ]; then
-        echo "❌ 错误: 未指定新版二进制文件或文件不存在。" >&2
+        echo "❌ 错误: 未找到新版 dashd 二进制文件 ($NEW_BIN)。" >&2
         exit 1
     fi
 
@@ -942,8 +1062,56 @@ cmd_upgrade() {
         exit 1
     fi
 
-    echo "==> [1/6] 备份当前旧版本二进制..."
+    echo "==> [1/6] 备份当前旧版本二进制 (dashd 与 provider)..."
     cp -p /usr/local/bin/dashd /usr/local/bin/dashd.bak
+    HAD_OLD_PROVIDER=0
+    if [ -f /usr/local/bin/dash-provider-aliyun ]; then
+        cp -p /usr/local/bin/dash-provider-aliyun /usr/local/bin/dash-provider-aliyun.bak
+        HAD_OLD_PROVIDER=1
+    fi
+
+    rollback_upgrade() {
+        echo "❌ 升级失败，正在自动回滚到旧版本 (dashd 与 provider)..." >&2
+        if [ "$INIT_SYSTEM" = "systemd" ]; then
+            journalctl -u dashd.service -n 30 --no-pager >&2 || true
+            systemctl stop dashd.service || true
+        elif [ "$INIT_SYSTEM" = "openrc" ]; then
+            rc-service dashd stop || true
+        else
+            pkill -f /usr/local/bin/dashd || true
+        fi
+
+        # 回滚 dashd
+        if [ -f /usr/local/bin/dashd.bak ]; then
+            cp -f /usr/local/bin/dashd.bak /usr/local/bin/dashd
+            chmod 0755 /usr/local/bin/dashd
+            chown root:root /usr/local/bin/dashd
+            if command -v setcap >/dev/null 2>&1; then
+                setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
+            fi
+            rm -f /usr/local/bin/dashd.bak
+        fi
+
+        # 回滚 provider
+        if [ "$HAD_OLD_PROVIDER" -eq 1 ] && [ -f /usr/local/bin/dash-provider-aliyun.bak ]; then
+            cp -f /usr/local/bin/dash-provider-aliyun.bak /usr/local/bin/dash-provider-aliyun
+            chmod 0755 /usr/local/bin/dash-provider-aliyun
+            chown root:root /usr/local/bin/dash-provider-aliyun
+            rm -f /usr/local/bin/dash-provider-aliyun.bak
+        elif [ "$HAD_OLD_PROVIDER" -eq 0 ]; then
+            rm -f /usr/local/bin/dash-provider-aliyun
+        fi
+
+        # 重启旧服务
+        if [ "$INIT_SYSTEM" = "systemd" ]; then
+            systemctl start dashd.service
+        elif [ "$INIT_SYSTEM" = "openrc" ]; then
+            rc-service dashd start
+        else
+            su -s /bin/sh dashd -c "/usr/local/bin/dashd -config /etc/dash/config.toml serve" >/var/log/dashd.log 2>&1 &
+        fi
+        echo "✅ 回滚完成，旧版本服务已恢复运行。"
+    }
 
     echo "==> [2/6] 停止运行中的服务..."
     if [ "$INIT_SYSTEM" = "systemd" ]; then
@@ -954,7 +1122,7 @@ cmd_upgrade() {
         pkill -f /usr/local/bin/dashd || true
     fi
 
-    echo "==> [3/6] 替换新版本二进制..."
+    echo "==> [3/6] 替换新版本二进制 (dashd 与 provider)..."
     cp -f "$NEW_BIN" /usr/local/bin/dashd
     chmod 0755 /usr/local/bin/dashd
     chown root:root /usr/local/bin/dashd
@@ -962,19 +1130,20 @@ cmd_upgrade() {
         setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
     fi
 
+    if [ -f "$NEW_PROVIDER" ]; then
+        cp -f "$NEW_PROVIDER" /usr/local/bin/dash-provider-aliyun
+        chmod 0755 /usr/local/bin/dash-provider-aliyun
+        chown root:root /usr/local/bin/dash-provider-aliyun
+        echo "--> 已更新 dash-provider-aliyun"
+    else
+        echo "ℹ️ 未找到 dash-provider-aliyun 二进制，跳过 provider 更新 (云管理功能未启用)"
+    fi
+
     echo "==> [4/6] 执行数据库迁移..."
     MIGRATE_OUT=$(/usr/local/bin/dashd migrate --config /etc/dash/config.toml 2>&1) || {
-        echo "❌ 数据库迁移失败，正在回滚到旧版本..." >&2
+        echo "❌ 数据库迁移失败:" >&2
         printf '%s\n' "$MIGRATE_OUT" >&2
-        cp -f /usr/local/bin/dashd.bak /usr/local/bin/dashd
-        if command -v setcap >/dev/null 2>&1; then
-            setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
-        fi
-        if [ "$INIT_SYSTEM" = "systemd" ]; then
-            systemctl start dashd.service
-        elif [ "$INIT_SYSTEM" = "openrc" ]; then
-            rc-service dashd start
-        fi
+        rollback_upgrade
         exit 1
     }
 
@@ -1013,34 +1182,13 @@ cmd_upgrade() {
     done
 
     if [ "$HEALTH_OK" -ne 1 ]; then
-        echo "❌ 新版本健康检查失败，正在自动回滚到旧版本..." >&2
-        if [ "$INIT_SYSTEM" = "systemd" ]; then
-            journalctl -u dashd.service -n 30 --no-pager >&2 || true
-            systemctl stop dashd.service || true
-        elif [ "$INIT_SYSTEM" = "openrc" ]; then
-            rc-service dashd stop || true
-        else
-            pkill -f /usr/local/bin/dashd || true
-        fi
-
-        cp -f /usr/local/bin/dashd.bak /usr/local/bin/dashd
-        if command -v setcap >/dev/null 2>&1; then
-            setcap cap_net_bind_service=+ep /usr/local/bin/dashd || true
-        fi
-
-        if [ "$INIT_SYSTEM" = "systemd" ]; then
-            systemctl start dashd.service
-        elif [ "$INIT_SYSTEM" = "openrc" ]; then
-            rc-service dashd start
-        else
-            su -s /bin/sh dashd -c "/usr/local/bin/dashd -config /etc/dash/config.toml serve" >/var/log/dashd.log 2>&1 &
-        fi
-        echo "✅ 回滚完成，旧版本服务已恢复运行。"
+        echo "❌ 新版本健康检查失败。" >&2
+        rollback_upgrade
         exit 1
     fi
 
-    rm -f /usr/local/bin/dashd.bak
-    echo "🎉 dashd 升级成功！"
+    rm -f /usr/local/bin/dashd.bak /usr/local/bin/dash-provider-aliyun.bak
+    echo "🎉 dashd 与 provider 升级成功！"
 }
 
 cmd_uninstall() {
@@ -1150,6 +1298,17 @@ cmd_status() {
         fi
     fi
 
+    PROVIDER_VER=""
+    if [ -f /usr/local/bin/dash-provider-aliyun ]; then
+        PROVIDER_VER=$(/usr/local/bin/dash-provider-aliyun -v 2>/dev/null | awk '{print $2}' || true)
+        [ -z "$PROVIDER_VER" ] && PROVIDER_VER="installed"
+    elif [ -f "$SCRIPT_DIR/bin/dash-provider-aliyun" ]; then
+        PROVIDER_VER=$("$SCRIPT_DIR/bin/dash-provider-aliyun" -v 2>/dev/null | awk '{print $2}' || true)
+        [ -z "$PROVIDER_VER" ] && PROVIDER_VER="installed (本地 bin)"
+    else
+        PROVIDER_VER="未安装"
+    fi
+
     # 4. 证书到期时间
     CONSOLE_CERT_EXPIRY="尚未生成"
     AGENT_CERT_EXPIRY="尚未生成"
@@ -1204,6 +1363,12 @@ cmd_status() {
     fi
     echo "Nginx 状态:     $NGINX_STATUS"
     echo "程序版本:       $VER"
+    echo "Provider 版本:  $PROVIDER_VER"
+    if [ "$PROVIDER_VER" != "未安装" ] && [ -n "$VER" ] && [ "$VER" != "not installed" ]; then
+        if [ "$VER" != "$PROVIDER_VER" ]; then
+            echo "⚠️ 警告: dashd 版本 ($VER) 与 Provider 版本 ($PROVIDER_VER) 不一致！"
+        fi
+    fi
     echo "数据库连通性:   $DB_STATUS"
     echo "控制台入口:     $CONSOLE_INFO"
     echo "控制台证书到期: $CONSOLE_CERT_EXPIRY"
@@ -1222,6 +1387,9 @@ fi
 shift
 
 case "$COMMAND" in
+    build)
+        cmd_build "$@"
+        ;;
     install)
         cmd_install "$@"
         ;;
