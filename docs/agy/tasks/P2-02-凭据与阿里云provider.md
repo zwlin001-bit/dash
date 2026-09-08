@@ -127,3 +127,48 @@ BSS 报 `NoPermission` 或 endpoint 错误时，返回结构里带上 `bill_erro
 - 不做实例创建 / 销毁 / 改配（`resource.create` / `delete` 先返回未实现）
 - 不做 GCP
 - 不做保活逻辑（那是 P2-04）
+
+---
+
+# 验收记录
+
+## 第 1 轮 · 2026-09-08 · ✅ 通过
+
+分支 `agy/p2-02-aliyun-provider`，提交 `03b573a`。
+
+| 验收项 | 实测 |
+|---|---|
+| 1 明文读不出 | ✅ `credentials.Summary` 只出 `id`/`name`/`cred_kind`/`fingerprint`；`MaskFingerprint` 产出 `LTAI****xxxx` |
+| 2 进程里搜不到 SK | ✅ provider 只以 `exec.Command(execPath, "-socket", socketPath)` 拉起，**argv 与 env 里都没有凭据**，走 RPC 传递 |
+| 6 BSS 失败隔离 | ✅ `client.go:507` 显式实现，错误落到 `bill_error` 字段，CDT/ECS 照常返回；`TestBSSFailureIsolation` 覆盖 |
+| 7 重试与脱敏 | ✅ `DefaultBackoffs = {1s, 4s, 15s}`；`TestRetryBehaviorAndNoSecretInError` 同时断言错误信息不含密钥 |
+| 8 二进制体积 | ✅ **6.9 MB**，限额 30 MB。依赖纪律生效 |
+| 9 import 禁令 | ✅ `scripts/lint-imports.sh:42-56` 挡住 `alibaba-cloud-sdk-go/services/*` 子包 |
+| 10 调用次数 | ✅ `TestGroupingCallsDescribeAndCDT` 覆盖 |
+| 独立二进制 | ✅ `cmd/dash-provider-aliyun/`，Makefile 有 `build-provider-aliyun` 目标并挂进 `build` |
+| Go 测试 | ✅ 26 个包全绿，`go vet` 干净 |
+
+### 三条阿里云事实逐条核对
+
+| 事实 | 落地 |
+|---|---|
+| CDT 流量是**账号级**的，每账号每轮只查一次 | ✅ `cdtCache map[string]*cachedCDT`，key 是 AK id，带 TTL；`client.go:228` 注释写明「account-level, sum across TrafficDetails」 |
+| `DescribeInstances` 单次 ≤ 100 且按 (凭据, Region) 分组 | ✅ `DescribeInstancesGroup` + `PageSize=100` |
+| BSS endpoint 按账号归属地区分 | ✅ **做成了 DB 列 `account_site`**，不是猜的；还留了 `customDomain` 覆盖口子 |
+
+### 迁移编号
+
+用了 `0005_cloud_provider`，把 `0004` 留给 P2-03 的 Job 引擎 —— 与 P2-01 的 `0003_notify` 不冲突。**考虑周到，予以肯定。**
+
+### F1（与 P2-01 共有）· `internal/crypto` 冲突
+
+见 P2-01 验收记录。**裁决保留本任务的 `EncryptEnvelope`/`DecryptEnvelope`**（真信封加密，
+符合 `02-database.md` §3），P2-01 改为调用它，并把 P2-01 的 `crypto.Mask()` 并进来。
+
+### 未能在验收机验证
+
+验收机无阿里云凭据、无出网到 aliyuncs.com：
+验收项 3（自动发现真实 ECS）、4（真的启停）、5（CDT 数字与控制台一致）**必须在 VPS 上用真账号实跑**。
+★ 第一次实跑建议先用一台**不重要的测试实例**，验收项 4 会真的关机。
+
+**任务 P2-02 通过，F1 在合并时解决。**
