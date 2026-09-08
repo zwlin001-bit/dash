@@ -241,11 +241,11 @@ export const Cloud: React.FC = () => {
           </div>
 
           {isLoadingResources ? (
-            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-dim)' }}>
               加载资源中...
             </div>
           ) : resources.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)' }}>
               暂未同步到任何云资源。请切换到「云账号与凭据」标签页添加云账号并点击「立即同步」。
             </div>
           ) : (
@@ -272,11 +272,11 @@ export const Cloud: React.FC = () => {
                     <tr key={r.id}>
                       <td>
                         <div style={{ fontWeight: 600 }}>{r.name || r.res_ref}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{r.res_ref}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{r.res_ref}</div>
                       </td>
                       <td>
                         <div>阿里云</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{r.region}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{r.region}</div>
                       </td>
                       <td>
                         <span
@@ -293,14 +293,14 @@ export const Cloud: React.FC = () => {
                       </td>
                       <td>
                         <div>公: {r.public_ips || '-'}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>内: {r.private_ips || '-'}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>内: {r.private_ips || '-'}</div>
                       </td>
                       <td>
                         {specs.vcpu ? `${specs.vcpu}核 ${specs.mem_mb ? specs.mem_mb / 1024 + 'GB' : ''}` : '-'}
                       </td>
                       <td>
                         {r.attrs_json && JSON.parse(r.attrs_json || '{}').bill_error ? (
-                          <span style={{ color: '#f59e0b', fontSize: '11px' }} title={JSON.parse(r.attrs_json).bill_error}>
+                          <span style={{ color: 'var(--warn)', fontSize: '11px' }} title={JSON.parse(r.attrs_json).bill_error}>
                             ⚠️ 账单暂不可用
                           </span>
                         ) : (
@@ -350,7 +350,7 @@ export const Cloud: React.FC = () => {
             </div>
 
             {accounts.length === 0 ? (
-              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-dim)' }}>
                 暂无云账号，请点击右上角「+ 添加云账号」开始接入。
               </div>
             ) : (
@@ -387,7 +387,7 @@ export const Cloud: React.FC = () => {
                             ? new Date(acc.last_sync_at_ms).toLocaleString()
                             : '未同步'}
                         </td>
-                        <td style={{ fontWeight: 600, color: 'var(--primary-color)' }}>
+                        <td style={{ fontWeight: 600, color: 'var(--accent)' }}>
                           {formatBytes(cdtBytes)}
                         </td>
                         <td>
@@ -401,7 +401,7 @@ export const Cloud: React.FC = () => {
                             </button>
                             <button
                               className="btn mini ghost"
-                              style={{ color: '#ef4444' }}
+                              style={{ color: 'var(--err)' }}
                               onClick={() => {
                                 if (window.confirm(`确定删除账号 ${acc.name} 吗？`)) {
                                   deleteAccMutation.mutate(acc.id);
@@ -425,7 +425,7 @@ export const Cloud: React.FC = () => {
             <div className={styles.sectionHeader}>
               <div>
                 <h2 className={styles.sectionTitle}>凭据管理 (信封加密)</h2>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '2px' }}>
                   ★ 采用 AES-256-GCM 信封加密，主密钥永不进库，明文仅在 RPC 通信内存中瞬时留存
                 </div>
               </div>
@@ -435,7 +435,7 @@ export const Cloud: React.FC = () => {
             </div>
 
             {credentials.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)' }}>
                 暂无凭据，请录入阿里云 AK/SK。
               </div>
             ) : (
@@ -455,7 +455,7 @@ export const Cloud: React.FC = () => {
                       <td style={{ fontWeight: 600 }}>{c.name}</td>
                       <td>阿里云 AK</td>
                       <td>
-                        <code style={{ background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
+                        <code style={{ background: 'var(--bg-card-sub)', padding: '2px 6px', borderRadius: '4px' }}>
                           {c.fingerprint}
                         </code>
                       </td>
@@ -463,7 +463,7 @@ export const Cloud: React.FC = () => {
                       <td>
                         <button
                           className="btn mini ghost"
-                          style={{ color: '#ef4444' }}
+                          style={{ color: 'var(--err)' }}
                           onClick={() => {
                             if (window.confirm(`确定删除凭据 ${c.name} 吗？`)) {
                               deleteCredMutation.mutate(c.id);
@@ -534,7 +534,7 @@ export const Cloud: React.FC = () => {
                 onChange={(e) => setNewSK(e.target.value)}
               />
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
               🔒 提交后密钥将立即使用 AES-256-GCM 信封加密，明文不会在任何 API 中返回。
             </div>
             <div className={styles.formActions}>
@@ -681,7 +681,7 @@ export const Cloud: React.FC = () => {
                       <tr key={d.ref}>
                         <td>
                           <div style={{ fontWeight: 600 }}>{d.name || d.ref}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{d.ref}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{d.ref}</div>
                         </td>
                         <td>{d.region}</td>
                         <td>{d.status}</td>
@@ -692,7 +692,7 @@ export const Cloud: React.FC = () => {
                 </table>
               </div>
             ) : (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)' }}>
                 {isDiscovering ? '正在扫描阿里云主流区域（杭州、香港、新加坡等）...' : '请选择凭据并点击「开始扫描」'}
               </div>
             )}

@@ -1,4 +1,4 @@
-.PHONY: all build build-dashd build-agent build-provider-aliyun build-agent-all test lint lint-dist migrate clean verify-agent-matrix
+.PHONY: all build build-dashd build-agent build-provider-aliyun build-agent-all test lint lint-dist lint-css-tokens migrate clean verify-agent-matrix
 
 VERSION ?= dev
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -7,9 +7,9 @@ LDFLAGS := -s -w -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X m
 
 all: lint test build
 
-build: lint-dist build-dashd build-agent build-provider-aliyun
+build: lint-dist lint-css-tokens build-dashd build-agent build-provider-aliyun
 
-build-dashd: lint-dist
+build-dashd: lint-dist lint-css-tokens
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dashd ./cmd/dashd
 
@@ -39,7 +39,10 @@ test:
 lint-dist:
 	@./scripts/lint-dist.sh
 
-lint: lint-dist
+lint-css-tokens:
+	@./scripts/lint-css-tokens.sh
+
+lint: lint-dist lint-css-tokens
 	@./scripts/lint-imports.sh
 	@go vet ./...
 	@if [ -f scripts/lint-sql.sh ]; then ./scripts/lint-sql.sh; fi
@@ -54,6 +57,7 @@ clean:
 build-web:
 	@if command -v npm >/dev/null 2>&1 && [ -f web/package.json ]; then \
 		echo "Building web assets..."; \
+		./scripts/lint-css-tokens.sh && \
 		(cd web && npm run build) && \
 		rm -rf internal/api/dist && \
 		mkdir -p internal/api/dist && \

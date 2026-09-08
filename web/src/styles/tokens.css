@@ -85,6 +85,9 @@
   --glass-highlight: rgba(255, 255, 255, 0.12);
   --glass-blur: 14px;
   --glass-shadow: 0 8px 32px rgba(2, 6, 14, 0.4);
+
+  /* 模态遮罩：两主题均须定义，不许只在一处出现 */
+  --overlay: rgba(2, 6, 14, .62);
 }
 
 /* 显式深色主题 (与 :root 一致) */
@@ -144,6 +147,7 @@
   --glass-highlight: rgba(255, 255, 255, 0.12);
   --glass-blur: 14px;
   --glass-shadow: 0 8px 32px rgba(2, 6, 14, 0.4);
+  --overlay: rgba(2, 6, 14, .62);
 }
 
 /* 浅色主题 Token 定义 (显式选择) */
@@ -203,6 +207,7 @@
   --glass-highlight: rgba(255, 255, 255, 0.9);
   --glass-blur: 14px;
   --glass-shadow: 0 8px 32px rgba(15, 30, 60, 0.08);
+  --overlay: rgba(15, 30, 60, .45);
 }
 
 /* 系统偏好浅色且未显式指定 dark */
@@ -263,5 +268,6 @@
     --glass-highlight: rgba(255, 255, 255, 0.9);
     --glass-blur: 14px;
     --glass-shadow: 0 8px 32px rgba(15, 30, 60, 0.08);
+    --overlay: rgba(15, 30, 60, .45);
   }
 }

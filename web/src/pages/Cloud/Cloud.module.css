@@ -14,20 +14,20 @@
 .title {
   font-size: 22px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-main);
   margin: 0;
 }
 
 .subtitle {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   margin-top: 4px;
 }
 
 .tabs {
   display: flex;
   gap: 8px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-main);
   margin-bottom: 24px;
 }
 
@@ -38,20 +38,20 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .tabBtnActive {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .sectionCard {
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
   padding: 20px;
   margin-bottom: 24px;
 }
@@ -66,7 +66,7 @@
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-main);
   margin: 0;
 }
 
@@ -80,10 +80,10 @@
 
 .input, .select {
   padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-input, var(--bg-card));
-  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-main);
+  background: var(--input-bg);
+  color: var(--text-main);
   font-size: 13px;
 }
 
@@ -96,41 +96,41 @@
 .table th, .table td {
   padding: 10px 12px;
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-main);
 }
 
 .table th {
-  color: var(--text-secondary);
+  color: var(--text-dim);
   font-weight: 500;
 }
 
 .badge {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 500;
 }
 
 .badgeRunning {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: var(--ok-bg);
+  color: var(--ok);
 }
 
 .badgeStopped {
-  background: rgba(107, 114, 128, 0.15);
-  color: #6b7280;
+  background: var(--bg-card-sub);
+  color: var(--text-mute);
 }
 
 .badgeStarting {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  background: var(--warn-bg);
+  color: var(--warn);
 }
 
 .ramCard {
-  background: rgba(59, 130, 246, 0.05);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 8px;
+  background: var(--accent-bg);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
   padding: 16px 20px;
   margin-top: 24px;
 }
@@ -138,7 +138,7 @@
 .ramTitle {
   font-size: 14px;
   font-weight: 600;
-  color: var(--primary-color);
+  color: var(--accent);
   margin-top: 0;
   margin-bottom: 8px;
 }
@@ -147,7 +147,7 @@
   margin: 0;
   padding-left: 20px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   line-height: 1.6;
 }
 
@@ -157,7 +157,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -166,12 +166,12 @@
 
 .modal {
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
   padding: 24px;
   width: 520px;
   max-width: 90vw;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--card-shadow-lg);
 }
 
 .formGroup {
@@ -182,7 +182,7 @@
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text-main);
   margin-bottom: 6px;
 }
 

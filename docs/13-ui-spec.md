@@ -2,18 +2,19 @@
 
 **任务 15、16、17 的实现依据。**
 
-## 1. 参考实现
+## 1. 参考实现（历史）
 
 ```
 docs/agy/css/dash2.html    浅色主题（主）· 侧栏 288px · 顶栏 64px · 毛玻璃
 docs/agy/css/demo2.html    深色主题（主）· 侧栏 220px · 顶栏 48px · 紧凑
 ```
 
-两份是**同一套 token 契约的两个主题**，语义变量名完全一致。
+> **注**：以上两份 HTML 是**最初的静态设计稿**，已被 P1-28「视觉基线换血」取代。
+> 当前配色、圆角、阴影的权威来源是 **`web/src/styles/tokens.css`**，
+> 不要再以 dash2.html / demo2.html 为准。
 
-★ **做法：把 demo 里的 CSS 变量层原样抽成 `web/src/styles/tokens.css`，
-组件类名沿用 demo 的命名。** 不要重新发明一套设计系统，也不要照抄 HTML 结构——
-demo 是静态稿，实现是 React 组件。
+两份是同一套 token 契约的两个主题原型，语义变量名已提取进 `tokens.css`。
+组件类名沿用了 demo 里的命名，实现是 React 组件，不是照抄 HTML 结构。
 
 ---
 
@@ -51,11 +52,12 @@ demo 是静态稿，实现是 React 组件。
 | `--err` / `--err-bg` / `--err-border` | 错误 | 节点离线、投递失败、数据库不可用 |
 | `--color-teal/cyan/blue/yellow/red/purple` | 图表系列色 | **只给图表用**，不用于状态 |
 
-### 2.5 阴影与毛玻璃
+### 2.5 阴影、毛玻璃与遮罩
 
 `--card-shadow` `--card-shadow-lg` `--modal-shadow`
 `--glass-bg` `--glass-bg-strong` `--glass-border` `--glass-blur` `--glass-shadow`
 `--glow-1` `--glow-2`（品牌氛围辉光，用于登录页等背景装饰）
+`--overlay`（模态框遮罩背景，暗色 `rgba(2,6,14,.62)` / 浅色 `rgba(15,30,60,.45)`）
 
 浅色主题下顶栏/侧栏用毛玻璃（`backdrop-filter: blur(var(--glass-blur))`），
 深色主题下通过半透明边框与卡片背景区分层次。
@@ -81,11 +83,16 @@ demo 是静态稿，实现是 React 组件。
 
 ## 3. 双主题
 
+> ★ **实际结构（P1-28 换血后）：暗色优先。** `tokens.css` 以 `:root` 定义暗色 token，
+> 浅色 token 通过 `[data-theme="light"]` 和媒体查询覆盖。
+
 ```css
-:root                                  { /* 浅色 token */ }
-:root:not([data-theme="light"])        { @media (prefers-color-scheme: dark) { /* 深色 */ } }
-:root[data-theme="dark"]               { /* 深色，显式选择优先 */ }
-:root[data-theme="light"]              { /* 浅色，显式选择优先 */ }
+:root                                           { /* 暗色 token（默认） */ }
+:root[data-theme="dark"]                        { /* 暗色，显式选择，与 :root 一致 */ }
+:root[data-theme="light"]                       { /* 浅色，显式选择优先 */ }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"])               { /* 浅色，跟随系统且未强制暗色 */ }
+}
 ```
 
 三态：显式亮 / 显式暗 / 跟随系统（默认）。选择存 `localStorage`。
