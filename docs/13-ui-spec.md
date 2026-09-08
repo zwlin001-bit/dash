@@ -45,6 +45,7 @@ demo 是静态稿，实现是 React 组件。
 | 变量 | 含义 | 用在 |
 |---|---|---|
 | `--accent` / `--accent-hover` / `--accent-bg` | 主操作 | 主按钮、选中态、链接 |
+| `--accent-gradient` | 品牌渐变 | 主按钮背景、强调元素 |
 | `--ok` / `--ok-bg` / `--ok-border` | 正常 | 节点在线、健康、达标 |
 | `--warn` / `--warn-bg` / `--warn-border` | 警告 | 即将到期、流量接近上限、时钟异常 |
 | `--err` / `--err-bg` / `--err-border` | 错误 | 节点离线、投递失败、数据库不可用 |
@@ -54,9 +55,10 @@ demo 是静态稿，实现是 React 组件。
 
 `--card-shadow` `--card-shadow-lg` `--modal-shadow`
 `--glass-bg` `--glass-bg-strong` `--glass-border` `--glass-blur` `--glass-shadow`
+`--glow-1` `--glow-2`（品牌氛围辉光，用于登录页等背景装饰）
 
 浅色主题下顶栏/侧栏用毛玻璃（`backdrop-filter: blur(var(--glass-blur))`），
-深色主题下 `--card-shadow: none` 走边框区分层次。
+深色主题下通过半透明边框与卡片背景区分层次。
 
 ### 2.6 字体
 
@@ -73,6 +75,7 @@ demo 是静态稿，实现是 React 组件。
 
 ★ **所有数字一律用 `--font-mono`**（`cell-mono` 类）：CPU 百分比、流量、
 字节数、时间戳、ID。等宽是表格里数字能对齐扫读的前提。
+配合 `font-variant-numeric: tabular-nums` 保证所有数字列绝对对齐。
 
 ---
 

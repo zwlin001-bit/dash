@@ -1,13 +1,56 @@
 .container {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   background: var(--bg-app);
   padding: 16px;
+  overflow: hidden;
+}
+
+.gridBg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--border-main) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border-main) 1px, transparent 1px);
+  background-size: 32px 32px;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, var(--text-main) 20%, transparent 75%);
+  mask-image: radial-gradient(circle at 50% 50%, var(--text-main) 20%, transparent 75%);
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.glow1 {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: var(--radius-full);
+  background: var(--glow-1);
+  filter: blur(110px);
+  pointer-events: none;
+  top: 20%;
+  left: 25%;
+  transform: translate(-50%, -50%);
+}
+
+.glow2 {
+  position: absolute;
+  width: 450px;
+  height: 450px;
+  border-radius: var(--radius-full);
+  background: var(--glow-2);
+  filter: blur(110px);
+  pointer-events: none;
+  bottom: 20%;
+  right: 25%;
+  transform: translate(50%, 50%);
 }
 
 .loginCard {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 380px;
   background: var(--bg-card);
@@ -26,8 +69,11 @@
   font-family: var(--font-mono);
   font-size: 24px;
   font-weight: 700;
-  color: var(--color-teal);
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   letter-spacing: 1px;
+  display: inline-block;
 }
 
 .sub {

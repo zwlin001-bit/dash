@@ -94,7 +94,7 @@
 .loadingOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 20, 28, 0.4);
+  background: var(--glass-bg);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
