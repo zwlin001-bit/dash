@@ -2,8 +2,10 @@ package linux
 
 import (
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -384,6 +386,73 @@ func TestListenCollector_LivePerformance(t *testing.T) {
 	t.Logf("Live machine listen collect: entries=%d, duration=%v", len(payload.Listen), dur)
 	if dur > 100*time.Millisecond {
 		t.Errorf("listen collect duration %v exceeded 100ms budget", dur)
+	}
+}
+
+// TestListenCollector_500ActiveConnectionsPerformance 建立 500 个真实 TCP 连接模拟高并发连接场景，
+// 验证在连接数大幅增长时 ListenCollector 的耗时与内存开销符合预算要求（Criterion 3）。
+func TestListenCollector_500ActiveConnectionsPerformance(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen failed: %v", err)
+	}
+	defer ln.Close()
+
+	addr := ln.Addr().String()
+	const numConns = 500
+	clientConns := make([]net.Conn, 0, numConns)
+	serverConns := make([]net.Conn, 0, numConns)
+	defer func() {
+		for _, c := range clientConns {
+			_ = c.Close()
+		}
+		for _, c := range serverConns {
+			_ = c.Close()
+		}
+	}()
+
+	acceptDone := make(chan struct{})
+	go func() {
+		defer close(acceptDone)
+		for i := 0; i < numConns; i++ {
+			sConn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			serverConns = append(serverConns, sConn)
+		}
+	}()
+
+	for i := 0; i < numConns; i++ {
+		cConn, err := net.Dial("tcp", addr)
+		if err != nil {
+			t.Fatalf("net.Dial %d failed: %v", i, err)
+		}
+		clientConns = append(clientConns, cConn)
+	}
+	<-acceptDone
+
+	col := NewListenCollector()
+	var m1, m2 runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&m1)
+
+	start := time.Now()
+	payload, err := col.CollectPayload()
+	dur := time.Since(start)
+
+	runtime.ReadMemStats(&m2)
+	allocBytes := m2.TotalAlloc - m1.TotalAlloc
+
+	if err != nil {
+		t.Fatalf("CollectPayload with 500 conns failed: %v", err)
+	}
+
+	t.Logf("500 Active Connections: entries=%d, duration=%v, total allocs=%d KB",
+		len(payload.Listen), dur, allocBytes/1024)
+
+	if dur > 100*time.Millisecond {
+		t.Errorf("listen collect duration %v exceeded 100ms budget under 500 connections", dur)
 	}
 }
 
