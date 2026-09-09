@@ -1,6 +1,37 @@
 package guard
 
-// GuardRule 对应 guard_rules 表 (P2-04 §1)。
+// GuardAccountPolicy 对应 guard_account_policies 表 (P2-11 §1)。
+type GuardAccountPolicy struct {
+	CloudAccountID  string   `json:"cloud_account_id"`
+	IsEnabled       bool     `json:"is_enabled"`
+	ActionsEnabled  bool     `json:"actions_enabled"`
+	TrafficLimitGB  *float64 `json:"traffic_limit_gb,omitempty"`
+	TrafficAction   string   `json:"traffic_action"`
+	WarnRatio       float64  `json:"warn_ratio"`
+	ScheduleEnabled bool     `json:"schedule_enabled"`
+	ScheduleStart   *string  `json:"schedule_start,omitempty"`
+	ScheduleStop    *string  `json:"schedule_stop,omitempty"`
+	ScheduleTZ      string   `json:"schedule_tz"`
+	EvalIntervalS   int      `json:"eval_interval_s"`
+	CreatedAtMs     int64    `json:"created_at_ms"`
+	UpdatedAtMs     int64    `json:"updated_at_ms"`
+}
+
+// AccountPolicyUpdateRequest 账号策略更新请求
+type AccountPolicyUpdateRequest struct {
+	IsEnabled       *bool    `json:"is_enabled,omitempty"`
+	ActionsEnabled  *bool    `json:"actions_enabled,omitempty"`
+	TrafficLimitGB  *float64 `json:"traffic_limit_gb,omitempty"`
+	TrafficAction   *string  `json:"traffic_action,omitempty"`
+	WarnRatio       *float64 `json:"warn_ratio,omitempty"`
+	ScheduleEnabled *bool    `json:"schedule_enabled,omitempty"`
+	ScheduleStart   *string  `json:"schedule_start,omitempty"`
+	ScheduleStop    *string  `json:"schedule_stop,omitempty"`
+	ScheduleTZ      *string  `json:"schedule_tz,omitempty"`
+	EvalIntervalS   *int     `json:"eval_interval_s,omitempty"`
+}
+
+// GuardRule 对应 guard_rules 表 (P2-04 §1, P2-11 §1)。
 type GuardRule struct {
 	ID              string   `json:"id"`
 	CloudResourceID string   `json:"cloud_resource_id"`
@@ -12,6 +43,7 @@ type GuardRule struct {
 	ScheduleStart   *string  `json:"schedule_start,omitempty"` // "08:30"
 	ScheduleStop    *string  `json:"schedule_stop,omitempty"`  // "20:00"
 	ScheduleTZ      string   `json:"schedule_tz"`              // IANA时区，默认 "Asia/Shanghai"
+	InheritAccount  bool     `json:"inherit_account"`          // P2-11: 默认 true 继承账号
 	LastEvalAtMs    *int64   `json:"last_eval_at_ms,omitempty"`
 	LastAction      *string  `json:"last_action,omitempty"`
 	LastActionAtMs  *int64   `json:"last_action_at_ms,omitempty"`
@@ -61,6 +93,7 @@ type EvaluationItem struct {
 	InScheduleRun      bool             `json:"in_schedule_run"`
 	NextScheduleAction string           `json:"next_schedule_action,omitempty"`
 	NextScheduleTimeMs *int64           `json:"next_schedule_time_ms,omitempty"`
+	DecidedBy          string           `json:"decided_by,omitempty"` // "account" | "resource" (P2-11 §4)
 	WouldExecute       bool             `json:"would_execute"`
 	JobSubmitted       bool             `json:"job_submitted,omitempty"`
 	JobID              string           `json:"job_id,omitempty"`
@@ -89,6 +122,7 @@ type RuleUpdateRequest struct {
 	ScheduleStart   *string  `json:"schedule_start,omitempty"`
 	ScheduleStop    *string  `json:"schedule_stop,omitempty"`
 	ScheduleTZ      *string  `json:"schedule_tz,omitempty"`
+	InheritAccount  *bool    `json:"inherit_account,omitempty"`
 }
 
 // ForceStartRequest 表示手动强制开机请求。
@@ -108,22 +142,30 @@ type InstanceOverview struct {
 	PrivateIPs         []string   `json:"private_ips"`
 	BillingInfo        string     `json:"billing_info,omitempty"`
 	Rule               *GuardRule `json:"rule"`
+	InheritAccount     bool       `json:"inherit_account"`
+	EffectiveLimitGB   *float64   `json:"effective_limit_gb,omitempty"`
+	LimitOrigin        string     `json:"limit_origin,omitempty"` // "account" | "resource"
+	EffectiveSchedule  bool       `json:"effective_schedule"`
+	ScheduleOrigin     string     `json:"schedule_origin,omitempty"` // "account" | "resource"
+	EffectiveActions   bool       `json:"effective_actions"`
 	NextScheduleAction string     `json:"next_schedule_action,omitempty"`
 	NextScheduleTimeMs *int64     `json:"next_schedule_time_ms,omitempty"`
 }
 
 // AccountOverview 供前端展现的账号总览。
 type AccountOverview struct {
-	AccountID      string             `json:"account_id"`
-	AccountName    string             `json:"account_name"`
-	ProviderCode   string             `json:"provider_code"`
-	DefaultRegion  string             `json:"default_region"`
-	AccountSite    string             `json:"account_site"`
-	CDTUsedGB      *float64           `json:"cdt_used_gb,omitempty"`
-	TrafficLimitGB *float64           `json:"traffic_limit_gb,omitempty"`
-	UsagePercent   float64            `json:"usage_percent"`
-	CDTError       string             `json:"cdt_error,omitempty"`
-	Instances      []InstanceOverview `json:"instances"`
+	AccountID      string              `json:"account_id"`
+	AccountName    string              `json:"account_name"`
+	ProviderCode   string              `json:"provider_code"`
+	DefaultRegion  string              `json:"default_region"`
+	AccountSite    string              `json:"account_site"`
+	CredentialFP   string              `json:"credential_fp,omitempty"`
+	CDTUsedGB      *float64            `json:"cdt_used_gb,omitempty"`
+	TrafficLimitGB *float64            `json:"traffic_limit_gb,omitempty"`
+	UsagePercent   float64             `json:"usage_percent"`
+	CDTError       string              `json:"cdt_error,omitempty"`
+	Policy         *GuardAccountPolicy `json:"policy,omitempty"`
+	Instances      []InstanceOverview  `json:"instances"`
 }
 
 // OverviewResponse 守卫页面首屏数据响应。

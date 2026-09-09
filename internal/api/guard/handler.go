@@ -27,6 +27,9 @@ type Store interface {
 	ListRecentCycles(ctx context.Context, limit, offset int) ([]guard.GuardCycle, int, error)
 	GetRuleByResourceID(ctx context.Context, resourceID string) (*guard.GuardRule, error)
 	UpsertRule(ctx context.Context, rule *guard.GuardRule) error
+	GetAccountPolicy(ctx context.Context, accountID string) (*guard.GuardAccountPolicy, error)
+	ListAccountPolicies(ctx context.Context) (map[string]*guard.GuardAccountPolicy, error)
+	UpsertAccountPolicy(ctx context.Context, p *guard.GuardAccountPolicy) error
 }
 
 type CloudService interface {
@@ -70,6 +73,7 @@ func (h *Handler) RegisterAppRoutes(a *app.App) {
 	a.HandleAuthed("POST /api/v1/guard/evaluate", h.HandleEvaluate)
 	a.HandleAuthed("GET /api/v1/guard/cycles", h.HandleListCycles)
 	a.HandleAuthed("PUT /api/v1/guard/rules/", h.HandleUpdateRule)
+	a.HandleAuthed("PUT /api/v1/guard/accounts/", h.HandleUpdateAccountPolicy)
 	a.HandleAuthed("POST /api/v1/guard/instances/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/force-start") {
 			h.HandleForceStart(w, r)
@@ -94,6 +98,11 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 		rulesMap = make(map[string]*guard.GuardRule)
 	}
 
+	accountPolicies, err := h.store.ListAccountPolicies(ctx)
+	if err != nil {
+		accountPolicies = make(map[string]*guard.GuardAccountPolicy)
+	}
+
 	now := h.now()
 	nowMs := now.UnixMilli()
 
@@ -109,6 +118,21 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		acctPol := accountPolicies[acc.ID]
+		if acctPol == nil {
+			// 初始化默认账号策略
+			acctPol = &guard.GuardAccountPolicy{
+				CloudAccountID:  acc.ID,
+				IsEnabled:       true,
+				ActionsEnabled:  false,
+				TrafficAction:   "stop",
+				WarnRatio:       0.8,
+				ScheduleEnabled: false,
+				ScheduleTZ:      "Asia/Shanghai",
+				EvalIntervalS:   60,
+			}
+		}
+
 		var cdtGB *float64
 		// 从 config_json 读缓存的 cdt_traffic_bytes
 		var cfgData map[string]any
@@ -121,20 +145,28 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var instOverviews []guard.InstanceOverview
-		var maxLimit *float64
 
 		for _, res := range resources {
 			totalInstances++
 			rule := rulesMap[res.ID]
-			if rule != nil && rule.IsEnabled {
-				guardedCount++
-				if rule.ActionsEnabled {
-					actionsEnabledCount++
+			if rule == nil {
+				rule = &guard.GuardRule{
+					ID:              ulid.New(),
+					CloudResourceID: res.ID,
+					IsEnabled:       true,
+					ActionsEnabled:  false,
+					TrafficAction:   "stop",
+					ScheduleTZ:      "Asia/Shanghai",
+					InheritAccount:  true,
 				}
-				if rule.TrafficLimitGB != nil {
-					if maxLimit == nil || *rule.TrafficLimitGB > *maxLimit {
-						maxLimit = rule.TrafficLimitGB
-					}
+			}
+
+			eff := guard.ResolveEffectiveRule(rule, acctPol)
+
+			if eff.IsEnabled {
+				guardedCount++
+				if eff.ActionsEnabled {
+					actionsEnabledCount++
 				}
 			}
 
@@ -147,19 +179,25 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 			}
 
 			io := guard.InstanceOverview{
-				ResourceID:   res.ID,
-				ResourceName: res.Name,
-				ResourceRef:  res.ResRef,
-				Region:       res.Region,
-				Status:       res.Status,
-				PublicIPs:    pubIPList,
-				PrivateIPs:   privIPList,
-				BillingInfo:  res.BillingJSON,
-				Rule:         rule,
+				ResourceID:         res.ID,
+				ResourceName:       res.Name,
+				ResourceRef:        res.ResRef,
+				Region:             res.Region,
+				Status:             res.Status,
+				PublicIPs:          pubIPList,
+				PrivateIPs:         privIPList,
+				BillingInfo:        res.BillingJSON,
+				Rule:               rule,
+				InheritAccount:     rule.InheritAccount,
+				EffectiveLimitGB:   eff.TrafficLimitGB,
+				LimitOrigin:        eff.LimitOrigin,
+				EffectiveSchedule:  eff.ScheduleEnabled,
+				ScheduleOrigin:     eff.ScheduleOrigin,
+				EffectiveActions:   eff.ActionsEnabled,
 			}
 
-			if rule != nil && rule.ScheduleEnabled && rule.ScheduleStart != nil && rule.ScheduleStop != nil {
-				_, _, nextAct, nextTime, err := guard.EvaluateSchedule(*rule.ScheduleStart, *rule.ScheduleStop, rule.ScheduleTZ, now)
+			if eff.ScheduleEnabled && eff.ScheduleStart != nil && eff.ScheduleStop != nil {
+				_, _, nextAct, nextTime, err := guard.EvaluateSchedule(*eff.ScheduleStart, *eff.ScheduleStop, eff.ScheduleTZ, now)
 				if err == nil {
 					io.NextScheduleAction = nextAct
 					if nextTime != nil {
@@ -172,9 +210,15 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 			instOverviews = append(instOverviews, io)
 		}
 
+		// 账号级 CDT 阈值与使用百分比
+		var acctLimit *float64
+		if acctPol != nil && acctPol.TrafficLimitGB != nil {
+			acctLimit = acctPol.TrafficLimitGB
+		}
+
 		usagePct := 0.0
-		if cdtGB != nil && maxLimit != nil && *maxLimit > 0 {
-			usagePct = (*cdtGB / *maxLimit) * 100.0
+		if cdtGB != nil && acctLimit != nil && *acctLimit > 0 {
+			usagePct = (*cdtGB / *acctLimit) * 100.0
 		}
 
 		accountOverviews = append(accountOverviews, guard.AccountOverview{
@@ -184,8 +228,9 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 			DefaultRegion:  acc.DefaultRegion,
 			AccountSite:    acc.AccountSite,
 			CDTUsedGB:      cdtGB,
-			TrafficLimitGB: maxLimit,
+			TrafficLimitGB: acctLimit,
 			UsagePercent:   usagePct,
+			Policy:         acctPol,
 			Instances:      instOverviews,
 		})
 	}
@@ -202,6 +247,82 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// HandleUpdateAccountPolicy handles PUT /api/v1/guard/accounts/{account_id}/policy.
+func (h *Handler) HandleUpdateAccountPolicy(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/guard/accounts/")
+	accountID := strings.TrimSuffix(path, "/policy")
+	accountID = strings.Trim(accountID, "/")
+	if accountID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "account_id is required"})
+		return
+	}
+
+	var req guard.AccountPolicyUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json: " + err.Error()})
+		return
+	}
+
+	ctx := r.Context()
+	existing, err := h.store.GetAccountPolicy(ctx, accountID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	policy := existing
+	if policy == nil {
+		policy = &guard.GuardAccountPolicy{
+			CloudAccountID:  accountID,
+			IsEnabled:       true,
+			ActionsEnabled:  false,
+			TrafficAction:   "stop",
+			WarnRatio:       0.8,
+			ScheduleEnabled: false,
+			ScheduleTZ:      "Asia/Shanghai",
+			EvalIntervalS:   60,
+		}
+	}
+
+	if req.IsEnabled != nil {
+		policy.IsEnabled = *req.IsEnabled
+	}
+	if req.ActionsEnabled != nil {
+		policy.ActionsEnabled = *req.ActionsEnabled
+	}
+	if req.TrafficLimitGB != nil {
+		policy.TrafficLimitGB = req.TrafficLimitGB
+	}
+	if req.TrafficAction != nil {
+		policy.TrafficAction = *req.TrafficAction
+	}
+	if req.WarnRatio != nil {
+		policy.WarnRatio = *req.WarnRatio
+	}
+	if req.ScheduleEnabled != nil {
+		policy.ScheduleEnabled = *req.ScheduleEnabled
+	}
+	if req.ScheduleStart != nil {
+		policy.ScheduleStart = req.ScheduleStart
+	}
+	if req.ScheduleStop != nil {
+		policy.ScheduleStop = req.ScheduleStop
+	}
+	if req.ScheduleTZ != nil {
+		policy.ScheduleTZ = *req.ScheduleTZ
+	}
+	if req.EvalIntervalS != nil {
+		policy.EvalIntervalS = *req.EvalIntervalS
+	}
+
+	if err := h.store.UpsertAccountPolicy(ctx, policy); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, policy)
 }
 
 // HandleUpdateRule handles PUT /api/v1/guard/rules/{resource_id}.
@@ -234,6 +355,7 @@ func (h *Handler) HandleUpdateRule(w http.ResponseWriter, r *http.Request) {
 			ActionsEnabled:  false,
 			TrafficAction:   "stop",
 			ScheduleTZ:      "Asia/Shanghai",
+			InheritAccount:  true,
 		}
 	}
 
@@ -260,6 +382,9 @@ func (h *Handler) HandleUpdateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ScheduleTZ != nil {
 		rule.ScheduleTZ = *req.ScheduleTZ
+	}
+	if req.InheritAccount != nil {
+		rule.InheritAccount = *req.InheritAccount
 	}
 
 	if err := h.store.UpsertRule(ctx, rule); err != nil {

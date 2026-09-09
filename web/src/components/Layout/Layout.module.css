@@ -117,6 +117,126 @@
   font-size: 14px;
 }
 
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-mute);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.groupHeader:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.groupTitle {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.groupChevron {
+  font-size: 10px;
+  color: var(--text-mute);
+  transition: transform 0.2s ease;
+  display: inline-block;
+  line-height: 1;
+}
+
+.groupChevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+.subList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 10px;
+  margin-top: 2px;
+}
+
+.subListCollapsed {
+  display: none;
+}
+
+.subNavLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  border-left: 3px solid transparent;
+  text-decoration: none;
+}
+
+.subNavLink:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.subNavLinkActive {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+
+.groupBadge {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  background-color: var(--err-bg);
+  color: var(--err);
+  border: 1px solid var(--err-border);
+  line-height: 1.2;
+}
+
+.itemBadge {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  background-color: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid var(--warn-border);
+  line-height: 1.2;
+}
+
+.itemBadgeErr {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  background-color: var(--err-bg);
+  color: var(--err);
+  border: 1px solid var(--err-border);
+  line-height: 1.2;
+}
+
 .sideFoot {
   padding: 12px 14px;
   font-size: 11px;
@@ -135,7 +255,16 @@
   .sidebar {
     width: 64px;
   }
-  .navLink span:not(.icon) {
+  .groupHeader span:not(.groupChevron),
+  .groupBadge {
+    display: none;
+  }
+  .subList {
+    padding-left: 0;
+  }
+  .subNavLink span:not(.icon),
+  .itemBadge,
+  .itemBadgeErr {
     display: none;
   }
   .mainContent {

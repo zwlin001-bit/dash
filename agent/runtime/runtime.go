@@ -13,6 +13,7 @@ import (
 
 	"dash/agent/collect"
 	"dash/agent/collect/linux"
+	"dash/agent/exec"
 	"dash/agent/transport"
 	"dash/internal/protocol"
 
@@ -53,6 +54,9 @@ type Runtime struct {
 	memCollector   *linux.MemCollector
 	factsCollector *linux.FactsCollector
 
+	registry *exec.Registry
+	executor *exec.Executor
+
 	customTransport bool
 }
 
@@ -71,6 +75,13 @@ func WithTransport(tr transport.Transport) Option {
 func WithStateStore(s *StateStore) Option {
 	return func(r *Runtime) {
 		r.state = s
+	}
+}
+
+// WithRegistry 允许注入自定义动作白名单注册表。
+func WithRegistry(reg *exec.Registry) Option {
+	return func(r *Runtime) {
+		r.registry = reg
 	}
 }
 
@@ -117,7 +128,12 @@ func New(cfg *Config, version string, opts ...Option) (*Runtime, error) {
 	// 5. 采集初始 facts 与开机时间
 	r.initFacts()
 
-	// 6. 初始化传输层（如果未通过选项注入）
+	// 6. 初始化白名单注册表与执行调度器
+	if r.registry == nil {
+		r.registry = exec.NewRegistry()
+	}
+
+	// 7. 初始化传输层（如果未通过选项注入）
 	if !r.customTransport {
 		tr, err := r.buildTransport()
 		if err != nil {
@@ -126,7 +142,9 @@ func New(cfg *Config, version string, opts ...Option) (*Runtime, error) {
 		r.transport = tr
 	}
 
-	// 7. 注册下行指令处理器
+	r.executor = exec.NewExecutor(r.registry, r.transport)
+
+	// 8. 注册下行指令处理器
 	r.transport.OnServerMessage(r.handleServerMessage)
 
 	return r, nil
@@ -282,9 +300,27 @@ func (r *Runtime) handleServerMessage(method string, params json.RawMessage) (an
 		}
 		r.applyServerConfig(&p)
 		return nil, nil
+	case protocol.MethodServerExec:
+		if r.executor == nil {
+			return nil, &protocol.RPCError{
+				Code:    protocol.ErrCodeCapDisabled,
+				Message: "executor not initialized",
+			}
+		}
+		return r.executor.HandleExec(params)
 	default:
 		return nil, transport.ErrMethodNotFound
 	}
+}
+
+// Registry 返回运行时的白名单注册表。
+func (r *Runtime) Registry() *exec.Registry {
+	return r.registry
+}
+
+// Executor 返回运行时的执行调度器。
+func (r *Runtime) Executor() *exec.Executor {
+	return r.executor
 }
 
 func (r *Runtime) applyServerConfig(p *protocol.ServerConfigParams) {

@@ -33,19 +33,19 @@ func (s *Store) DB() *db.DB {
 // GetRuleByResourceID 根据 cloud_resource_id 获取守卫规则。若不存在返回 nil, nil。
 func (s *Store) GetRuleByResourceID(ctx context.Context, resourceID string) (*GuardRule, error) {
 	q := `SELECT id, cloud_resource_id, is_enabled, actions_enabled, traffic_limit_gb, traffic_action,
-schedule_enabled, schedule_start, schedule_stop, schedule_tz, last_eval_at_ms, last_action, last_action_at_ms,
+schedule_enabled, schedule_start, schedule_stop, schedule_tz, inherit_account, last_eval_at_ms, last_action, last_action_at_ms,
 created_at_ms, updated_at_ms
 FROM guard_rules WHERE cloud_resource_id = ?`
 
 	var r GuardRule
-	var isEn, actEn, schedEn int
+	var isEn, actEn, schedEn, inheritAcc int
 	var trafficLimit sql.NullFloat64
 	var schedStart, schedStop, lastAction sql.NullString
 	var lastEval, lastActAt sql.NullInt64
 
 	err := s.db.QueryRow(ctx, q, resourceID).Scan(
 		&r.ID, &r.CloudResourceID, &isEn, &actEn, &trafficLimit, &r.TrafficAction,
-		&schedEn, &schedStart, &schedStop, &r.ScheduleTZ, &lastEval, &lastAction, &lastActAt,
+		&schedEn, &schedStart, &schedStop, &r.ScheduleTZ, &inheritAcc, &lastEval, &lastAction, &lastActAt,
 		&r.CreatedAtMs, &r.UpdatedAtMs,
 	)
 	if err != nil {
@@ -58,6 +58,7 @@ FROM guard_rules WHERE cloud_resource_id = ?`
 	r.IsEnabled = isEn == 1
 	r.ActionsEnabled = actEn == 1
 	r.ScheduleEnabled = schedEn == 1
+	r.InheritAccount = inheritAcc == 1
 	if trafficLimit.Valid {
 		r.TrafficLimitGB = &trafficLimit.Float64
 	}
@@ -83,7 +84,7 @@ FROM guard_rules WHERE cloud_resource_id = ?`
 // ListRules 获取全部规则映射，key 为 cloud_resource_id。
 func (s *Store) ListRules(ctx context.Context) (map[string]*GuardRule, error) {
 	q := `SELECT id, cloud_resource_id, is_enabled, actions_enabled, traffic_limit_gb, traffic_action,
-schedule_enabled, schedule_start, schedule_stop, schedule_tz, last_eval_at_ms, last_action, last_action_at_ms,
+schedule_enabled, schedule_start, schedule_stop, schedule_tz, inherit_account, last_eval_at_ms, last_action, last_action_at_ms,
 created_at_ms, updated_at_ms
 FROM guard_rules`
 
@@ -96,14 +97,14 @@ FROM guard_rules`
 	res := make(map[string]*GuardRule)
 	for rows.Next() {
 		var r GuardRule
-		var isEn, actEn, schedEn int
+		var isEn, actEn, schedEn, inheritAcc int
 		var trafficLimit sql.NullFloat64
 		var schedStart, schedStop, lastAction sql.NullString
 		var lastEval, lastActAt sql.NullInt64
 
 		if err := rows.Scan(
 			&r.ID, &r.CloudResourceID, &isEn, &actEn, &trafficLimit, &r.TrafficAction,
-			&schedEn, &schedStart, &schedStop, &r.ScheduleTZ, &lastEval, &lastAction, &lastActAt,
+			&schedEn, &schedStart, &schedStop, &r.ScheduleTZ, &inheritAcc, &lastEval, &lastAction, &lastActAt,
 			&r.CreatedAtMs, &r.UpdatedAtMs,
 		); err != nil {
 			return nil, err
@@ -112,6 +113,7 @@ FROM guard_rules`
 		r.IsEnabled = isEn == 1
 		r.ActionsEnabled = actEn == 1
 		r.ScheduleEnabled = schedEn == 1
+		r.InheritAccount = inheritAcc == 1
 		if trafficLimit.Valid {
 			r.TrafficLimitGB = &trafficLimit.Float64
 		}
@@ -158,6 +160,10 @@ func (s *Store) UpsertRule(ctx context.Context, rule *GuardRule) error {
 	if rule.ScheduleEnabled {
 		schedEnInt = 1
 	}
+	inheritAccInt := 0
+	if rule.InheritAccount {
+		inheritAccInt = 1
+	}
 	if rule.TrafficAction == "" {
 		rule.TrafficAction = "stop"
 	}
@@ -173,13 +179,13 @@ func (s *Store) UpsertRule(ctx context.Context, rule *GuardRule) error {
 
 		q := `INSERT INTO guard_rules (
 id, cloud_resource_id, is_enabled, actions_enabled, traffic_limit_gb, traffic_action,
-schedule_enabled, schedule_start, schedule_stop, schedule_tz, last_eval_at_ms, last_action, last_action_at_ms,
+schedule_enabled, schedule_start, schedule_stop, schedule_tz, inherit_account, last_eval_at_ms, last_action, last_action_at_ms,
 created_at_ms, updated_at_ms
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 		_, err := s.db.Exec(ctx, q,
 			rule.ID, rule.CloudResourceID, isEnInt, actEnInt, rule.TrafficLimitGB, rule.TrafficAction,
-			schedEnInt, rule.ScheduleStart, rule.ScheduleStop, rule.ScheduleTZ, rule.LastEvalAtMs, rule.LastAction, rule.LastActionAtMs,
+			schedEnInt, rule.ScheduleStart, rule.ScheduleStop, rule.ScheduleTZ, inheritAccInt, rule.LastEvalAtMs, rule.LastAction, rule.LastActionAtMs,
 			rule.CreatedAtMs, rule.UpdatedAtMs,
 		)
 		if err != nil {
@@ -191,13 +197,13 @@ created_at_ms, updated_at_ms
 
 		q := `UPDATE guard_rules SET
 is_enabled = ?, actions_enabled = ?, traffic_limit_gb = ?, traffic_action = ?,
-schedule_enabled = ?, schedule_start = ?, schedule_stop = ?, schedule_tz = ?,
+schedule_enabled = ?, schedule_start = ?, schedule_stop = ?, schedule_tz = ?, inherit_account = ?,
 updated_at_ms = ?
 WHERE id = ?`
 
 		_, err := s.db.Exec(ctx, q,
 			isEnInt, actEnInt, rule.TrafficLimitGB, rule.TrafficAction,
-			schedEnInt, rule.ScheduleStart, rule.ScheduleStop, rule.ScheduleTZ,
+			schedEnInt, rule.ScheduleStart, rule.ScheduleStop, rule.ScheduleTZ, inheritAccInt,
 			rule.UpdatedAtMs, rule.ID,
 		)
 		if err != nil {
@@ -222,6 +228,174 @@ func (s *Store) UpdateRuleLastEval(ctx context.Context, ruleID string, evalAtMs 
 	now := time.Now().UnixMilli()
 	_, err := s.db.Exec(ctx, q, evalAtMs, now, ruleID)
 	return err
+}
+
+// GetAccountPolicy 获取指定账号的保活策略。若未设置返回 nil, nil。
+func (s *Store) GetAccountPolicy(ctx context.Context, accountID string) (*GuardAccountPolicy, error) {
+	q := `SELECT cloud_account_id, is_enabled, actions_enabled, traffic_limit_gb, traffic_action,
+warn_ratio, schedule_enabled, schedule_start, schedule_stop, schedule_tz, eval_interval_s,
+created_at_ms, updated_at_ms
+FROM guard_account_policies WHERE cloud_account_id = ?`
+
+	var p GuardAccountPolicy
+	var isEn, actEn, schedEn int
+	var trafficLimit, warnRatio sql.NullFloat64
+	var schedStart, schedStop sql.NullString
+
+	err := s.db.QueryRow(ctx, q, accountID).Scan(
+		&p.CloudAccountID, &isEn, &actEn, &trafficLimit, &p.TrafficAction,
+		&warnRatio, &schedEn, &schedStart, &schedStop, &p.ScheduleTZ, &p.EvalIntervalS,
+		&p.CreatedAtMs, &p.UpdatedAtMs,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("guard: get account policy failed: %w", err)
+	}
+
+	p.IsEnabled = isEn == 1
+	p.ActionsEnabled = actEn == 1
+	p.ScheduleEnabled = schedEn == 1
+	if trafficLimit.Valid {
+		p.TrafficLimitGB = &trafficLimit.Float64
+	}
+	if warnRatio.Valid {
+		p.WarnRatio = warnRatio.Float64
+	} else {
+		p.WarnRatio = 0.8
+	}
+	if schedStart.Valid {
+		p.ScheduleStart = &schedStart.String
+	}
+	if schedStop.Valid {
+		p.ScheduleStop = &schedStop.String
+	}
+
+	return &p, nil
+}
+
+// ListAccountPolicies 获取所有账号的策略映射，key 为 cloud_account_id。
+func (s *Store) ListAccountPolicies(ctx context.Context) (map[string]*GuardAccountPolicy, error) {
+	q := `SELECT cloud_account_id, is_enabled, actions_enabled, traffic_limit_gb, traffic_action,
+warn_ratio, schedule_enabled, schedule_start, schedule_stop, schedule_tz, eval_interval_s,
+created_at_ms, updated_at_ms
+FROM guard_account_policies`
+
+	rows, err := s.db.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("guard: list account policies failed: %w", err)
+	}
+	defer rows.Close()
+
+	res := make(map[string]*GuardAccountPolicy)
+	for rows.Next() {
+		var p GuardAccountPolicy
+		var isEn, actEn, schedEn int
+		var trafficLimit, warnRatio sql.NullFloat64
+		var schedStart, schedStop sql.NullString
+
+		if err := rows.Scan(
+			&p.CloudAccountID, &isEn, &actEn, &trafficLimit, &p.TrafficAction,
+			&warnRatio, &schedEn, &schedStart, &schedStop, &p.ScheduleTZ, &p.EvalIntervalS,
+			&p.CreatedAtMs, &p.UpdatedAtMs,
+		); err != nil {
+			return nil, err
+		}
+
+		p.IsEnabled = isEn == 1
+		p.ActionsEnabled = actEn == 1
+		p.ScheduleEnabled = schedEn == 1
+		if trafficLimit.Valid {
+			p.TrafficLimitGB = &trafficLimit.Float64
+		}
+		if warnRatio.Valid {
+			p.WarnRatio = warnRatio.Float64
+		} else {
+			p.WarnRatio = 0.8
+		}
+		if schedStart.Valid {
+			p.ScheduleStart = &schedStart.String
+		}
+		if schedStop.Valid {
+			p.ScheduleStop = &schedStop.String
+		}
+
+		res[p.CloudAccountID] = &p
+	}
+	return res, rows.Err()
+}
+
+// UpsertAccountPolicy 插入或更新账号保活策略。
+func (s *Store) UpsertAccountPolicy(ctx context.Context, p *GuardAccountPolicy) error {
+	existing, err := s.GetAccountPolicy(ctx, p.CloudAccountID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UnixMilli()
+	p.UpdatedAtMs = now
+
+	isEnInt := 0
+	if p.IsEnabled {
+		isEnInt = 1
+	}
+	actEnInt := 0
+	if p.ActionsEnabled {
+		actEnInt = 1
+	}
+	schedEnInt := 0
+	if p.ScheduleEnabled {
+		schedEnInt = 1
+	}
+	if p.TrafficAction == "" {
+		p.TrafficAction = "stop"
+	}
+	if p.WarnRatio <= 0 {
+		p.WarnRatio = 0.8
+	}
+	if p.ScheduleTZ == "" {
+		p.ScheduleTZ = "Asia/Shanghai"
+	}
+	if p.EvalIntervalS <= 0 {
+		p.EvalIntervalS = 60
+	}
+
+	if existing == nil {
+		p.CreatedAtMs = now
+		q := `INSERT INTO guard_account_policies (
+cloud_account_id, is_enabled, actions_enabled, traffic_limit_gb, traffic_action,
+warn_ratio, schedule_enabled, schedule_start, schedule_stop, schedule_tz, eval_interval_s,
+created_at_ms, updated_at_ms
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+		_, err := s.db.Exec(ctx, q,
+			p.CloudAccountID, isEnInt, actEnInt, p.TrafficLimitGB, p.TrafficAction,
+			p.WarnRatio, schedEnInt, p.ScheduleStart, p.ScheduleStop, p.ScheduleTZ, p.EvalIntervalS,
+			p.CreatedAtMs, p.UpdatedAtMs,
+		)
+		if err != nil {
+			return fmt.Errorf("guard: insert account policy failed: %w", err)
+		}
+	} else {
+		p.CreatedAtMs = existing.CreatedAtMs
+		q := `UPDATE guard_account_policies SET
+is_enabled = ?, actions_enabled = ?, traffic_limit_gb = ?, traffic_action = ?,
+warn_ratio = ?, schedule_enabled = ?, schedule_start = ?, schedule_stop = ?,
+schedule_tz = ?, eval_interval_s = ?, updated_at_ms = ?
+WHERE cloud_account_id = ?`
+
+		_, err := s.db.Exec(ctx, q,
+			isEnInt, actEnInt, p.TrafficLimitGB, p.TrafficAction,
+			p.WarnRatio, schedEnInt, p.ScheduleStart, p.ScheduleStop,
+			p.ScheduleTZ, p.EvalIntervalS, p.UpdatedAtMs, p.CloudAccountID,
+		)
+		if err != nil {
+			return fmt.Errorf("guard: update account policy failed: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // RecordCycle 保存一次守卫周期记录。

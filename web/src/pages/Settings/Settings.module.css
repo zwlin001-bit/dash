@@ -256,6 +256,79 @@
   border: 1px solid var(--err-border);
 }
 
+.warningBox {
+  background-color: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dangerBox {
+  background-color: var(--err-bg);
+  border: 1px solid var(--err-border);
+  color: var(--err);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.certNoticeBox {
+  background-color: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--text-main);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.installCodeBox {
+  display: flex;
+  align-items: stretch;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.installCmd {
+  flex: 1;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ok);
+  overflow-x: auto;
+  white-space: nowrap;
+  user-select: all;
+}
+
+.copyBtn {
+  background-color: var(--bg-card-sub);
+  border: none;
+  border-left: 1px solid var(--border-main);
+  color: var(--text-main);
+  padding: 0 var(--sp-3);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.copyBtn:hover {
+  background-color: var(--bg-hover);
+  color: var(--accent);
+}
+
 .modalOverlay {
   position: fixed;
   top: 0;
